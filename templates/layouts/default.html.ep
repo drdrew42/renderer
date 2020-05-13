@@ -1,0 +1,6 @@
+<!DOCTYPE html>
+<html>
+  <head><title>Login Manager</title></head>
+  <body><%= content %></body>
+</html>
+
