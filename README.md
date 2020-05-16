@@ -19,7 +19,8 @@ MOUNT the openwebwork/pg repository at:
   --publish 3000:3000 \
   --mount type=bind,source="$(pwd)"/PG,target=/usr/app/lib/PG \
   --mount type=bind,source="$(pwd)"/webwork-open-problem-library/,target=/usr/app/webwork-open-problem-library \
-  renderer:1.0```
+  renderer:1.0
+```
 
 ### LOCAL INSTALL ###
 If using a local install instead of docker, change ./lib/WeBWorK/conf/site.conf line 205 and defaults.config line 1077
