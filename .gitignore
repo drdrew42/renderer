@@ -1,4 +1,4 @@
-.DS_Store
+*.DS_Store
 
 !Build/
 .last_cover_stats
