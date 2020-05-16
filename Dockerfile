@@ -3,6 +3,10 @@ MAINTAINER Rederly
 
 WORKDIR /usr/app
 
+ENV APP_ROOT=/usr/app \
+    WEBWORK_ROOT=$APP_ROOT/lib/WeBWorK \
+    PG_ROOT=$APP_ROOT/lib/pg 
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
     curl \
