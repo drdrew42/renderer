@@ -12,7 +12,7 @@ BEGIN {
 	use File::Basename;
 	$main::dirname = dirname(__FILE__);
 }
-$ENV{MOD_PERL_API_VERSION} = 2;
+#$ENV{MOD_PERL_API_VERSION} = 2;
 use lib "$main::dirname";
 print "home directory ".$main::dirname."\n";
 
@@ -46,8 +46,11 @@ sub startup {
   $self->helper(renderedProblem => sub{
     my $c = shift;
 		my $opl_root = $c->app->config('opl_root');
+		my $contrib_root = $c->app->config('contrib_root');
     my $file_path = shift || $problemPath;
 		$file_path =~ s!^Library/!$opl_root!;
+		$file_path =~ s!^Contrib/!$contrib_root!;
+		# $file_path = $main::dirname."/../".$file_path;
 		my $seed = shift || '666';
 		my $hash = {};
 		# it seems that ->Vars encodes an array in case key=>array
@@ -55,7 +58,7 @@ sub startup {
 		$hash->{filePath} = $file_path;
 		$hash->{problemSeed} = $seed;
 		$hash->{form_action_url} = $c->app->config('form');
-		$hash->{outputFormat} = 'standard';
+		$hash->{outputFormat} = $c->app->config('output_format');
 		$hash->{inputs_ref} = \%inputs_ref;
     return RenderApp::Controller::RenderProblem::process_pg_file($hash);
   });
