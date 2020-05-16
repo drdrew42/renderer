@@ -15,7 +15,10 @@ MOUNT the openwebwork/pg repository at:
 
 * CLONE https://github.com/openwebwork/pg
 
-```docker run -d \
+```
+docker build --tag renderer:1.0 .
+
+docker run -d \
   --publish 3000:3000 \
   --mount type=bind,source="$(pwd)"/PG,target=/usr/app/lib/PG \
   --mount type=bind,source="$(pwd)"/webwork-open-problem-library/,target=/usr/app/webwork-open-problem-library \
