@@ -39,6 +39,7 @@ our @EXPORT_OK = qw(
 	constituency_hash
 	writeLog
 	surePathToFile
+	path_is_subdir
 );
 
 sub force_eoln($) {
@@ -215,6 +216,28 @@ sub writeTimingLogEntry($$$$) {
 	my ($ce, $function, $details, $beginEnd) = @_;
 	$beginEnd = ($beginEnd eq "begin") ? ">" : ($beginEnd eq "end") ? "<" : "-";
 	writeLog($ce, "timing", "$$ ".time." $beginEnd $function [$details]");
+}
+
+sub path_is_subdir($$;$) {
+	my ($path, $dir, $allow_relative) = @_;
+
+	unless ($path =~ /^\//) {
+		if ($allow_relative) {
+			$path = "$dir/$path";
+		} else {
+			return 0;
+		}
+	}
+
+	$path = canonpath($path);
+	$path .= "/" unless $path =~ m|/$|;
+	return 0 if $path =~ m#(^\.\.$|^\.\./|/\.\./|/\.\.$)#;
+
+	$dir = canonpath($dir);
+	$dir .= "/" unless $dir =~ m|/$|;
+	return 0 unless $path =~ m|^$dir|;
+
+	return 1;
 }
 
 1;
