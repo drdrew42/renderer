@@ -209,7 +209,7 @@ sub new {
 
 	# Try a fallback location
 	if ( !-r $PG_version_file ) {
-	  $PG_version_file = $self->{'webwork_dir'}."../PG/VERSION";
+	  $PG_version_file = $self->{'webwork_dir'}."/../PG/VERSION";
 	}
 	# #	We'll get the pg version here and read it into the safe symbol table
 	if (-r $PG_version_file){
