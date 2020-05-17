@@ -1,13 +1,12 @@
 % layout 'default';
-%= form_for index => begin
-  % if (param 'user') {
-    <b>Wrong name or password, please try again.</b><br>
-  % }
-  Name:<br>
-  %= text_field 'user'
-  <br>Password:<br>
-  %= password_field 'pass'
-  <br>
-  %= submit_button 'Login'
-% end
 
+% if (my $msg = flash 'message') {
+  <b><%= $msg %></b><br>
+% }
+
+You will need an access token to render WeBWorK problems.
+
+%= form_for index => begin
+  <%= check_box 'agreed' %> I solemnly swear I am up to no good. <br>
+  %= submit_button 'Generate Access Token'
+% end

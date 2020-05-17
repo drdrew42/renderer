@@ -5,16 +5,6 @@ This is a PG Renderer derived from the WeBWorK2 codebase
 
 ### DOCKER CONTAINER ###
 
-MOUNT the openwebwork/webwork-open-problem-library repo at:
-    /usr/app/webwork-open-problem-library
-
-* CLONE https://github.com/openwebwork/webwork-open-problem-library
-
-MOUNT the openwebwork/pg repository at:
-    /usr/app/lib/PG
-
-* CLONE https://github.com/openwebwork/pg
-
 ```
 mkdir volumes
 mkdir container
@@ -31,7 +21,13 @@ docker run -d \
 ```
 
 ### LOCAL INSTALL ###
+
 If using a local install instead of docker:
+
+* Dockerfile lists perl dependencies
 * clone PG and webwork-open-problem-library into the provided stubs ./lib/PG and ./webwork-open-problem-library
+    `git clone https://github.com/openwebwork/pg ./lib/PG`
+    `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
 * change ./lib/WeBWorK/conf/site.conf line 205 and defaults.config line 1077 to the location of PG
-* begin the app with morbo ./script/render_app and access on localhost:3000
+* start the app with morbo -l http://localhost:3000 ./script/render_app
+* access on localhost:3000
