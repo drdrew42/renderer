@@ -39,6 +39,7 @@ use Cwd 'abs_path';
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
 
+# drop proc::processtable ?
 use Proc::ProcessTable; # use in standalonePGproblemRenderer
 use WeBWorK::PG; #webwork2 (use to set up environment)
 use WeBWorK::CourseEnvironment;

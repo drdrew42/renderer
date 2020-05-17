@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-  <head><title>Login Manager</title></head>
+  <head><title>Rederly WeBWorK Renderer</title></head>
   <body><%= content %></body>
 </html>
-

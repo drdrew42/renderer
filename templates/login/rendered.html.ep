@@ -1,14 +1,10 @@
 % layout 'default';
 
-Welcome <%= session 'user' %>.<br><br>
-
-% if ((my $path = session 'filePath') && (my $seed = session 'seed')) {
-  <p>Thank you, <%= $path %> received</p>
-  <p>Thank you, <%= $seed %> received</p><br>
-  <%== renderedProblem($path,$seed) %><br>
+% if ((session 'filePath') && (session 'seed')) {
+  <%== renderedProblem() %><br>
 % }
 
-%= link_to 'Request different problem or seed' => 'protected'
+%= link_to 'Request different problem or seed' => 'request'
 <br>
-%= link_to Logout => 'logout'
+%= link_to 'End Session' => 'logout'
 <br>

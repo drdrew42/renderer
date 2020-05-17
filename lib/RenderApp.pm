@@ -35,11 +35,11 @@ sub startup {
 
   # Config
   $self->plugin('Config');
+	$self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
 
   # Models
-  #$self->helper(problem => sub { state $problem = RenderApp::Model::Problem->new });
-  $self->helper(users => sub { state $users = RenderApp::Model::Users->new });
+  # $self->helper(users => sub { state $users = RenderApp::Model::Users->new });
 
 	# helper for rendering problem
 	# needs to capture request data and pass along
@@ -47,23 +47,21 @@ sub startup {
     my $c = shift;
 		my $opl_root = $c->app->config('opl_root');
 		my $contrib_root = $c->app->config('contrib_root');
-    my $file_path = shift || $problemPath;
+    my $file_path = $c->session('filePath');
 		$file_path =~ s!^Library/!$opl_root!;
 		$file_path =~ s!^Contrib/!$contrib_root!;
-		# $file_path = $main::dirname."/../".$file_path;
-		my $seed = shift || '666';
 		my $hash = {};
 		# it seems that ->Vars encodes an array in case key=>array
 		my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
 		$hash->{filePath} = $file_path;
-		$hash->{problemSeed} = $seed;
+		$hash->{problemSeed} = $c->session('seed');
 		$hash->{form_action_url} = $c->app->config('form');
-		$hash->{outputFormat} = $c->app->config('output_format');
+		$hash->{outputFormat} = $c->session('outputFormat') || 'simple';
 		$hash->{inputs_ref} = \%inputs_ref;
     return RenderApp::Controller::RenderProblem::process_pg_file($hash);
   });
 
-	# helper to reveal request data
+	# helper to expose request data
   $self->helper(requestData => sub {
 		my $c = shift;
 		my $string = "";
@@ -78,8 +76,8 @@ sub startup {
   my $r = $self->routes;
   $r->any('/')->to('login#index')->name('index');
 
-  my $logged_in = $r->under('/')->to('login#logged_in');
-  $logged_in->get('/protected')->to('login#protected');
+  my $logged_in = $r->under('/')->to('login#is_valid');
+  $logged_in->get('/request')->to('login#request');
 	$logged_in->any('/render')->to('render#form_check');
 	$logged_in->any('/rendered')->to('login#rendered');
 

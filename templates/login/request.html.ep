@@ -1,0 +1,20 @@
+% layout 'default';
+
+% if (my $msg = flash 'message') {
+  <b><%= $msg %></b><br>
+% }
+
+%= form_for render => begin
+  Path to problem:<br>
+  %= text_field 'path_to_problem'
+  <br>Random seed:<br>
+  %= text_field 'random_seed'
+  <br>
+  <%= radio_button template => 'simple'    %> <label for='simple'>Simple</label> <br>
+  <%= radio_button template => 'standard'  %> <label for='standard'>Standard</label> <br>
+  <%= radio_button template => 'json'      %> <label for='json'>JSON</label> <br>
+  <br>
+  %= submit_button 'Render'
+% end
+
+%= link_to 'End Session' => 'logout'
