@@ -11,26 +11,29 @@ ENV WEBWORK_ROOT=$APP_ROOT/lib/WeBWorK \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
     apt-utils \
-    curl \
-  	dvipng \
   	gcc \
     make \
-    libgd-perl \
+    curl \
+  	dvipng \
     cpanminus \
+    libgd-perl \
+    libdbi-perl \
+    libjson-perl \
+    libcgi-pm-perl \
+    libjson-xs-perl \
+    libstorable-perl \
+    libdatetime-perl \
+    libuuid-tiny-perl \
+    libtie-ixhash-perl \
+    libclass-accessor-perl \
     libstring-shellquote-perl \
     libproc-processtable-perl \
-    libdatetime-perl \
-    libdbi-perl \
-    libtie-ixhash-perl \
-    libuuid-tiny-perl \
-    libjson-perl \
+    libdata-structure-util-perl \
     liblocale-maketext-lexicon-perl \
-    libclass-accessor-perl \
-    libcgi-pm-perl \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
-RUN cpanm install Mojolicious Date::Format \
+RUN cpanm install Mojo::Base Date::Format \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 COPY . .

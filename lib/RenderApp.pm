@@ -50,15 +50,16 @@ sub startup {
     my $file_path = $c->session('filePath');
 		$file_path =~ s!^Library/!$opl_root!;
 		$file_path =~ s!^Contrib/!$contrib_root!;
+		my $format = $c->session('format') || 'html';
 		my $hash = {};
 		# it seems that ->Vars encodes an array in case key=>array
 		my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
 		$hash->{filePath} = $file_path;
-		$hash->{problemSeed} = $c->session('seed');
+		$hash->{problem_seed} = $c->session('seed');
 		$hash->{form_action_url} = $c->app->config('form');
-		$hash->{outputFormat} = $c->session('outputFormat') || 'simple';
+		$hash->{outputFormat} = $c->session('template') || 'simple';
 		$hash->{inputs_ref} = \%inputs_ref;
-    return RenderApp::Controller::RenderProblem::process_pg_file($hash);
+    return RenderApp::Controller::RenderProblem::process_pg_file($format,$hash);
   });
 
 	# helper to expose request data
@@ -76,10 +77,10 @@ sub startup {
   my $r = $self->routes;
   $r->any('/')->to('login#index')->name('index');
 
-  my $logged_in = $r->under('/')->to('login#is_valid');
-  $logged_in->get('/request')->to('login#request');
-	$logged_in->any('/render')->to('render#form_check');
-	$logged_in->any('/rendered')->to('login#rendered');
+  #my $logged_in = $r->under('/')->to('login#is_valid');
+  $r->get('/request')->to('login#request');
+	$r->any('/render')->to('render#form_check');
+	$r->any('/rendered')->to('login#rendered');
 
   $r->get('/logout')->to('login#logout');
 

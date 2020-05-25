@@ -12,6 +12,7 @@ sub form_check {
 
   $v->required('random_seed')->size(1,6)->like(qr/^[0-9]+$/);
   $v->required('path_to_problem')->like(qr/^[a-zA-Z0-9\-_\.\/]+\.pg$/);
+  $v->optional('format');
   $v->optional('template');
 
   if ($v->has_error) {
@@ -21,7 +22,8 @@ sub form_check {
 
   $c->session->{filePath} = $v->param('path_to_problem');
   $c->session->{seed} = $v->param('random_seed');
-  $c->session->{outputFormat} = $v->param('template');
+  $c->session->{template} = $v->param('template');
+  $c->session->{format} = $v->param('format');
   $c->redirect_to('rendered');
 }
 
