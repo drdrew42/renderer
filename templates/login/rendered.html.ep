@@ -1,10 +1,3 @@
-% layout 'default';
-
 % if ((session 'filePath') && (session 'seed')) {
   <%== renderedProblem() %><br>
 % }
-
-%= link_to 'Request different problem or seed' => 'request'
-<br>
-%= link_to 'End Session' => 'logout'
-<br>

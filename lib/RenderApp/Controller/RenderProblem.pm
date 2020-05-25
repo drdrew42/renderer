@@ -27,6 +27,7 @@ use Carp;
 #use Crypt::SSLeay;  # needed for https
 #use LWP::Protocol::https;
 use Time::HiRes qw/time/;
+use Date::Format;
 use MIME::Base64 qw(encode_base64 decode_base64);
 use Getopt::Long qw[:config no_ignore_case bundling];
 use File::Find;
@@ -35,12 +36,12 @@ use File::Path;
 #use File::Temp qw/tempdir/;
 use String::ShellQuote;
 use Cwd 'abs_path';
+use JSON::XS;
 
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
 
-# drop proc::processtable ?
-use Proc::ProcessTable; # use in standalonePGproblemRenderer
+use Proc::ProcessTable; # use for log memory use
 use WeBWorK::PG; #webwork2 (use to set up environment)
 use WeBWorK::CourseEnvironment;
 use RenderApp::Controller::FormatRenderedProblem;
@@ -67,6 +68,21 @@ eval { # attempt to create log file
 
 die "You must first create an output file at $path_to_log_file with permissions 777 " unless -w $path_to_log_file;
 
+##################################################
+# define universal TO_JSON for JSON::XS unbless
+##################################################
+
+sub UNIVERSAL::TO_JSON {
+    my( $self ) = shift;
+
+    use Storable qw(dclone);
+    use Data::Structure::Util qw(unbless);
+
+    my $clone = unbless( dclone( $self ) );
+
+    $clone;
+}
+
 ##########################################################
 #  END MAIN :: BEGIN SUBROUTINES
 ##########################################################
@@ -76,6 +92,7 @@ die "You must first create an output file at $path_to_log_file with permissions 
 #######################################################################
 
 sub process_pg_file {
+	my $format = shift;
 	my $inputHash = shift;
 	my $NO_ERRORS = "";
 	my $ALL_CORRECT = "";
@@ -88,8 +105,8 @@ sub process_pg_file {
 	my $form_data = {
 		displayMode			=> 'MathJax',
 		outputformat		=> $inputHash->{outputFormat}||'simple',
-		problem_seed		=> $inputHash->{problemSeed}||'666',
-		problemSeed			=> $inputHash->{problemSeed}||'123',
+		problem_seed		=> $inputHash->{problem_seed}||'666',
+#		problemSeed			=> $inputHash->{problemSeed}||'123',
 		language				=> $inputHash->{language}||'en',
 		form_action_url => $inputHash->{form_action_url}||'http://failure.org'
 		#psvn            => $psvn//'23456',
@@ -108,8 +125,21 @@ sub process_pg_file {
 
 	# extract and display result
 	# print "display $file_path\n";
-	return display_html_output($file_path, $formatter);
-
+  my $html = $formatter->formatRenderedProblem;
+	return $html unless $format eq 'json';
+	my $pg_obj = $formatter->{return_object};
+	my $json_rh = {
+		renderedHTML => $html,
+		answers => $pg_obj->{answers},
+		#PG_ANSWERS_HASH => $pg_obj->{PG_ANSWERS_HASH},
+		problem_result => $pg_obj->{problem_result},
+		problem_state => $pg_obj->{problem_state},
+		flags => $pg_obj->{flags},
+		form_data => $form_data
+	};
+	my $coder = JSON::XS->new->ascii->pretty->convert_blessed->allow_unknown;
+	my $json = $coder->encode ($json_rh);
+	return $json;
 }
 
 #######################################################################
@@ -137,7 +167,7 @@ sub process_problem {
 	#$inputs_ref->{probFileName} = $adj_file_path;
 	$inputs_ref->{sourceFilePath} = $adj_file_path;
 	#$inputs_ref->{pathToProblemFile} = $adj_file_path;
-	$inputs_ref->{problemSeed} = $problem_seed;
+	#$inputs_ref->{problemSeed} = $problem_seed;
 
 # These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
 #	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
@@ -198,7 +228,7 @@ sub process_problem {
 	##################################################
 	# log elapsed time
 	##################################################
-	my $scriptName = 'standalonePGproblemRenderer';
+	my $scriptName = 'rederlyPGproblemRenderer';
 	my $cg_end = time;
 	my $cg_duration = $cg_end - $cg_start;
 	my $memory_use_end = get_current_process_memory();
@@ -227,7 +257,7 @@ sub standaloneRenderer {
   my %args = @_;
 
 	# my $key = $r->param('key');
-	# WTF is this even here for? PG doesn't do authz
+	# WTF is this even here for? PG doesn't do authz - but it wants key?
 	my $key = '3211234567654321';
 
 	my $user          = fake_user();
@@ -235,7 +265,7 @@ sub standaloneRenderer {
 	my $showHints     = $form_data->{showHints} || 0;
 	my $showSolutions = $form_data->{showSolutions} || 0;
 	my $problemNumber = $form_data->{'problem_number'} || 1;
-  my $displayMode   = $form_data->{displayMode} || $ce->{pg}->{options}->{displayMode};
+  my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
 	my $problem_seed  = $form_data->{'problem_seed'} || 0; #$r->param('problem_seed') || 0;
 
 	my $translationOptions = {
@@ -251,7 +281,7 @@ sub standaloneRenderer {
 	};
 	my $extras = {};   # Check what this is used for - passed as arg to renderer->new()
 
-	$form_data->{displayMode} = $displayMode;
+	#REDUNDANT $form_data->{displayMode} = $displayMode;
 
 	# Create template of problem then add source text or a path to the source file
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPreamble} = {TeX=>'',HTML=>''};
@@ -318,215 +348,11 @@ sub standaloneRenderer {
 	$out2;
 }
 
-# helper function to remove temp dirs
-sub delete_temp_dir {
-	my ($temp_dir_path) = @_;
-
-	my $rm_cmd = "2>&1 rm -rf " . shell_quote($temp_dir_path);  #can use perl command for this??
-	my $rm_out = readpipe $rm_cmd;
-	if ($?) {
-		print "Failed to remove temporary directory '".$temp_dir_path."':\n$rm_out\n";
-		return 0;
-	} else {
-		return 1;
-	}
-}
-
-sub create_tex_output {
-	my $file_path = shift;
-	my $formatter = shift;
-	my $output_text = $formatter->formatRenderedProblem;
-	$file_path =~s|/$||;   # remove final /
-	$file_path =~ m|/?([^/]+)$|;
-	my $file_name = $1;
-	$file_name =~ s/\.\w+$/\.tex/;    # replace extension with tex
-	my $output_file = TEMPOUTPUTDIR().$file_name;
-	local(*FH);
-	open(FH, '>:encoding(UTF-8)', $output_file) or die "Can't open file $output_file for writing";
-	print FH $output_text;
-	close(FH);
-	print "tex result sent to $output_file\n" if $UNIT_TESTS_ON;
-#	sleep 5;   #wait 5 seconds
-#	unlink($output_file);
-	return $file_name;
-}
-
-sub display_tex_output {
-	my $file_path = shift;
-	my $formatter = shift;
-	my $output_text = $formatter->formatRenderedProblem;
-	$file_path =~s|/$||;   # remove final /
-	$file_path =~ m|/?([^/]+)$|;
-	my $file_name = $1;
-	$file_name =~ s/\.\w+$/\.tex/;    # replace extension with tex
-	my $output_file = TEMPOUTPUTDIR().$file_name;
-	local(*FH);
-	open(FH, '>', $output_file) or die "Can't open file $output_file for writing";
-	print FH $output_text;
-	close(FH);
-	print "tex result sent to $output_file\n" if $UNIT_TESTS_ON;
-#	if ($display_pdf_output) {
-		print "pdf mode\n";
-		my $pdf_file_name = $file_name;
-		$pdf_file_name =~ s/\.\w+$/\.pdf/;    # replace extension with pdf
-		my $pdf_path = TEMPOUTPUTDIR().$pdf_file_name;
-		print "pdflatex $output_file\n";
-		system("pdflatex $output_file");
-		print "pdflatex to $pdf_path DONE\n";
-		# this is doable but will require changing directories
-		# look at the solution done using hardcopy
-		system("open -a Preview ". $pdf_path);
-#	}
-#	sleep 5;   #wait 5 seconds
-#	unlink($output_file);
-}
-
-sub create_json_output {
-	my $file_path = shift;
-	my $formatter = shift;
-	my $output_text = $formatter->formatRenderedProblem;
-	$file_path =~s|/$||;   # remove final /
-	$file_path =~ m|/?([^/]+)$|;
-	my $file_name = $1;
-	$file_name =~ s/\.\w+$/\.json/;    # replace extension with json
-	my $output_file = TEMPOUTPUTDIR().$file_name;
-	local(*FH);
-	open(FH, '>:encoding(UTF-8)', $output_file) or die "Can't open file $output_file for writing";
-	print FH $output_text;
-	close(FH);
-	print "json result sent to $output_file\n" if $UNIT_TESTS_ON;
-#	sleep 5;   #wait 5 seconds
-#	unlink($output_file);
-	return $file_name;
-}
-
 sub	display_html_output {  #display the problem in a browser
 	my $file_path = shift;
 	my $formatter = shift;
 	my $output_text = $formatter->formatRenderedProblem;
 	return $output_text;
-	$file_path =~s|/$||;   # remove final /
-	$file_path =~ m|/?([^/]+)$|;
-	my $file_name = $1;
-	$file_name =~ s/\.\w+$/\.html/;    # replace extension with html
-	my $output_file = TEMPOUTPUTDIR().$file_name;
-	local(*FH);
-	open(FH, '>:encoding(UTF-8)', $output_file) or die "Can't open file $output_file for writing";
-	print FH $output_text;
-	close(FH);
-  #specify  HTML_DISPLAY_COMMAND
-	#system($HTML_DISPLAY_COMMAND." ".$output_file);
-	sleep 5;   #wait 1 seconds
-	unlink($output_file);
-}
-
-sub display_hash_output {   # print the entire hash output to the command line
-	my $file_path = shift;
-	my $formatter = shift;
-	my $output_text = $formatter->formatRenderedProblem;
-	$file_path =~s|/$||;   # remove final /
-	$file_path =~ m|/?([^/]+)$|;
-	my $file_name = $1;
-	$file_name =~ s/\.\w+$/\.txt/;    # replace extension with html
-	my $output_file = TEMPOUTPUTDIR().$file_name;
-	my $output_text2 = pretty_print_rh($output_text);
-	print STDOUT $output_text2;
-
-# 	local(*FH);
-# 	open(FH, '>', $output_file) or die "Can't open file $output_file writing";
-# 	print FH $output_text2;
-# 	close(FH);
-#
-# 	system($HASH_DISPLAY_COMMAND().$output_file."; rm $output_file;");
-	#sleep 1; #wait 1 seconds
-	#unlink($output_file);
-}
-
-sub display_ans_output {  # print the collection of answer hashes to the command line
-	my $file_path = shift;
-	my $formatter = shift;
-	my $return_object = $formatter->return_object;
-	$file_path =~s|/$||;   # remove final /
-	$file_path =~ m|/?([^/]+)$|;
-	my $file_name = $1;
-	$file_name =~ s/\.\w+$/\.txt/;    # replace extension with html
-	my $output_file = TEMPOUTPUTDIR().$file_name;
-	my $output_text = pretty_print_rh($return_object->{answers});
-	print STDOUT $output_text;
-# 	local(*FH);
-# 	open(FH, '>', $output_file) or die "Can't open file $output_file writing";
-# 	print FH $output_text;
-# 	close(FH);
-#
-# 	system($HASH_DISPLAY_COMMAND().$output_file."; rm $output_file;");
-# 	sleep 1; #wait 1 seconds
-# 	unlink($output_file);
-}
-
-sub record_problem_ok1 {
-	my $error_flag = shift//'';
-	my $formatter = shift;  # for formatting
-	my $file_path = shift;
-	my $return_string = '';
-	my $return_object = $formatter->return_object;
-	if (defined($return_object->{flags}->{DEBUG_messages}) ) {
-		my @debug_messages = @{$return_object->{flags}->{DEBUG_messages}};
-		$return_string .= (pop @debug_messages ) ||'' ; #avoid error if array was empty
-		if (@debug_messages) {
-			$return_string .= join(" ", @debug_messages);
-		} else {
-					$return_string = "";
-		}
-	}
-	if (defined($return_object->{errors}) ) {
-		$return_string= $return_object->{errors};
-	}
-	if (defined($return_object->{flags}->{WARNING_messages}) ) {
-		my @warning_messages = @{$return_object->{flags}->{WARNING_messages}};
-		$return_string .= (pop @warning_messages)||''; #avoid error if array was empty
-			$@=undef;
-		if (@warning_messages) {
-			$return_string .= join(" ", @warning_messages);
-		} else {
-			$return_string = "";
-		}
-	}
-	my $SHORT_RETURN_STRING = ($return_string)?"has errors":"ok";
-	unless ($return_string) {
-		$return_string = "1\t $file_path is ok\n";
-	} else {
-		$return_string = "0\t $file_path has errors\n";
-	}
-
-	local(*FH);
-	open(FH, '>>:encoding(UTF-8)',$path_to_log_file) or die "Can't open file $path_to_log_file for writing";
-	print FH $return_string;
-	close(FH);
-	return $SHORT_RETURN_STRING;
-}
-
-sub record_problem_ok2 {
-	my $error_flag = shift//'';
-	my $formatter = shift;
-	my $file_path = shift;
-	my $some_correct_answers_not_specified = shift;
-	my $pg_duration = shift;  #processing time
-	my $return_object = $formatter->return_object;
-	my %scores = ();
-	my $ALL_CORRECT= 0;
-	my $all_correct = ($error_flag)?0:1;
-		foreach my $ans (keys %{$return_object->{answers}} ) {
-			$scores{$ans} =
-			      $return_object->{answers}->{$ans}->{score};
-			$all_correct =$all_correct && $scores{$ans};
-		}
-	$all_correct = ".5" if $some_correct_answers_not_specified;
-	$ALL_CORRECT = ($all_correct == 1)?'All answers are correct':'Some answers are incorrect';
-	local(*FH);
-	open(FH, '>>:encoding(UTF-8)',$path_to_log_file) or die "Can't open file $path_to_log_file for writing";
-	print FH "$all_correct $file_path\n"; #  do we need this? compile_errors=$error_flag\n";
-	close(FH);
-	return $ALL_CORRECT;
 }
 
 ##################################################
@@ -592,17 +418,17 @@ sub fake_set {
 	return($set);
 }
 
-sub display_inputs {
-	my %correct_answers = @_;
-	foreach my $key (sort keys %correct_answers) {
-		print "$key => $correct_answers{$key}\n";
-	}
-}
+#sub display_inputs {
+#	my %correct_answers = @_;
+#	foreach my $key (sort keys %correct_answers) {
+#		print "$key => $correct_answers{$key}\n";
+#	}
+#}
 
-sub edit_source_file {
-	my $file_path = shift;
-	system(EDIT_COMMAND()." $file_path");
-}
+#sub edit_source_file {
+#	my $file_path = shift;
+#	system(EDIT_COMMAND()." $file_path");
+#}
 
 # Get problem template source and adjust file_path name
 sub get_source {
@@ -679,7 +505,7 @@ sub pretty_print_rh {
 
 sub create_course_environment {
 	my $self = shift;
-	my $courseName = $self->{courseName} || 'blackbox';
+	my $courseName = $self->{courseName} || 'rederly';
 	my $ce = WeBWorK::CourseEnvironment->new(
 				{webwork_dir		=> $WeBWorK::Constants::WEBWORK_DIRECTORY,
 				 courseName			=> $courseName
@@ -691,7 +517,14 @@ sub create_course_environment {
 sub writeRenderLogEntry($$$) {
 	my ($function, $details, $beginEnd) = @_;
 	$beginEnd = ($beginEnd eq "begin") ? ">" : ($beginEnd eq "end") ? "<" : "-";
-	#WeBWorK::Utils::writeLog($seed_ce, "render_timing", "$$ ".time." $beginEnd $function [$details]");
+	#writeLog($seed_ce, "render_timing", "$$ ".time." $beginEnd $function [$details]");
+	local *LOG;
+	if (open LOG, ">>", $path_to_log_file) {
+		print LOG "[", time2str("%a %b %d %H:%M:%S %Y", time), "] $$ ".time." $beginEnd $function [$details]\n";
+		close LOG;
+	} else {
+		warn "failed to open $path_to_log_file for writing: $!";
+	}
 }
 
 1;

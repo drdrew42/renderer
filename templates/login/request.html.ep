@@ -10,9 +10,13 @@
   <br>Random seed:<br>
   %= text_field 'random_seed'
   <br>
+  <b>TEMPLATE: </b><br>
   <%= radio_button template => 'simple'    %> <label for='simple'>Simple</label> <br>
   <%= radio_button template => 'standard'  %> <label for='standard'>Standard</label> <br>
-  <%= radio_button template => 'json'      %> <label for='json'>JSON</label> <br>
+  <br>
+  <b>OUTPUT FORMAT: </b><br>
+  <%= radio_button format => 'html'      %> <label for='html'>HTML</label> <br>
+  <%= radio_button format => 'json'      %> <label for='json'>JSON</label> <br>
   <br>
   %= submit_button 'Render'
 % end
