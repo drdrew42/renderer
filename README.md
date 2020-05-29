@@ -31,3 +31,12 @@ If using a local install instead of docker:
 * change ./lib/WeBWorK/conf/site.conf line 205 and defaults.config line 1077 to the location of PG
 * start the app with morbo -l http://localhost:3000 ./script/render_app
 * access on localhost:3000
+
+### API ENDPOINTS ###
+
+Point at localhost:3000/rendered  
+Params:
+* sourceFilePath (beginning with Library or Contrib will be modified automatically)
+* problemSeed (for consistent randomization)
+* template (simple or standard)
+* format (html or json)

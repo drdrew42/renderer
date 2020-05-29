@@ -1,8 +1,0 @@
-[Sun Jan 19 20:31:26 2020] 841 1579483886.72215 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.280 sec; memory:  26332 bytes;}]
-[Sun Jan 19 20:35:29 2020] 961 1579484129.14186 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.312 sec; memory:  26392 bytes;}]
-[Sun Jan 19 20:37:18 2020] 995 1579484238.96334 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.181 sec; memory:  25884 bytes;}]
-[Sun Jan 19 20:41:11 2020] 1042 1579484471.59203 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.296 sec; memory:  26592 bytes;}]
-[Sun Jan 19 20:41:57 2020] 1049 1579484517.2226 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.179 sec; memory:  26092 bytes;}]
-[Sun Jan 19 23:02:01 2020] 2746 1579492921.49013 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.203 sec; memory:  25924 bytes;}]
-[Sun Jan 19 23:11:57 2020] 2840 1579493517.98698 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.282 sec; memory:  26180 bytes;}]
-[Sun Jan 19 23:17:07 2020] 2890 1579493827.08836 -  [{script:standalonePGproblemRenderer; file:/Users/drdrew42/mojo/LibraryApp/lib/problem.pg; duration: 0.194 sec; memory:  25676 bytes;}]

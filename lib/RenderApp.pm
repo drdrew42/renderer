@@ -43,21 +43,21 @@ sub startup {
 
 	# helper for rendering problem
 	# needs to capture request data and pass along
-  $self->helper(renderedProblem => sub{
+	$self->helper(renderedProblem => sub{
     my $c = shift;
 		my $opl_root = $c->app->config('opl_root');
 		my $contrib_root = $c->app->config('contrib_root');
-    my $file_path = $c->session('filePath');
+    my $file_path = $c->param('sourceFilePath') || $c->session('filePath');
 		$file_path =~ s!^Library/!$opl_root!;
 		$file_path =~ s!^Contrib/!$contrib_root!;
-		my $format = $c->session('format') || 'html';
+		my $format = $c->param('format') || $c->session('format');
 		my $hash = {};
 		# it seems that ->Vars encodes an array in case key=>array
 		my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
 		$hash->{filePath} = $file_path;
-		$hash->{problem_seed} = $c->session('seed');
+		$hash->{problem_seed} = $c->param('problemSeed') || $c->session('seed');
 		$hash->{form_action_url} = $c->app->config('form');
-		$hash->{outputFormat} = $c->session('template') || 'simple';
+		$hash->{outputFormat} = $c->param('template') || $c->session('template');
 		$hash->{inputs_ref} = \%inputs_ref;
     return RenderApp::Controller::RenderProblem::process_pg_file($format,$hash);
   });
