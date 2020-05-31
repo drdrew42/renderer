@@ -56,7 +56,7 @@ sub startup {
 		my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
 		$hash->{filePath} = $file_path;
 		$hash->{problem_seed} = $c->param('problemSeed') || $c->session('seed');
-		$hash->{form_action_url} = $c->app->config('form');
+		$hash->{form_action_url} = $c->param('formURL') || $c->app->config('form');
 		$hash->{outputFormat} = $c->param('template') || $c->session('template');
 		$hash->{inputs_ref} = \%inputs_ref;
     return RenderApp::Controller::RenderProblem::process_pg_file($format,$hash);
