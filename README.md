@@ -40,3 +40,4 @@ Params:
 * problemSeed (for consistent randomization)
 * template (simple or standard)
 * format (html or json)
+* formURL 
