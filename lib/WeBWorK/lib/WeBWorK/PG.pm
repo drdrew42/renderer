@@ -238,7 +238,7 @@ sub defineProblemEnvir {
 	$envir{webworkDocsURL}         = $ce->{webworkURLs}->{docs}."/";
 	$envir{localHelpURL}           = $ce->{webworkURLs}->{local_help}."/";
 	$envir{MathJaxURL}             = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js?config=TeX-MML-AM_HTMLorMML-full';
-	$envir{server_root_url}        = "localhost:5000" || '';
+	$envir{server_root_url}        = $ce->{server_root_url} || 'http://localhost/failed-lib-webwork-lib-webwork-pg.pm';
 
 	# Information for sending mail
 

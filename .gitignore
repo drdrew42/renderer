@@ -1,4 +1,5 @@
 *.DS_Store
+lib/WeBWorK/htdocs/tmp/
 
 !Build/
 .last_cover_stats

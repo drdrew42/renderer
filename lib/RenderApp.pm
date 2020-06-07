@@ -30,8 +30,7 @@ BEGIN {
 
 sub startup {
   my $self = shift;
-  my $problemPath = curfile->dirname->sibling('problem.pg')->to_string;
-  my $staticPath = curfile->dirname->sibling('public')->to_string.'/';
+  my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
   # Config
   $self->plugin('Config');
