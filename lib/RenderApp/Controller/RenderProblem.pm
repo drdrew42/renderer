@@ -105,8 +105,7 @@ sub process_pg_file {
 	my $form_data = {
 		displayMode			=> 'MathJax',
 		outputformat		=> $inputHash->{outputFormat}||'simple',
-		problem_seed		=> $inputHash->{problem_seed}||'666',
-#		problemSeed			=> $inputHash->{problemSeed}||'123',
+		problemSeed		=> $inputHash->{problemSeed}||'666',
 		language				=> $inputHash->{language}||'en',
 		form_action_url => $inputHash->{form_action_url}||'http://failure.org'
 		#psvn            => $psvn//'23456',
@@ -157,7 +156,7 @@ sub process_problem {
 	#print "find file at $adj_file_path ", length($source), "\n";
 
 	### update inputs
-	my $problem_seed = $inputs_ref->{problem_seed};
+	my $problem_seed = $inputs_ref->{problemSeed};
 	die "problem seed not defined in sendXMLRPC::process_problem" unless $problem_seed;
 
 #  my $local_psvn = $form_data->{psvn}//34567;
@@ -266,7 +265,7 @@ sub standaloneRenderer {
 	my $showSolutions = $form_data->{showSolutions} || 0;
 	my $problemNumber = $form_data->{'problem_number'} || 1;
   my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
-	my $problem_seed  = $form_data->{'problem_seed'} || 0; #$r->param('problem_seed') || 0;
+	my $problem_seed  = $form_data->{'problemSeed'} || 0; #$r->param('problem_seed') || 0;
 
 	my $translationOptions = {
 		displayMode     	=> $displayMode,
