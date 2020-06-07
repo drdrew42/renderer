@@ -146,7 +146,7 @@ sub formatRenderedProblem {
 	my $course_password  =  $self->{course_password}//'';
 	my $problemSeed      =  $self->{inputs_ref}->{problemSeed}//6666;
 	my $session_key      =  $rh_result->{session_key}//'';
-	my $displayMode      =  $self->{inputs_ref}->{displayMode}//'foobar';
+	my $displayMode      =  $self->{inputs_ref}->{displayMode}//'MathJax';
 
 	my $previewMode      =  defined($self->{inputs_ref}->{preview})||0;
 	my $checkMode        =  defined($self->{inputs_ref}->{WWcheck})||0;
