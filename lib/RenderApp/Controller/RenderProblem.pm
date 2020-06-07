@@ -220,7 +220,7 @@ sub process_problem {
 		return_object    => $return_object,
 		encoded_source   => encode_base64($source),
 		sourceFilePath   => $file_path,
-		url              => $inputs_ref->{form_action_url},   # use default hosted2
+		url              => $ce->{server_root_url},   # use default hosted2
 		form_action_url  => $inputs_ref->{form_action_url},
 		maketext         =>  sub {return @_},
 		courseID         =>  'blackbox',
