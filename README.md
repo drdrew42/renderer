@@ -28,7 +28,10 @@ If using a local install instead of docker:
 * clone PG and webwork-open-problem-library into the provided stubs ./lib/PG and ./webwork-open-problem-library
     `git clone https://github.com/openwebwork/pg ./lib/PG`
     `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
-* change ./lib/WeBWorK/conf/site.conf line 205 and defaults.config line 1077 to the location of PG
+* set server_root_url at lib/WeBWorK/conf/site.conf line 49 (localhost:3000)
+* change lib/WeBWorK/conf/site.conf line 205 to (pwd)/lib/PG
+* lib/WeBWorK/conf/defaults.config line 1077 to (pwd)/lib/PG
+*
 * start the app with morbo -l http://localhost:3000 ./script/render_app
 * access on localhost:3000
 
@@ -40,4 +43,4 @@ Params:
 * problemSeed (for consistent randomization)
 * template (simple or standard)
 * format (html or json)
-* formURL 
+* formURL
