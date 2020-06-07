@@ -105,7 +105,7 @@ sub process_pg_file {
 	my $form_data = {
 		displayMode			=> 'MathJax',
 		outputformat		=> $inputHash->{outputFormat}||'simple',
-		problemSeed		=> $inputHash->{problemSeed}||'666',
+		problemSeed		  => $inputHash->{problemSeed}||'666',
 		language				=> $inputHash->{language}||'en',
 		form_action_url => $inputHash->{form_action_url}||'http://failure.org'
 		#psvn            => $psvn//'23456',
@@ -155,9 +155,10 @@ sub process_problem {
 	my ($adj_file_path, $source) = get_source($file_path);
 	#print "find file at $adj_file_path ", length($source), "\n";
 
-	### update inputs
+	### stash inputs that get wiped by PG
 	my $problem_seed = $inputs_ref->{problemSeed};
 	die "problem seed not defined in sendXMLRPC::process_problem" unless $problem_seed;
+	my $display_mode = $inputs_ref->{displayMode};
 
 #  my $local_psvn = $form_data->{psvn}//34567;
 # formerly updated_input -- now inputs_ref
@@ -209,6 +210,10 @@ sub process_problem {
 	##################################################
 	# Create FormatRenderedProblems object
 	##################################################
+
+  # PG/macros/PG.pl wipes out problemSeed -- put it back!
+	$inputs_ref->{problemSeed} = $problem_seed;
+	$inputs_ref->{displayMode} = $display_mode;
 
 	#my $encoded_source = encode_base64($source); # create encoding of source_file;
 	my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
@@ -263,9 +268,9 @@ sub standaloneRenderer {
 	my $set           = fake_set();
 	my $showHints     = $form_data->{showHints} || 0;
 	my $showSolutions = $form_data->{showSolutions} || 0;
-	my $problemNumber = $form_data->{'problem_number'} || 1;
+	my $problemNumber = $form_data->{problem_number} || 1;
   my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
-	my $problem_seed  = $form_data->{'problemSeed'} || 0; #$r->param('problem_seed') || 0;
+	my $problem_seed  = $form_data->{problemSeed} || 0; #$r->param('problem_seed') || 0;
 
 	my $translationOptions = {
 		displayMode     	=> $displayMode,
@@ -274,7 +279,7 @@ sub standaloneRenderer {
 		refreshMath2img 	=> 1,
 		processAnswers  	=> 1,
 		QUIZ_PREFIX     	=> '',
-		use_site_prefix 	=> 'localhost:5000',
+		use_site_prefix 	=> 'localhost:3000',
 		use_opaque_prefix => 0,
 		permissionLevel 	=> 20
 	};
