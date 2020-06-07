@@ -141,6 +141,7 @@ sub formatRenderedProblem {
 	$self->{outputformats}={};
 	my $XML_URL      	 =  $self->url//'';
 	my $FORM_ACTION_URL  =  $self->{form_action_url}//'';
+	my $SITE_URL         =  $self->{url}//'';
 	my $courseID         =  $self->{courseID}//'';
 	my $userID           =  $self->{userID}//'';
 	my $course_password  =  $self->{course_password}//'';
