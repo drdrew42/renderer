@@ -220,7 +220,7 @@ sub process_problem {
 		return_object    => $return_object,
 		encoded_source   => encode_base64($source),
 		sourceFilePath   => $file_path,
-		url              => $ce->{server_root_url},   # use default hosted2
+		url              => $inputs_ref->{form_action_url},   # use default hosted2
 		form_action_url  => $inputs_ref->{form_action_url},
 		maketext         =>  sub {return @_},
 		courseID         =>  'blackbox',
@@ -279,7 +279,7 @@ sub standaloneRenderer {
 		refreshMath2img 	=> 1,
 		processAnswers  	=> 1,
 		QUIZ_PREFIX     	=> '',
-		use_site_prefix 	=> $ce->{server_root_url} || 'localhost/fail-renderapp-controller-renderproblem.pm',
+		use_site_prefix 	=> 'localhost:3000',
 		use_opaque_prefix => 0,
 		permissionLevel 	=> 20
 	};
