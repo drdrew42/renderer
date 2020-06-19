@@ -75,7 +75,7 @@ push( @pairs_for_json, "body_part100", $nextBlock );
 push( @pairs_for_json, "body_part300_VI", '$answerTemplate' . "\n" );
 
 $nextBlock = <<'ENDPROBLEMTEMPLATE';
-<form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="TO_SET_LATER_FORM_ACTION_URL" method="post">
+<form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="TO_SET_LATER_FORM_ACTION_URL" method="post" onsubmit="submitAction()">
 ENDPROBLEMTEMPLATE
 
 push( @pairs_for_json, "body_part500", $nextBlock );

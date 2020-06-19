@@ -42,7 +42,7 @@ $problemHeadText
     <div class="row-fluid">
       <div class="span12 problem">
 		    $answerTemplate
-        <form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post">
+        <form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit="submitAction()">
           <div id="problem_body" class="problem-content" $PROBLEM_LANG_AND_DIR>
             $problemText
           </div>
