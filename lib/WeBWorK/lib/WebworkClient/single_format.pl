@@ -68,9 +68,7 @@ $problemHeadText
           <input type="hidden" name="forcePortNumber" value="$forcePortNumber">
           <p>
 
-            <input type="submit" name="previewAnswers"  value="$STRING_Preview" />
             <input type="submit" name="submitAnswers" value="$STRING_Submit"/>
-            <input type="submit" name="showCorrectAnswers" value="$STRING_ShowCorrect"/>
           </p>
         </form>
       </div>

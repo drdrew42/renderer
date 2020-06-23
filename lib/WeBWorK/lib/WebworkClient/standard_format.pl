@@ -69,9 +69,9 @@ $LTIGradeMessage
        <label for="showAnsHashInfo_id"><input id="showAnsHashInfo_id" name="showAnsHashInfo" type="checkbox" value="1" /> AnswerHashInfo</label>&nbsp;
        <label for="showPGInfo_id"><input id="showPGInfo_id" name="showPGInfo" type="checkbox" value="1" /> PGInfo</label>&nbsp;<br />
 
-			<input type="submit" name="preview"  value="$STRING_Preview" />
-			<input type="submit" name="WWsubmit" value="$STRING_Submit"/>
-			<input type="submit" name="WWcorrectAns" value="$STRING_ShowCorrect"/>
+			<input type="submit" name="previewAnswers"  value="$STRING_Preview" />
+			<input type="submit" name="submitAnswers" value="$STRING_Submit"/>
+			<input type="submit" name="showCorrectAns" value="$STRING_ShowCorrect"/>
 		   </p>
 	</form>
 <HR>
