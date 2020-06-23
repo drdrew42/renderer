@@ -1,5 +1,10 @@
 *.DS_Store
 lib/WeBWorK/htdocs/tmp/
+lib/PG
+webwork-open-problem-library/
+logs/
+
+start.sh
 
 !Build/
 .last_cover_stats

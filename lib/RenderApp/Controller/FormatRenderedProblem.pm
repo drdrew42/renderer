@@ -149,10 +149,10 @@ sub formatRenderedProblem {
 	my $session_key      =  $rh_result->{session_key}//'';
 	my $displayMode      =  $self->{inputs_ref}->{displayMode}//'MathJax';
 
-	my $previewMode      =  defined($self->{inputs_ref}->{preview})||0;
-	my $checkMode        =  defined($self->{inputs_ref}->{WWcheck})||0;
-	my $submitMode       =  defined($self->{inputs_ref}->{WWsubmit})||0;
-	my $showCorrectMode  =  defined($self->{inputs_ref}->{WWcorrectAns})||0;
+	my $previewMode      =  defined($self->{inputs_ref}->{previewAnswers})||0;
+	my $checkMode        =  defined($self->{inputs_ref}->{checkAnswers})||0;
+	my $submitMode       =  defined($self->{inputs_ref}->{submitAnswers})||0;
+	my $showCorrectMode  =  defined($self->{inputs_ref}->{showCorrectAnswers})||0;
         # problemIdentifierPrefix can be added to the request as a parameter.
         # It adds a prefix to the
         # identifier used by the  format so that several different problems
@@ -208,7 +208,7 @@ sub formatRenderedProblem {
 
   my $STRING_Preview = "Preview My Answers";
   my $STRING_ShowCorrect = "Show correct answers";
-  my $STRING_Submit = "Check Answers";
+  my $STRING_Submit = "Submit Answers";
 
 	#my $pretty_print_self  = pretty_print($self);
 ######################################################
