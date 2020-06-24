@@ -107,7 +107,8 @@ sub process_pg_file {
 		outputformat		=> $inputHash->{outputFormat}||'simple',
 		problemSeed		  => $inputHash->{problemSeed}||'666',
 		language				=> $inputHash->{language}||'en',
-		form_action_url => $inputHash->{form_action_url}||'http://failure.org'
+		form_action_url => $inputHash->{form_action_url}||'http://failure.org',
+		base_url => $inputHash->{base_url}||'http://failure.org'
 		#psvn            => $psvn//'23456',
 		#forcePortNumber => $credentials{forcePortNumber}//'',
 	};
@@ -220,7 +221,7 @@ sub process_problem {
 		return_object    => $return_object,
 		encoded_source   => encode_base64($source),
 		sourceFilePath   => $file_path,
-		url              => $inputs_ref->{form_action_url},   # use default hosted2
+		url              => $inputs_ref->{base_url},   # use default hosted2
 		form_action_url  => $inputs_ref->{form_action_url},
 		maketext         =>  sub {return @_},
 		courseID         =>  'blackbox',
@@ -279,7 +280,7 @@ sub standaloneRenderer {
 		refreshMath2img 	=> 1,
 		processAnswers  	=> 1,
 		QUIZ_PREFIX     	=> '',
-		use_site_prefix 	=> 'localhost:3000',
+		#use_site_prefix 	=> 'http://localhost:3000',
 		use_opaque_prefix => 0,
 		permissionLevel 	=> 20
 	};

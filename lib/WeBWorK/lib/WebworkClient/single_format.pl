@@ -1,4 +1,4 @@
-$simple_format = <<'ENDPROBLEMTEMPLATE';
+$single_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
 <html $COURSE_LANG_AND_DIR>
 <head>
@@ -35,7 +35,7 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 
 $problemHeadText
 
-<title>WeBWorK using host: $SITE_URL, format: simple seed: $problemSeed</title>
+<title>Rederly Standalone Renderer</title>
 </head>
 <body>
   <div class="container-fluid">
