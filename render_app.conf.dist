@@ -4,7 +4,5 @@
   form => 'http://localhost:3000/rendered',
   opl_root => 'webwork-open-problem-library/OpenProblemLibrary/',
   contrib_root => 'webwork-open-problem-library/Contrib/',
-  APP_ROOT => '/usr/app/',
-  WEBWORK_DIR => './lib/WeBWorK',
-  PG_DIR => './lib/PG/',
+  RENDER_ROOT => '/usr/app/',
 };
