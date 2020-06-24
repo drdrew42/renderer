@@ -79,4 +79,4 @@ $problemHeadText
 
 ENDPROBLEMTEMPLATE
 
-$simple_format;
+$single_format;
