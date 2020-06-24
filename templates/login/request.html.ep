@@ -12,6 +12,7 @@
   <br>
   <b>TEMPLATE: </b><br>
   <%= radio_button template => 'simple'    %> <label for='simple'>Simple</label> <br>
+  <%= radio_button template => 'single'    %> <label for='single'>Single</label> <br>
   <%= radio_button template => 'standard'  %> <label for='standard'>Standard</label> <br>
   <br>
   <b>OUTPUT FORMAT: </b><br>
