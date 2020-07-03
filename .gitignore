@@ -3,7 +3,6 @@ render_app.conf
 lib/WeBWorK/htdocs/tmp/
 lib/PG
 webwork-open-problem-library/
-logs/
 
 start.sh
 
