@@ -38,6 +38,8 @@ RUN cpanm install Mojo::Base Date::Format \
 
 COPY . .
 
+RUN cp render_app.conf.dist render_app.conf
+
 EXPOSE 3000
 
 CMD morbo ./script/render_app
