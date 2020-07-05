@@ -42,4 +42,6 @@ RUN cp render_app.conf.dist render_app.conf
 
 EXPOSE 3000
 
+HEALTHCHECK CMD curl -I localhost:3000/request
+
 CMD morbo ./script/render_app
