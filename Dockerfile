@@ -11,16 +11,18 @@ ENV WEBWORK_ROOT=$RENDER_ROOT/lib/WeBWorK \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
     apt-utils \
-  	gcc \
+    git \
+    gcc \
     make \
     curl \
-  	dvipng \
+    dvipng \
     cpanminus \
     libgd-perl \
     libdbi-perl \
     libjson-perl \
     libcgi-pm-perl \
     libjson-xs-perl \
+    ca-certificates \ 
     libstorable-perl \
     libdatetime-perl \
     libuuid-tiny-perl \
@@ -39,6 +41,8 @@ RUN cpanm install Mojo::Base Date::Format \
 COPY . .
 
 RUN cp render_app.conf.dist render_app.conf
+
+RUN git clone --single-branch --branch master --depth 1 https://github.com/openwebwork/pg.git && mv pg/* lib/PG/ && rm -r pg
 
 EXPOSE 3000
 
