@@ -1,0 +1,25 @@
+% layout 'navbar';
+%= stylesheet '/twocolumn.css'
+%= javascript '/iframeResizer.min.js'
+<div class="row">
+  <div class="column" style="background-color:#aaa;">
+    %= include 'login/editorUI'
+  </div>
+  <div class="column" style="background-color:#bbb;">
+    <div class="iframe-container">
+      <button type="button" id="render-button">Render contents of editor</button>
+      <div class="collab" style="float:right;">
+      <img src="webwork-logo-65.png" height="35px">
+      <i class="fa fa-plus" aria-hidden="true" style="vertical-align:middle; height:42px;"></i>
+      <img src="Rederly-50.png" height="35px">
+      </div>
+      <BR>
+      <iframe class="iframe-responsive" id="rendered-problem" style="min-width: 100%;">
+        Load a problem, then click on "render contents."
+      </iframe>
+      %= javascript begin
+      iFrameResize({ checkOrigin: false }, "#rendered-problem")
+      % end
+    </div>
+  </div>
+</div>

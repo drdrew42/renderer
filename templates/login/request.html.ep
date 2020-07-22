@@ -6,14 +6,14 @@
 
 %= form_for render => begin
   Path to problem:<br>
-  %= text_field 'path_to_problem'
+  %= text_field 'sourceFilePath'
   <br>Random seed:<br>
-  %= text_field 'random_seed'
+  %= text_field 'problemSeed'
   <br>
   <b>TEMPLATE: </b><br>
-  <%= radio_button template => 'simple'    %> <label for='simple'>Simple</label> <br>
-  <%= radio_button template => 'single'    %> <label for='single'>Single</label> <br>
-  <%= radio_button template => 'standard'  %> <label for='standard'>Standard</label> <br>
+  <%= radio_button outputformat => 'simple'    %> <label for='simple'>Simple</label> <br>
+  <%= radio_button outputformat => 'single'    %> <label for='single'>Single</label> <br>
+  <%= radio_button outputformat => 'standard'  %> <label for='standard'>Standard</label> <br>
   <br>
   <b>OUTPUT FORMAT: </b><br>
   <%= radio_button format => 'html'      %> <label for='html'>HTML</label> <br>
