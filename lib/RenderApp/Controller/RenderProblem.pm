@@ -11,9 +11,9 @@ BEGIN {
 	# Unused variable, but define it twice to avoid an error message.
 	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/../../WeBWorK";
 	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/../../PG";
-	#unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
-#		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
-	#}
+	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
+		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
+	}
 	unless (-r $WeBWorK::Constants::PG_DIRECTORY ) {
 		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
 	}
@@ -92,10 +92,10 @@ sub UNIVERSAL::TO_JSON {
 #######################################################################
 
 sub process_pg_file {
-	my $format = shift;
+	#my $format = shift;
 	my $inputHash = shift;
-	my $NO_ERRORS = "";
-	my $ALL_CORRECT = "";
+	#my $NO_ERRORS = "";
+	#my $ALL_CORRECT = "";
 
 	our $seed_ce = create_course_environment();
 
@@ -103,12 +103,12 @@ sub process_pg_file {
 
 	# just make sure we have the fundamentals covered...
 	my $form_data = {
-		displayMode			=> 'MathJax',
-		outputformat		=> $inputHash->{outputFormat}||'simple',
-		problemSeed		  => $inputHash->{problemSeed}||'666',
-		language				=> $inputHash->{language}||'en',
+		displayMode     => 'MathJax',
+		outputformat    => $inputHash->{outputformat}||'processPGFileFailure',
+		problemSeed     => $inputHash->{problemSeed}||'666',
+		language        => $inputHash->{language}||'en',
 		form_action_url => $inputHash->{form_action_url}||'http://failure.org',
-		base_url => $inputHash->{base_url}||'http://failure.org'
+		base_url        => $inputHash->{base_url}||'http://failure.org'
 		#psvn            => $psvn//'23456',
 		#forcePortNumber => $credentials{forcePortNumber}//'',
 	};
@@ -126,12 +126,17 @@ sub process_pg_file {
 	# extract and display result
 	# print "display $file_path\n";
   my $html = $formatter->formatRenderedProblem;
-	return $html unless $format eq 'json';
+	#return $html unless $format eq 'json';
 	my $pg_obj = $formatter->{return_object};
 	my $json_rh = {
 		renderedHTML => $html,
 		answers => $pg_obj->{answers},
-		#PG_ANSWERS_HASH => $pg_obj->{PG_ANSWERS_HASH},
+		debug => {
+			perl_warn => decode_base64($pg_obj->{WARNINGS}),
+			pg_warn => $pg_obj->{warning_messages},
+			debug => $pg_obj->{debug_messages},
+			internal => $pg_obj->{internal_debug_messages}
+		},
 		problem_result => $pg_obj->{problem_result},
 		problem_state => $pg_obj->{problem_state},
 		flags => $pg_obj->{flags},
@@ -150,32 +155,38 @@ sub process_problem {
 	my $ce 				 = shift;
 	my $file_path  = shift;
 	my $inputs_ref = shift;
-
-	### get source and correct file_path name so that it is relative to templates directory
-	### revisit: DO WE NEED TO ADJUST THE FILE PATH???
-	my ($adj_file_path, $source) = get_source($file_path);
-	#print "find file at $adj_file_path ", length($source), "\n";
+	my $adj_file_path;
+	my $source;
 
 	### stash inputs that get wiped by PG
 	my $problem_seed = $inputs_ref->{problemSeed};
-	die "problem seed not defined in sendXMLRPC::process_problem" unless $problem_seed;
+	die "problem seed not defined in Controller::RenderProblem::process_problem" unless $problem_seed;
 	my $display_mode = $inputs_ref->{displayMode};
 
-#  my $local_psvn = $form_data->{psvn}//34567;
-# formerly updated_input -- now inputs_ref
-# removed ->{envir}{...}
-	#$inputs_ref->{fileName} = $adj_file_path;
-	#$inputs_ref->{probFileName} = $adj_file_path;
-	$inputs_ref->{sourceFilePath} = $adj_file_path;
-	#$inputs_ref->{pathToProblemFile} = $adj_file_path;
-	#$inputs_ref->{problemSeed} = $problem_seed;
+	if ($inputs_ref->{problemSource} =~ m/\S/) {
+		$source = decode_base64($inputs_ref->{problemSource});
+	} else {
+		### get source and correct file_path name so that it is relative to templates directory
+		### revisit: DO WE NEED TO ADJUST THE FILE PATH???
+		($adj_file_path, $source) = get_source($file_path);
+		#print "find file at $adj_file_path ", length($source), "\n";
 
-# These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
-#	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
-#	$inputs_ref->{showAnsHashInfo}		= 1; #$print_answer_hash;
-#	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
-#	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
+		#  my $local_psvn = $form_data->{psvn}//34567;
+		# formerly updated_input -- now inputs_ref
+		# removed ->{envir}{...}
+		#$inputs_ref->{fileName} = $adj_file_path;
+		#$inputs_ref->{probFileName} = $adj_file_path;
+		#$inputs_ref->{sourceFilePath} = $adj_file_path;
+		$inputs_ref->{pathToProblemFile} = $adj_file_path;
+		#$inputs_ref->{problemSeed} = $problem_seed;
 
+		# obsolete if using JSON return format
+		# These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
+		#	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
+		#	$inputs_ref->{showAnsHashInfo}	= 1; #$print_answer_hash;
+		#	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
+		#	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
+	}
 	##################################################
 	# Process the pg file
 	##################################################
@@ -339,9 +350,7 @@ sub standaloneRenderer {
 		header_text									=> $pg->{head_text},
 		answers											=> $pg->{answers},
 		errors											=> $pg->{errors},
-		WARNINGS										=> encode_base64(
-		                               "WARNINGS\n".$warning_messages."\n<br/>More<br/>\n".$pg->{warnings}
-		                               ),
+		WARNINGS										=> encode_base64($pg->{warnings}),
 		PG_ANSWERS_HASH             => $pg->{pgcore}->{PG_ANSWERS_HASH},
 		problem_result							=> $pg->{result},
 		problem_state								=> $pg->{state},
@@ -395,7 +404,6 @@ sub insert_mathquill_responses {
 }
 
 sub fake_user {
-#	my ($db) = @_;
 	my $user = {
 		user_id => 'Motoko_Kusanagi',
 		first_name=>'Motoko',
@@ -410,24 +418,22 @@ sub fake_user {
 }
 
 sub fake_problem {
-  #	my $db = shift;
-	my $problem = {}; #$db->newGlobalProblem();
-	#$problem = global2user($db->{problem_user}->{record}, $problem);
-
-	$problem->{set_id} = "Section_9";
-	$problem->{problem_id} = 1;
-	$problem->{value} = 1;
-	$problem->{max_attempts} = -1;
-	$problem->{showMeAnother} = -1;
-	$problem->{showMeAnotherCount} = 0;
-	$problem->{problem_seed} = 666;
-	$problem->{status} = 0;
-	$problem->{sub_status} = 0;
-	$problem->{attempted} = 2000;  # Large so hints won't be blocked
-	$problem->{last_answer} = "";
-	$problem->{num_correct} = 1000;
-	$problem->{num_incorrect} = 1000;
-	$problem->{prCount} = -10; # Negative to detect fake problems and disable problem randomization.
+	my $problem = {
+		set_id => 'Section_9',
+		problem_id => 1,
+		value => 1,
+		max_attempts => -1,
+		showMeAnother => -1,
+		showMeAnotherCount => 0,
+		problem_seed => 666,
+		status => 0,
+		sub_status => 0,
+		attempted => 2000,
+		last_answer => '',
+		num_correct => 1000,
+		num_incorrect => 1000,
+		prCount => -10
+	};
 
 	return($problem);
 }

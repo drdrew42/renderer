@@ -1,0 +1,22 @@
+% layout 'default';
+
+Welcome <%= session 'user' %>.<br>
+
+% if (my $msg = flash 'message') {
+  <b><%= $msg %></b><br>
+% }
+
+% if (my $seed = session 'seed') {
+  <b>Seed value was NOT deleted: <%= $seed %></b><br>
+% }
+
+%= form_for render => begin
+  Path to problem:<br>
+  %= text_field 'path_to_problem'
+  <br>Random seed:<br>
+  %= text_field 'random_seed'
+  <br>
+  %= submit_button 'Render'
+% end
+
+%= link_to Logout => 'logout'

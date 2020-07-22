@@ -32,6 +32,7 @@ $single_format = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mathquill.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqeditor.js"></script>
+<script type="text/javascript" src="/iframeResizer.contentWindow.min.js"></script>
 
 $problemHeadText
 
@@ -42,6 +43,7 @@ $problemHeadText
     <div class="row-fluid">
       <div class="span12 problem">
 		    $answerTemplate
+        $color_input_blanks_script
         <form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit="submitAction()">
           <div id="problem_body" class="problem-content" $PROBLEM_LANG_AND_DIR>
             $problemText
@@ -52,20 +54,9 @@ $problemHeadText
           <input type="hidden" name="answersSubmitted" value="1">
           <input type="hidden" name="sourceFilePath" value = "$sourceFilePath">
           <input type="hidden" name="problemSource" value="$encoded_source">
-          <input type="hidden" name="problemSeed" value="$problemSeed">
-          <input type="hidden" name="problemUUID" value="$problemUUID">
-          <input type="hidden" name="psvn" value="$psvn">
-          <input type="hidden" name="pathToProblemFile" value="$fileName">
-          <input type="hidden" name=courseName value="$courseID">
-          <input type="hidden" name=courseID value="$courseID">
-          <input type="hidden" name="userID" value="$userID">
-          <input type="hidden" name="course_password" value="$course_password">
-          <input type="hidden" name="displayMode" value="$displayMode">
-          <input type="hidden" name="session_key" value="$session_key">
-          <input type="hidden" name="outputformat" value="simple">
+          <input type="hidden" name="outputformat" value="single">
           <input type="hidden" name="language" value="$formLanguage">
           <input type="hidden" name="showSummary" value="$showSummary">
-          <input type="hidden" name="forcePortNumber" value="$forcePortNumber">
           <p>
 
             <input type="submit" name="submitAnswers" value="$STRING_Submit"/>

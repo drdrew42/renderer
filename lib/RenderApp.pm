@@ -1,16 +1,16 @@
 package RenderApp;
 use Mojo::Base 'Mojolicious';
-use Mojo::File 'curfile';
+use Mojo::File;
 
-use RenderApp::Model::Users;
-#use RenderApp::Model::Problem;
+use RenderApp::Model::Problem;
 
 use RenderApp::Controller::RenderProblem;
 use WeBWorK::Form;
 
 BEGIN {
-	use File::Basename;
-	$main::dirname = dirname(__FILE__);
+	#use File::Basename;
+	use Mojo::File;
+	$main::dirname = Mojo::File::curfile->dirname;
 }
 #$ENV{MOD_PERL_API_VERSION} = 2;
 use lib "$main::dirname";
@@ -20,6 +20,7 @@ BEGIN {
 	# Unused variable, but define it twice to avoid an error message.
 	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
 	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
+	$WeBWorK::Constants::OPL_DIRECTORY     = $main::dirname->dirname."/webwork-open-problem-library";
 	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
 		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
 	}
@@ -59,8 +60,22 @@ sub startup {
 		$hash->{base_url} = $c->param('baseURL') || $c->app->config('url');
 		$hash->{outputFormat} = $c->param('template') || $c->session('template');
 		$hash->{inputs_ref} = \%inputs_ref;
-    return RenderApp::Controller::RenderProblem::process_pg_file($format,$hash);
+    return RenderApp::Controller::RenderProblem::process_pg_file($hash);
   });
+
+  $self->helper(fetchProblemSource => sub{
+		my $c = shift;
+		my $file_path = $c->param('sourceFilePath') || $c->session('filePath');
+		return unless $file_path;
+		my $opl_root = $c->app->config('opl_root');
+		my $contrib_root = $c->app->config('contrib_root');
+		$file_path =~ s!^Library/!$opl_root!;
+		$file_path =~ s!^Contrib/!$contrib_root!;
+		$file_path = Mojo::File->new($file_path);
+		return unless (-r $file_path);
+		#$c->session( pathString => $file_path->to_string );
+		return $file_path->slurp;
+	});
 
 	# helper to expose request data
   $self->helper(requestData => sub {
@@ -77,10 +92,18 @@ sub startup {
   my $r = $self->routes;
   $r->any('/')->to('login#index')->name('index');
 
+	$r->post('/render-api/')->to('render#problem');
+	$r->post('/render-api/age')->to('render#problem');
+	$r->post('/render-api/tap')->to('render#raw');
+	$r->post('/render-api/can')->to('render#writer');
+	$r->any('/ui')->to('login#ui');
+
   #my $logged_in = $r->under('/')->to('login#is_valid');
   $r->get('/request')->to('login#request');
-	$r->any('/render')->to('render#form_check');
+	$r->any('/render')->to('render#problem');
 	$r->any('/rendered')->to('login#rendered');
+	$r->post('/editor')->to('editor#action');
+	$r->any('/editor')->to('login#editor')->name('editor');
 
   $r->get('/logout')->to('login#logout');
 
