@@ -22,7 +22,7 @@ let problemiframe = document.getElementById("rendered-problem");
 problemiframe.addEventListener('load', () => { insertListener(); activeButton(); console.log("loaded..."); } )
 
 savebutton.addEventListener("click", event => {
-  const writeurl = 'http://localhost:3000/render-api/can'
+  const writeurl = '/render-api/can'
 
   let formData = new FormData()
   formData.append("problemSource", window.btoa(cm.getValue()))
@@ -46,7 +46,7 @@ savebutton.addEventListener("click", event => {
 
 loadbutton.addEventListener("click", event => {
   event.preventDefault();
-  const sourceurl = 'http://localhost:3000/render-api/tap'
+  const sourceurl = '/render-api/tap'
 
   let formData = new FormData();
   formData.append("sourceFilePath", document.getElementById('sourceFilePath').value);
@@ -73,7 +73,7 @@ loadbutton.addEventListener("click", event => {
 renderbutton.addEventListener("click", event => {
   event.preventDefault();
   document.getElementById("rendered-problem").srcdoc = "Loading..."
-  const renderurl = 'http://localhost:3000/render-api'
+  const renderurl = '/render-api'
 
   let formData = new FormData();
   formData.append("sourceFilePath", document.getElementById('sourceFilePath').value);
@@ -124,7 +124,7 @@ function insertListener() {
     let clickedButton = problemForm.querySelector('.btn-clicked')
     formData.append("format", "json")
     formData.append(clickedButton.name, clickedButton.value)
-    const submiturl = 'http://localhost:3000/render-api'
+    const submiturl = '/render-api'
     const submit_params = {
       body : formData,
       method : "post"
