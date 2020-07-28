@@ -57,7 +57,7 @@ sub startup {
 		$hash->{problemSeed} = $c->param('problemSeed') || $c->session('seed');
 		$hash->{form_action_url} = $c->param('formURL') || $c->app->config('form');
 		$hash->{base_url} = $c->param('baseURL') || $c->app->config('url');
-		$hash->{outputFormat} = $c->param('template') || $c->session('template');
+		$hash->{outputformat} = $c->param('template') || $c->session('template');
 		$hash->{inputs_ref} = \%inputs_ref;
     return RenderApp::Controller::RenderProblem::process_pg_file($format,$hash);
   });
