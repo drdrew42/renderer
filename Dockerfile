@@ -42,7 +42,7 @@ COPY . .
 
 RUN cp render_app.conf.dist render_app.conf
 
-RUN git clone --single-branch --branch master --depth 1 https://github.com/openwebwork/pg.git && mv pg/* lib/PG/ && rm -r pg
+RUN git clone --single-branch --branch master --depth 1 https://github.com/openwebwork/pg.git lib/PG
 
 EXPOSE 3000
 
