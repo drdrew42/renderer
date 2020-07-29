@@ -4,28 +4,30 @@ $standard_format = <<'ENDPROBLEMTEMPLATE';
 <meta charset='utf-8'>
 <base href="$SITE_URL">
 <link rel="shortcut icon" href="/webwork2_files/images/favicon.ico"/>
+
 <!-- CSS Loads -->
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap-responsive.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/jquery-ui-1.8.18.custom.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/vendor/font-awesome/css/font-awesome.min.css"/>
+<link rel="stylesheet" type="text/css" href="/webwork2_files/css/jquery-ui.css"/>
+<link rel="stylesheet" type="text/css" href="/bootstrap.sub.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/themes/math4/math4.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/css/knowlstyle.css"/>
+<link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mathquill.css"/>
+<link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
 
 <!-- JS Loads -->
-<script type="text/javascript" src="/webwork2_files/js/vendor/jquery/jquery.js"></script>
-<script type="text/javascript" src="/webwork2_files/mathjax/MathJax.js?config=TeX-MML-AM_HTMLorMML-full"></script>
-<script type="text/javascript" src="/webwork2_files/js/jquery-ui-1.9.0.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/vendor/bootstrap/js/bootstrap.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/jquery.min.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/jquery-ui.min.js"></script>
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-MML-AM_CHTML"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/AddOnLoad/addOnLoadEvent.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/legacy/java_init.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/InputColor/color.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/Base64/Base64.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/vendor/underscore/underscore.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/legacy/vendor/knowl.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/Problem/problem.js"></script>
 <script type="text/javascript" src="/webwork2_files/themes/math4/math4.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mathquill.min.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqeditor.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/submithelper.js"></script>
+
 $problemHeadText
 
 
