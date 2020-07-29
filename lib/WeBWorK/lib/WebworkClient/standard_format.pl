@@ -7,6 +7,8 @@ $standard_format = <<'ENDPROBLEMTEMPLATE';
 
 <!-- CSS Loads -->
 <link rel="stylesheet" type="text/css" href="/webwork2_files/css/jquery-ui.css"/>
+<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap.min.css"/>
+<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap-responsive.min.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/css/bootstrap.sub.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/themes/math4/math4.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/css/knowlstyle.css"/>
