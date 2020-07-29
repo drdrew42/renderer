@@ -8,7 +8,7 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 
 <!-- CSS Loads -->
 <link rel="stylesheet" type="text/css" href="/webwork2_files/css/jquery-ui.css"/>
-<link rel="stylesheet" type="text/css" href="/bootstrap.sub.css"/>
+<link rel="stylesheet" type="text/css" href="/webwork2_files/css/bootstrap.sub.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/themes/math4/math4.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/css/knowlstyle.css"/>
 <link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mathquill.css"/>
