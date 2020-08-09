@@ -1,4 +1,4 @@
-%= my ($path_string, $problem_source)
+%= my $problem_source
 
 %= stylesheet 'http://codemirror.net/theme/monokai.css'
 %= stylesheet 'http://codemirror.net/theme/material-palenight.css'
@@ -11,7 +11,7 @@
   <i><div id="currentEditPath"></div></i>
   %= text_area problemContentsEditor => $problem_source, id => 'problemContentsEditor'
 
-%= javascript '/webwork2_files/js/vendor/jquery/jquery.js'
+%= javascript '/webwork2_files/js/jquery.min.js'
 %= javascript 'https://codemirror.net/addon/selection/active-line.js'
 %= javascript begin
 $(function(){
@@ -30,14 +30,6 @@ $(function(){
 	    matchBrackets: true,
 	  });
 	// cm.setSize(700,400);
-});
-
-$(function(){
-  $('#hide').text($('#writePathString').val());
-  $('#writePathString').width($('#hide').width());
-}).on('input', function () {
-  $('#hide').text($('#writePathString').val());
-  $('#writePathString').width($('#hide').width());
 });
 % end
 
