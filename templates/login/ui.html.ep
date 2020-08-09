@@ -18,7 +18,7 @@
         Load a problem, then click on "render contents."
       </iframe>
       %= javascript begin
-      iFrameResize({ checkOrigin: false }, "#rendered-problem")
+      iFrameResize({ checkOrigin: false, scrolling: true }, "#rendered-problem")
       % end
     </div>
   </div>
