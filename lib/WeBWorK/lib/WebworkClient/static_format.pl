@@ -1,4 +1,4 @@
-$single_format = <<'ENDPROBLEMTEMPLATE';
+$static_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
 <html $COURSE_LANG_AND_DIR>
 <head>
@@ -28,8 +28,7 @@ $single_format = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="/webwork2_files/themes/math4/math4.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mathquill.min.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqeditor.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/submithelper.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqstatic.js"></script>
 
 $problemHeadText
 
@@ -55,10 +54,7 @@ $problemHeadText
           <input type="hidden" name="outputformat" value="single">
           <input type="hidden" name="language" value="$formLanguage">
           <input type="hidden" name="showSummary" value="$showSummary">
-          <p>
 
-            <input type="submit" name="submitAnswers" value="$STRING_Submit"/>
-          </p>
         </form>
       </div>
     </div>
@@ -68,4 +64,4 @@ $problemHeadText
 
 ENDPROBLEMTEMPLATE
 
-$single_format;
+$static_format;

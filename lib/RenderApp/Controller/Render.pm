@@ -5,34 +5,6 @@ use Mojo::File;
 use RenderApp::Controller::RenderProblem;
 use MIME::Base64 qw(decode_base64);
 
-sub form_check {
-  my $c = shift;
-  my $v = $c->validation;
-
-  unless ($v->has_data) {
-    $c->flash(message=>'Your request contained no data.');
-    return $c->redirect_to('request');
-  }
-
-  $v->required('problemSeed')->size(1,6)->like(qr/^[0-9]+$/);
-  $v->required('sourceFilePath')->like(qr/^[a-zA-Z0-9\-_\.\/]+\.pg$/);
-  $v->optional('outputformat');
-  $v->optional('template');
-
-  if ($v->has_error) {
-    $c->flash(message=>"Your request was malformed.");
-    warn for @{$v->failed};
-    return $c->redirect_to('request');
-  }
-
-  $c->session->{filePath} = $v->param('sourceFilePath');
-  $c->session->{seed} = $v->param('problemSeed');
-  $c->session->{template} = $v->param('template');
-  $c->session->{format} = $v->param('outputformat');
-  $c->session->{showEdit} = 1;
-  $c->redirect_to('rendered');
-}
-
 sub problem {
   my $c = shift;
   my $opl_root = $c->app->config('opl_root');
@@ -40,6 +12,11 @@ sub problem {
   my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
   $file_path =~ s!^Library/!$opl_root!;
   $file_path =~ s!^Contrib/!$contrib_root!;
+  $c->render(json => {
+    statusCode => 404,
+    error => "Not Found",
+    message => "I cannot find a problem with that file path."
+  }, status => 404) unless (-r $file_path);
   my $hash = {};
   # it seems that ->Vars encodes an array in case key=>array
   my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
@@ -64,6 +41,11 @@ sub raw {
   my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
   $file_path =~ s!^Library/!$opl_root!;
   $file_path =~ s!^Contrib/!$contrib_root!;
+  return $c->render(json => {
+    statusCode => 404,
+    error => "Not Found",
+    message => "I cannot find a problem with that file path."
+  }, status => 404) unless (-r $file_path);
   $c->render(text => Mojo::File->new($file_path)->slurp);
 }
 

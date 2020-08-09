@@ -140,7 +140,7 @@ sub process_pg_file {
 		problem_result => $pg_obj->{problem_result},
 		problem_state => $pg_obj->{problem_state},
 		flags => $pg_obj->{flags},
-		form_data => $form_data
+		form_data => $form_data,
 	};
 	my $coder = JSON::XS->new->ascii->pretty->convert_blessed->allow_unknown;
 	my $json = $coder->encode ($json_rh);
@@ -158,6 +158,13 @@ sub process_problem {
 	my $adj_file_path;
 	my $source;
 
+	# obsolete if using JSON return format
+	# These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
+	#	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
+	#	$inputs_ref->{showAnsHashInfo}	= 1; #$print_answer_hash;
+	#	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
+	#	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
+
 	### stash inputs that get wiped by PG
 	my $problem_seed = $inputs_ref->{problemSeed};
 	die "problem seed not defined in Controller::RenderProblem::process_problem" unless $problem_seed;
@@ -166,27 +173,26 @@ sub process_problem {
 	if ($inputs_ref->{problemSource} =~ m/\S/) {
 		$source = decode_base64($inputs_ref->{problemSource});
 	} else {
-		### get source and correct file_path name so that it is relative to templates directory
-		### revisit: DO WE NEED TO ADJUST THE FILE PATH???
 		($adj_file_path, $source) = get_source($file_path);
-		#print "find file at $adj_file_path ", length($source), "\n";
-
-		#  my $local_psvn = $form_data->{psvn}//34567;
-		# formerly updated_input -- now inputs_ref
-		# removed ->{envir}{...}
+		# WHY are there so many fields in which to stash the file path?
 		#$inputs_ref->{fileName} = $adj_file_path;
 		#$inputs_ref->{probFileName} = $adj_file_path;
 		#$inputs_ref->{sourceFilePath} = $adj_file_path;
-		$inputs_ref->{pathToProblemFile} = $adj_file_path;
+		#$inputs_ref->{pathToProblemFile} = $adj_file_path;
 		#$inputs_ref->{problemSeed} = $problem_seed;
-
-		# obsolete if using JSON return format
-		# These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
-		#	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
-		#	$inputs_ref->{showAnsHashInfo}	= 1; #$print_answer_hash;
-		#	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
-		#	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
 	}
+
+	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
+		warn "problem-level redirect found!\nMatch 1: ".$1."\nMatch 2: ".$2."\n" if $UNIT_TESTS_ON;
+		# TODO: find a non-hardcoded way to re-address the library...
+		my $redirect = $1;
+		$redirect =~ s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
+		warn "REDIRECTING TO: ".$redirect."\n" if $UNIT_TESTS_ON;
+		($adj_file_path, $source) = get_source($redirect);
+	}
+
+	$inputs_ref->{pathToProblemFile} = $adj_file_path if (defined $adj_file_path);
+
 	##################################################
 	# Process the pg file
 	##################################################
@@ -469,6 +475,7 @@ sub fake_set {
 sub get_source {
 	my $file_path = shift;
 	my $source;
+	warn "sub get_source called \n";
 	die "Unable to read file $file_path \n" unless $file_path eq '-' or -r $file_path;
 	eval {  #File::Slurp would be faster (see perl monks)
 		 local $/=undef;
@@ -489,6 +496,13 @@ sub get_source {
 		}
 	};
 	die "Something is wrong with the contents of $file_path\n" if $@;
+
+	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
+		warn "problem-level redirect found! ".$1."\n" if $UNIT_TESTS_ON;;
+		($file_path, $source) = get_source($1);
+		return $file_path, $source;
+	}
+
 	### adjust file_path so that it is relative to the rendering course directory
 	#$file_path =~ s|/opt/webwork/libraries/NationalProblemLibrary|Library|;
 	#$file_path =~ s|^.*?/webwork-open-problem-library/OpenProblemLibrary|Library|;
