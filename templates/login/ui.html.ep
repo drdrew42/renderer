@@ -8,6 +8,8 @@
   <div class="column" style="background-color:#bbb;">
     <div class="iframe-container">
       <button type="button" id="render-button">Render contents of editor</button>
+      <div class="render-option"><input type="checkbox" class="checkbox-input inp" id="show-hint" name="showHints" value="1"><label for="showHints">Show hints</label></div>
+      <div class="render-option"><input type="checkbox" class="checkbox-input inp" id="show-solution" name="showSolutions" value="1"><label for="showSolutions">Show solutions</label></div>
       <div class="collab" style="float:right;">
       <img src="webwork-logo-65.png" height="35px">
       <i class="fa fa-plus" aria-hidden="true" style="vertical-align:middle; height:42px;"></i>
