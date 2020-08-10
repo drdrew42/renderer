@@ -80,6 +80,9 @@ renderbutton.addEventListener("click", event => {
   formData.append("problemSeed", document.getElementById('problemSeed').value);
   formData.append("outputformat", document.querySelector(".dropdown-item.selected").id);
   formData.append("problemSource", window.btoa(cm.getValue()));
+  [...document.querySelectorAll('.checkbox-input:checked')].map(e=>e.name).forEach( (box) => {
+    formData.append(box, 1);
+  });
   formData.append("format", "json");
   const render_params = {
     body : formData,

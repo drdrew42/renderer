@@ -37,6 +37,7 @@ use File::Path;
 use String::ShellQuote;
 use Cwd 'abs_path';
 use JSON::XS;
+use Data::Dumper;
 
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
@@ -286,9 +287,10 @@ sub standaloneRenderer {
 	my $set           = fake_set();
 	my $showHints     = $form_data->{showHints} || 0;
 	my $showSolutions = $form_data->{showSolutions} || 0;
-	my $problemNumber = $form_data->{problem_number} || 1;
+	my $problemNumber = $form_data->{problemNumber} || 1;
   my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
 	my $problem_seed  = $form_data->{problemSeed} || 0; #$r->param('problem_seed') || 0;
+	my $permission_level = $form_data->{permissionLevel} || 0;
 
 	my $translationOptions = {
 		displayMode     	=> $displayMode,
@@ -299,7 +301,7 @@ sub standaloneRenderer {
 		QUIZ_PREFIX     	=> '',
 		#use_site_prefix 	=> 'http://localhost:3000',
 		use_opaque_prefix => 0,
-		permissionLevel 	=> 20
+		permissionLevel 	=> 0
 	};
 	my $extras = {};   # Check what this is used for - passed as arg to renderer->new()
 
@@ -350,6 +352,7 @@ sub standaloneRenderer {
     }
 
   insert_mathquill_responses($form_data,$pg);
+	warn Dumper($pg);
 
 	my $out2 = {
 		text												=> $pg->{body_text},
