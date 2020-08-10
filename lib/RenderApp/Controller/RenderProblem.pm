@@ -105,7 +105,7 @@ sub process_pg_file {
 	# just make sure we have the fundamentals covered...
 	my $form_data = {
 		displayMode     => 'MathJax',
-		outputformat    => $inputHash->{outputformat}||'processPGFileFailure',
+		outputformat    => $inputHash->{outputformat}||'static',
 		problemSeed     => $inputHash->{problemSeed}||'666',
 		language        => $inputHash->{language}||'en',
 		form_action_url => $inputHash->{form_action_url}||'http://failure.org',
