@@ -155,7 +155,7 @@ sub load {
 sub render {
   my $self = shift;
   my $inputs_ref = shift;
-  return RenderApp::Controller::RenderProblem::process_pg_file($inputs_ref);
+  return RenderApp::Controller::RenderProblem::process_pg_file($self, $inputs_ref);
 }
 
 sub success {

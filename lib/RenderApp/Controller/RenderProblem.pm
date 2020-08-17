@@ -74,14 +74,12 @@ sub UNIVERSAL::TO_JSON {
 #######################################################################
 
 sub process_pg_file {
-	#my $format = shift;
+	my $problem = shift;
 	my $inputHash = shift;
-	#my $NO_ERRORS = "";
-	#my $ALL_CORRECT = "";
 
 	our $seed_ce = create_course_environment();
 
-	my $file_path = $inputHash->{sourceFilePath};
+	my $file_path = $problem->{read_path};
 
 	# just make sure we have the fundamentals covered...
 	$inputHash->{displayMode}	=	'MathJax';	#	is there any reason for this to be anything else?
@@ -218,8 +216,8 @@ sub process_problem {
 		return_object    => $return_object,
 		encoded_source   => encode_base64($source),
 		sourceFilePath   => $file_path,
-		url              => $inputs_ref->{base_url},   # use default hosted2
-		form_action_url  => $inputs_ref->{form_action_url},
+		url              => $inputs_ref->{base_url} || $inputs_ref->{baseURL},   # use default hosted2
+		form_action_url  => $inputs_ref->{form_action_url} || $inputs_ref->{formURL},
 		maketext         =>  sub {return @_},
 		courseID         =>  'blackbox',
 		userID           =>  'Motoko_Kusanagi',
@@ -465,7 +463,6 @@ sub fake_set {
 sub get_source {
 	my $file_path = shift;
 	my $source;
-	warn "sub get_source called \n";
 	die "Unable to read file $file_path \n" unless $file_path eq '-' or -r $file_path;
 	eval {  #File::Slurp would be faster (see perl monks)
 		 local $/=undef;
