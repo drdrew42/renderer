@@ -36,11 +36,16 @@ savebutton.addEventListener("click", event => {
     if (response.ok) {
       return response.text();
     } else {
-      throw new Error("Could not save the file: " + response.statusText);
+      return response.json();
     }
   }).then(function(data) {
-  }).catch(function(error) {
-    alert(error.message)
+    if (data.message) {
+      throw new Error("Could not write to file: " + data.message);
+    } else {
+      alert("Successfully written to file: " + data);
+    }
+  }).catch(function(e) {
+    alert(e.message);
   });
 })
 
