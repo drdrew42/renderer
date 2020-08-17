@@ -46,8 +46,8 @@ sub new {
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
-		url            => 'localhost:5000',
-		form_action_url =>'localhost:5000/rendered',
+		url            => 'localhost:3000',
+		form_action_url =>'localhost:3000/render-api',
 		maketext   	   => sub {return @_},
 		courseID       => 'foo',  # optional?
 		userID         => 'bar',  # optional?
