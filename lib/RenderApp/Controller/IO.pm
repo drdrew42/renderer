@@ -1,11 +1,8 @@
 package RenderApp::Controller::IO;
 use Mojo::Base 'Mojolicious::Controller';
-use Mojo::JSON qw(decode_json);
-use Mojo::File;
 use File::Spec::Functions qw(splitdir);
 use File::Find qw(find);
 use MIME::Base64 qw(decode_base64);
-use RenderApp::Model::Problem;
 
 sub raw {
   my $c = shift;
@@ -34,11 +31,10 @@ sub catalog {
     message => "You must provide a valid base path."
   }, status => 412) unless ( defined($c->param('basePath')) && $c->param('basePath') =~ m/\S/ );
 
-  # depth 0: is this path valid?
-  # return directories with trailing slash
   my $root_path = $c->param('basePath');
   my $depth = $c->param('maxDepth') // 2;
 
+  # no peeking outside of these two directory trees
   return $c->render(json => {
     statusCode => 403,
     error => "Forbidden",
@@ -49,14 +45,14 @@ sub catalog {
     return (-e $root_path) ? $c->rendered(200) : $c->rendered(404);
   }
 
-  local $File::Find::skip_pattern = qr/^\./;
+  local $File::Find::skip_pattern = qr/^\./; #skip any hidden folders
   my %all;
   my $wanted = sub {
-    (my $rel = $File::Find::name) =~ s!^\Q$root_path\E/?!!;
+    (my $rel = $File::Find::name) =~ s!^\Q$root_path\E/?!!; #measure depth relative to root_path
     my $path = $File::Find::name;
     $File::Find::prune = 1 if File::Spec::Functions::splitdir($rel) >= $depth;
     $path = $path.'/' if -d $File::Find::name;
-    $all{$path}++ if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! );
+    $all{$path}++ if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ); #only report .pg files and directories
   };
   File::Find::find {wanted=>$wanted, no_chdir=>1}, $root_path;
 
