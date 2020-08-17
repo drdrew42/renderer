@@ -2,19 +2,24 @@ package RenderApp;
 use Mojo::Base 'Mojolicious';
 use Mojo::File;
 
-use RenderApp::Model::Problem;
-
-use RenderApp::Controller::RenderProblem;
-use WeBWorK::Form;
-
 BEGIN {
 	#use File::Basename;
 	use Mojo::File;
 	$main::dirname = Mojo::File::curfile->dirname;
+	#RENDER_ROOT is required for initializing conf files
+	$ENV{RENDER_ROOT} = $main::dirname->dirname unless ( defined($ENV{RENDER_ROOT}) );
+	#WEBWORK_ROOT is required for PG/lib/WeBWorK/IO
+	$ENV{WEBWORK_ROOT} = $main::dirname.'/WeBWorK' unless ( defined($ENV{WEBWORK_ROOT}) );
+	$ENV{OPL_DIRECTORY}	=	$main::dirname->dirname."/webwork-open-problem-library";
 }
 #$ENV{MOD_PERL_API_VERSION} = 2;
 use lib "$main::dirname";
 print "home directory ".$main::dirname."\n";
+print "RENDER_ROOT: ".$ENV{RENDER_ROOT}."\n";
+print "WEBWORK ROOT: ".$ENV{WEBWORK_ROOT}."\n";
+print "WEBWORK_DIRECTORY: ".$WeBWorK::Constants::WEBWORK_DIRECTORY."\n";
+print "OPL_DIRECTORY: ".$ENV{OPL_DIRECTORY}."\n";
+print "PG_DIRECTORY: ".$WeBWorK::Constants::PG_DIRECTORY."\n";
 
 BEGIN {
 	# Unused variable, but define it twice to avoid an error message.
@@ -29,6 +34,12 @@ BEGIN {
 	}
 }
 
+use RenderApp::Model::Problem;
+use RenderApp::Controller::RenderProblem;
+
+use WeBWorK::Form;
+use WeBWorK::Constants;
+
 sub startup {
   my $self = shift;
   my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
@@ -39,7 +50,7 @@ sub startup {
   $self->secrets($self->config('secrets'));
 
   # Models
-  # $self->helper(users => sub { state $users = RenderApp::Model::Users->new });
+  $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
 	# helper for rendering problem
 	# needs to capture request data and pass along
@@ -90,20 +101,18 @@ sub startup {
 
   # Routes to controller
   my $r = $self->routes;
-  $r->any('/')->to('login#index')->name('index');
+  #$r->any('/')->to('login#index')->name('index');
 
+	$r->any('/')->to('login#ui');
 	$r->post('/render-api/')->to('render#problem');
-	$r->post('/render-api/age')->to('render#problem');
-	$r->post('/render-api/tap')->to('render#raw');
-	$r->post('/render-api/can')->to('render#writer');
-	$r->any('/ui')->to('login#ui');
+	$r->post('/render-api/tap')->to('IO#raw');
+	$r->post('/render-api/can')->to('IO#writer');
+	$r->any('/render-api/cat')->to('IO#catalog');
 
   #my $logged_in = $r->under('/')->to('login#is_valid');
   $r->get('/request')->to('login#request');
 	$r->any('/render')->to('render#problem');
 	$r->any('/rendered')->to('login#rendered');
-	$r->post('/editor')->to('editor#action');
-	$r->any('/editor')->to('login#editor')->name('editor');
 
   $r->get('/logout')->to('login#logout');
 

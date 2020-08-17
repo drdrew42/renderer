@@ -5,24 +5,6 @@ use warnings;
 
 package RenderApp::Controller::RenderProblem;
 
-BEGIN {
-	use File::Basename;
-	$main::dirname = dirname(__FILE__);
-	# Unused variable, but define it twice to avoid an error message.
-	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/../../WeBWorK";
-	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/../../PG";
-	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
-		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
-	}
-	unless (-r $WeBWorK::Constants::PG_DIRECTORY ) {
-		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
-	}
-}
-
-#######################################################
-# Find the webwork2 root directory
-#######################################################
-
 use Carp;
 #use Crypt::SSLeay;  # needed for https
 #use LWP::Protocol::https;
@@ -37,7 +19,6 @@ use File::Path;
 use String::ShellQuote;
 use Cwd 'abs_path';
 use JSON::XS;
-use Data::Dumper;
 
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
@@ -100,26 +81,24 @@ sub process_pg_file {
 
 	our $seed_ce = create_course_environment();
 
-	my $file_path = $inputHash->{filePath};
+	my $file_path = $inputHash->{sourceFilePath};
 
 	# just make sure we have the fundamentals covered...
-	my $form_data = {
-		displayMode     => 'MathJax',
-		outputformat    => $inputHash->{outputformat}||'static',
-		problemSeed     => $inputHash->{problemSeed}||'666',
-		language        => $inputHash->{language}||'en',
-		form_action_url => $inputHash->{form_action_url}||'http://failure.org',
-		base_url        => $inputHash->{base_url}||'http://failure.org'
-		#psvn            => $psvn//'23456',
-		#forcePortNumber => $credentials{forcePortNumber}//'',
-	};
-	# pull the inputs_ref up a level into the form_data hash
-	$form_data = {%{$inputHash->{inputs_ref}}, %{$form_data}};
+	$inputHash->{displayMode}	=	'MathJax';	#	is there any reason for this to be anything else?
+	$inputHash->{outputformat} = 'static' unless ($inputHash->{outputformat});
+	$inputHash->{problemSeed}	=	'666' unless ($inputHash->{problemSeed});
+	$inputHash->{language} = 'en' unless ($inputHash->{language});
+
+	# OTHER fundamentals - urls have been handled already...
+	#	form_action_url => $inputHash->{form_action_url}||'http://failure.org',
+	#	base_url        => $inputHash->{base_url}||'http://failure.org'
+	#	#psvn            => $psvn//'23456', # DEPRECATED
+	#	#forcePortNumber => $credentials{forcePortNumber}//'',
 
 	my $pg_start = time; # this is Time::HiRes's time, which gives floating point values
 
 	my ($error_flag, $formatter, $error_string) =
-	    process_problem($seed_ce, $file_path, $form_data);
+	    process_problem($seed_ce, $file_path, $inputHash);
 
 	my $pg_stop = time;
 	my $pg_duration = $pg_stop-$pg_start;
@@ -141,7 +120,7 @@ sub process_pg_file {
 		problem_result => $pg_obj->{problem_result},
 		problem_state => $pg_obj->{problem_state},
 		flags => $pg_obj->{flags},
-		form_data => $form_data,
+		form_data => $inputHash,
 	};
 	my $coder = JSON::XS->new->ascii->pretty->convert_blessed->allow_unknown;
 	my $json = $coder->encode ($json_rh);
@@ -171,7 +150,7 @@ sub process_problem {
 	die "problem seed not defined in Controller::RenderProblem::process_problem" unless $problem_seed;
 	my $display_mode = $inputs_ref->{displayMode};
 
-	if ($inputs_ref->{problemSource} =~ m/\S/) {
+	if ($inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/) {
 		$source = decode_base64($inputs_ref->{problemSource});
 	} else {
 		($adj_file_path, $source) = get_source($file_path);
@@ -285,19 +264,22 @@ sub standaloneRenderer {
 
 	my $user          = fake_user();
 	my $set           = fake_set();
-	my $showHints     = $form_data->{showHints} || 0;
+	my $showHints     = $form_data->{showHints} || 1; # default is to showHint if neither showHints nor numIncorrect is provided
 	my $showSolutions = $form_data->{showSolutions} || 0;
-	my $problemNumber = $form_data->{problemNumber} || 1;
+	my $problemNumber = $form_data->{problemNumber} || 1; # ever even relevant?
   my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
 	my $problem_seed  = $form_data->{problemSeed} || 0; #$r->param('problem_seed') || 0;
-	my $permission_level = $form_data->{permissionLevel} || 0;
+	my $permission_level = $form_data->{permissionLevel} || 0; #permissionLevel >= 10 will show hints, solutions + open all scaffold
+	my $num_correct = $form_data->{numCorrect} || 0; # consider replacing - this may never be relevant...
+	my $num_incorrect = $form_data->{numIncorrect} || 1000; #default to exceed any problem's showHint threshold unless provided
+	my $processAnswers = $form_data->{processAnswers} || 1; #default to 1, explicitly avoid generating answer components
 
 	my $translationOptions = {
 		displayMode     	=> $displayMode,
 		showHints       	=> $showHints,
 		showSolutions   	=> $showSolutions,
 		refreshMath2img 	=> 1,
-		processAnswers  	=> 1,
+		processAnswers  	=> $processAnswers,
 		QUIZ_PREFIX     	=> '',
 		#use_site_prefix 	=> 'http://localhost:3000',
 		use_opaque_prefix => 0,
@@ -310,9 +292,15 @@ sub standaloneRenderer {
 	# Create template of problem then add source text or a path to the source file
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPreamble} = {TeX=>'',HTML=>''};
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPostamble} = {TeX=>'',HTML=>''};
+
+	#
 	my $problem = fake_problem(); # eliminated $db arg
 	$problem->{problem_seed} = $problem_seed;
 	$problem->{value} = -1;
+	$problem->{num_correct} = $num_correct;
+	$problem->{num_incorrect} = $num_incorrect;
+	$problem->{attempted} = $num_correct + $num_incorrect;
+
 	if (ref $problemFile) { #in this case the actual source is passed
 			$problem->{source_file} = $form_data->{sourceFilePath};
 			$translationOptions->{r_source} = $problemFile;
@@ -352,7 +340,6 @@ sub standaloneRenderer {
     }
 
   insert_mathquill_responses($form_data,$pg);
-	warn Dumper($pg);
 
 	my $out2 = {
 		text												=> $pg->{body_text},
@@ -437,9 +424,9 @@ sub fake_problem {
 		problem_seed => 666,
 		status => 0,
 		sub_status => 0,
-		attempted => 2000,
+		attempted => 1000,
 		last_answer => '',
-		num_correct => 1000,
+		num_correct => 0,
 		num_incorrect => 1000,
 		prCount => -10
 	};
@@ -559,7 +546,7 @@ sub create_course_environment {
 	my $self = shift;
 	my $courseName = $self->{courseName} || 'rederly';
 	my $ce = WeBWorK::CourseEnvironment->new(
-				{webwork_dir		=> $WeBWorK::Constants::WEBWORK_DIRECTORY,
+				{webwork_dir		=> $ENV{WEBWORK_ROOT},
 				 courseName			=> $courseName
 				});
 	warn "Unable to find environment for course: |$courseName|" unless ref($ce);
