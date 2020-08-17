@@ -28,7 +28,9 @@ use RenderApp::Controller::RenderProblem;
 our $codes = {
   400 => 'Bad Request',
   403 => 'Forbidden',
-  404 => 'Not Found'
+  404 => 'Not Found',
+  405 => 'Method Not Allowed',
+  412 => 'Precondition Failed'
 };
 
 sub new {
@@ -75,7 +77,7 @@ sub seed {
   my $self = shift;
   if (scalar(@_) == 1) {
     my $random_seed = shift;
-    $self->{_error} = "400 You must provide a positive integer for the random seed!\n" unless $random_seed =~ m!^\d+$!;
+    $self->{_error} = "400 You must provide a positive integer for the random seed.\n" unless $random_seed =~ m!^\d+$!;
     $self->{random_seed} = $random_seed;
   }
   return $self->{random_seed};
@@ -88,13 +90,15 @@ sub path {
     my $opl_root = $ENV{OPL_DIRECTORY};
     if ($read_path =~ m!^Library/!) {
       $read_path =~ s!^Library/!$opl_root/OpenProblemLibrary/!;
+      $self->{write_allowed}  = 0;
     } elsif ($read_path =~ m!^Contrib!) {
       $read_path =~ s!^Contrib/!$opl_root/Contrib/!;
+      $self->{write_allowed} = 0; # eventually reconsider this?
     } else {
       # TODO: consider steps in pipeline towards OPL
       # these problems are not in OPL or Contrib yet
       # are we placing them in a folder relative to their user?
-      #$read_path =~ m!^private!
+      $self->{write_allowed} = $read_path =~ m!^private\/!;
     }
     $self->{_error} = "404 I cannot find a problem with that file path." unless (-e $read_path);
     $self->{read_path} = Mojo::File->new($read_path);
@@ -123,14 +127,17 @@ sub target {
 sub save {
   my $self = shift;
   my $success = 0;
+  my $write_path = ($self->{write_path} =~ m/\S/) ? $self->{write_path} : $self->{read_path};
+
   $self->{_error} = "400 Nothing to write!" unless ($self->{problem_contents} =~ m/\S/);
-  $self->{_error} = "400 No file paths specified" unless ($self->{write_path} || $self->{read_path});
-  my $write_path = $self->{write_path} ? $self->{write_path} : $self->{read_path};
-  if ( $self->{write_allowed} ) {
-    $write_path->spurt($self->{problem_contents});
-    $success = 1;
-  }
-  return $success;
+  $self->{_error} = "412 No file paths specified." unless ($write_path =~ m/\S/);
+  $self->{_error} = "403 You are not allowed to write to that path." unless $self->{write_allowed};
+  $self->{_error} = "405 I cannot write to that path." unless (-w $write_path);
+  return 0 unless $self->success();
+
+  $write_path->spurt($self->{problem_contents});
+
+  return 1;
 }
 
 sub load {
@@ -140,7 +147,7 @@ sub load {
     $self->{problem_contents} = $self->{read_path}->slurp;
     $success = 1;
   } else {
-    $self->{_error} = "404 Problem set with un-read-able read_path!\n";
+    $self->{_error} = "404 Problem set with un-read-able read_path.";
   }
   return $success;
 }
