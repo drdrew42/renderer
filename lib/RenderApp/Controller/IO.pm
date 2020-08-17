@@ -49,6 +49,7 @@ sub catalog {
     return (-e $root_path) ? $c->rendered(200) : $c->rendered(404);
   }
 
+  local $File::Find::skip_pattern = qr/^\./;
   my %all;
   my $wanted = sub {
     (my $rel = $File::Find::name) =~ s!^\Q$root_path\E/?!!;
