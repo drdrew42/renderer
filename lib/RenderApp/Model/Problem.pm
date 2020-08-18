@@ -181,7 +181,7 @@ sub errport {
 
 sub DESTROY {
   my $self = shift;
-  print "I looooooove trash!\n";
+  print int(rand(2)) ? "Oh I looove trash!\n" : "I love it because it's traaash!\n";
 }
 
 1;
