@@ -10,7 +10,10 @@ BEGIN {
 	$ENV{RENDER_ROOT} = $main::dirname->dirname unless ( defined($ENV{RENDER_ROOT}) );
 	#WEBWORK_ROOT is required for PG/lib/WeBWorK/IO
 	$ENV{WEBWORK_ROOT} = $main::dirname.'/WeBWorK' unless ( defined($ENV{WEBWORK_ROOT}) );
+	#used for reconstructing library paths from sym-links
 	$ENV{OPL_DIRECTORY}	=	$main::dirname->dirname."/webwork-open-problem-library";
+	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
+	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
 }
 #$ENV{MOD_PERL_API_VERSION} = 2;
 use lib "$main::dirname";
@@ -22,10 +25,6 @@ print "OPL_DIRECTORY: ".$ENV{OPL_DIRECTORY}."\n";
 print "PG_DIRECTORY: ".$WeBWorK::Constants::PG_DIRECTORY."\n";
 
 BEGIN {
-	# Unused variable, but define it twice to avoid an error message.
-	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
-	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
-	$WeBWorK::Constants::OPL_DIRECTORY     = $main::dirname->dirname."/webwork-open-problem-library";
 	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
 		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
 	}
@@ -112,7 +111,7 @@ sub startup {
   #my $logged_in = $r->under('/')->to('login#is_valid');
   $r->get('/request')->to('login#request');
 	$r->any('/render')->to('render#problem');
-	$r->any('/rendered')->to('login#rendered');
+	$r->any('/rendered')->to('render#problem');
 
   $r->get('/logout')->to('login#logout');
 
