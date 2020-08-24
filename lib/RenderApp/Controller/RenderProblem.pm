@@ -83,9 +83,9 @@ sub process_pg_file {
 
 	# just make sure we have the fundamentals covered...
 	$inputHash->{displayMode}	=	'MathJax';	#	is there any reason for this to be anything else?
-	$inputHash->{outputformat} = 'static' unless ($inputHash->{outputformat});
-	$inputHash->{problemSeed}	=	'666' unless ($inputHash->{problemSeed});
-	$inputHash->{language} = 'en' unless ($inputHash->{language});
+	$inputHash->{outputformat} ||= 'static';
+	$inputHash->{problemSeed}	||=	'666';
+	$inputHash->{language} ||= 'en';
 
 	# OTHER fundamentals - urls have been handled already...
 	#	form_action_url => $inputHash->{form_action_url}||'http://failure.org',
