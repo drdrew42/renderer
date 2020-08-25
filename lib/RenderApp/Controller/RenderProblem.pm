@@ -489,7 +489,7 @@ sub get_source {
 		my $redirect = $1;
 		$redirect =~ s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
 		warn "REDIRECTING TO: ".$redirect."\n" if $UNIT_TESTS_ON;
-		($adj_file_path, $source) = get_source($redirect);
+		($file_path, $source) = get_source($redirect);
 	}
 
 	### adjust file_path so that it is relative to the rendering course directory
