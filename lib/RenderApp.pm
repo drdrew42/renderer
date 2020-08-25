@@ -11,7 +11,7 @@ BEGIN {
 	#WEBWORK_ROOT is required for PG/lib/WeBWorK/IO
 	$ENV{WEBWORK_ROOT} = $main::dirname.'/WeBWorK' unless ( defined($ENV{WEBWORK_ROOT}) );
 	#used for reconstructing library paths from sym-links
-	$ENV{OPL_DIRECTORY}	=	$main::dirname->dirname."/webwork-open-problem-library";
+	$ENV{OPL_DIRECTORY}	=	"webwork-open-problem-library";
 	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
 	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
 }
@@ -116,7 +116,7 @@ sub startup {
   $r->get('/logout')->to('login#logout');
 
   # pass all requests via ww2_files through to public
-  $r->any('/webwork2_files/*path' => sub {
+	$r->any('/webwork2_files/*path' => sub {
     my $c = shift;
     $c->reply->file($staticPath.$c->stash('path'));
   });
