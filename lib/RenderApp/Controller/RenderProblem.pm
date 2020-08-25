@@ -214,7 +214,7 @@ sub process_problem {
 	#my $encoded_source = encode_base64($source); # create encoding of source_file;
 	my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
 		return_object    => $return_object,
-		encoded_source   => encode_base64($source),
+		encoded_source   => '', #encode_base64($source),
 		sourceFilePath   => $file_path,
 		url              => $inputs_ref->{base_url} || $inputs_ref->{baseURL},   # use default hosted2
 		form_action_url  => $inputs_ref->{form_action_url} || $inputs_ref->{formURL},
