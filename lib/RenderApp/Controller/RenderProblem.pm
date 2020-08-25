@@ -486,8 +486,10 @@ sub get_source {
 
 	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
 		warn "problem-level redirect found! ".$1."\n" if $UNIT_TESTS_ON;;
-		($file_path, $source) = get_source($1);
-		return $file_path, $source;
+		my $redirect = $1;
+		$redirect =~ s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
+		warn "REDIRECTING TO: ".$redirect."\n" if $UNIT_TESTS_ON;
+		($adj_file_path, $source) = get_source($redirect);
 	}
 
 	### adjust file_path so that it is relative to the rendering course directory
