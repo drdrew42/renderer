@@ -17,6 +17,7 @@ $single_format = <<'ENDPROBLEMTEMPLATE';
 <link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
 
 <!-- JS Loads -->
+<script>function submitAction() {}</script>
 <script type="text/javascript" src="/webwork2_files/js/jquery.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/jquery-ui.min.js"></script>
 <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-MML-AM_CHTML"></script>
