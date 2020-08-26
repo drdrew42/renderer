@@ -87,6 +87,10 @@ sub process_pg_file {
 	$inputHash->{problemSeed}	||=	'666';
 	$inputHash->{language} ||= 'en';
 
+	# HACK: required for problemRandomize.pl
+	$inputHash->{effectiveUser} = 'red.ted';
+	$inputHash->{user} = 'red.ted';
+
 	# OTHER fundamentals - urls have been handled already...
 	#	form_action_url => $inputHash->{form_action_url}||'http://failure.org',
 	#	base_url        => $inputHash->{base_url}||'http://failure.org'
@@ -120,7 +124,11 @@ sub process_pg_file {
 		flags => $pg_obj->{flags},
 		form_data => $inputHash,
 	};
-	my $coder = JSON::XS->new->ascii->pretty->convert_blessed->allow_unknown;
+
+  # HACK: remove flags->{problemRandomize} if it exists
+	delete $json_rh->{flags}{problemRandomize} if $json_rh->{flags}{problemRandomize};
+
+	my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
 	my $json = $coder->encode ($json_rh);
 	return $json;
 }
