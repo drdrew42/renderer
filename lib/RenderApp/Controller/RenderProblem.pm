@@ -262,14 +262,14 @@ sub standaloneRenderer {
 
 	my $user          = fake_user();
 	my $set           = fake_set();
-	my $showHints     = $form_data->{showHints} || 1; # default is to showHint if neither showHints nor numIncorrect is provided
+	my $showHints     = $form_data->{showHints} // 1; # default is to showHint if neither showHints nor numIncorrect is provided
 	my $showSolutions = $form_data->{showSolutions} || 0;
-	my $problemNumber = $form_data->{problemNumber} || 1; # ever even relevant?
+	my $problemNumber = $form_data->{problemNumber} // 1; # ever even relevant?
   my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
-	my $problem_seed  = $form_data->{problemSeed} || 0; #$r->param('problem_seed') || 0;
+	my $problem_seed  = $form_data->{problemSeed} || 1234; #$r->param('problem_seed') || 0;
 	my $permission_level = $form_data->{permissionLevel} || 0; #permissionLevel >= 10 will show hints, solutions + open all scaffold
 	my $num_correct = $form_data->{numCorrect} || 0; # consider replacing - this may never be relevant...
-	my $num_incorrect = $form_data->{numIncorrect} || 1000; #default to exceed any problem's showHint threshold unless provided
+	my $num_incorrect = $form_data->{numIncorrect} // 1000; #default to exceed any problem's showHint threshold unless provided
 	my $processAnswers = $form_data->{processAnswers} || 1; #default to 1, explicitly avoid generating answer components
 
 	my $translationOptions = {
