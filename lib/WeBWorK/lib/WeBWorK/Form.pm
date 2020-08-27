@@ -78,7 +78,7 @@ sub new_from_paramable ($$) {
 	# list of param names
 	my @params = @{$r->params->names};
 	foreach my $key (@params) {
-		$self->{$key} = [ $r->params->param($key) ];
+		$self->{$key} = $r->params->every_param($key);
 	}
 
 	return bless $self, $class;
