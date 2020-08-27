@@ -131,6 +131,7 @@ function insertListener() {
     let formData = new FormData(problemForm)
     let clickedButton = problemForm.querySelector('.btn-clicked')
     formData.append("format", "json")
+    formData.append("outputformat", document.querySelector(".dropdown-item.selected").id);
     formData.append(clickedButton.name, clickedButton.value)
     const submiturl = '/render-api'
     const submit_params = {
