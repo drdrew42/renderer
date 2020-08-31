@@ -13,10 +13,10 @@ sub problem {
   $inputs_ref{formURL} ||= $c->app->config('form');
   $inputs_ref{baseURL} ||= $c->app->config('url');
 
-  my @errs = checkInputs(\%inputs_ref);
   # consider passing the problem object alongside the inputs_ref - this will become unnecessary
   $inputs_ref{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
+  my @errs = checkInputs(\%inputs_ref);
   my $ww_return_json = $problem->render(\%inputs_ref);
   my $ww_return_hash = decode_json($ww_return_json);
 
@@ -33,13 +33,19 @@ sub checkInputs {
   my @errs;
   while (my ($k, $v) = each %$inputs_ref) {
     next unless $v;
-    if ($v =~ /[^\x00-\x7F]/) {
+    if ($v =~ /[^\x01-\x7F]/) {
       my $err = "$k response contains nonstandard character(s): ";
       while ($v =~ /([^\x00-\x7F])/g) {
         $err = $err.'"'.$1.'" as '.sprintf("\\u%04x", ord($1));
       }
-      print $err."\n";
-      push @errs, $err;
+      if ( $v =~ /\x00/ ) {
+        print $inputs_ref->{sourceFilePath}." has generated a NUL byte response.\n";
+        my @v_array = split(/\x00/, $v);
+        $inputs_ref->{$k} = \@v_array;
+      } else {
+        print $err."\n";
+        push @errs, $err;
+      }
     }
   }
   return @errs;
