@@ -1,4 +1,4 @@
-$single_format = <<'ENDPROBLEMTEMPLATE';
+$static_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
 <html $COURSE_LANG_AND_DIR>
 <head>
@@ -17,7 +17,6 @@ $single_format = <<'ENDPROBLEMTEMPLATE';
 <link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
 
 <!-- JS Loads -->
-<script>function submitAction() {}</script>
 <script type="text/javascript" src="/webwork2_files/js/jquery.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/jquery-ui.min.js"></script>
 <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-MML-AM_CHTML"></script>
@@ -29,8 +28,7 @@ $single_format = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="/webwork2_files/themes/math4/math4.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mathquill.min.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqeditor.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/submithelper.js"></script>
+<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqstatic.js"></script>
 
 $problemHeadText
 
@@ -42,7 +40,7 @@ $problemHeadText
       <div class="span12 problem">
 		    $answerTemplate
         $color_input_blanks_script
-        <form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit="submitAction()">
+        <form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post">
           <div id="problem_body" class="problem-content" $PROBLEM_LANG_AND_DIR>
             $problemText
           </div>
@@ -55,10 +53,7 @@ $problemHeadText
           <input type="hidden" name="problemSeed" value = "$problemSeed">
           <input type="hidden" name="language" value="$formLanguage">
           <input type="hidden" name="showSummary" value="$showSummary">
-          <p>
 
-            <input type="submit" name="submitAnswers" value="$STRING_Submit"/>
-          </p>
         </form>
       </div>
     </div>
@@ -68,4 +63,4 @@ $problemHeadText
 
 ENDPROBLEMTEMPLATE
 
-$single_format;
+$static_format;

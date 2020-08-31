@@ -46,8 +46,8 @@ sub new {
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
-		url            => 'localhost:5000',
-		form_action_url =>'localhost:5000/rendered',
+		url            => '/',
+		form_action_url =>'/render-api',
 		maketext   	   => sub {return @_},
 		courseID       => 'foo',  # optional?
 		userID         => 'bar',  # optional?
@@ -172,6 +172,7 @@ sub formatRenderedProblem {
 		displayMode            => $self->{inputs_ref}->{displayMode},
 		imgGen                 => $imgGen,
 		ce                     => '',	#used only to build the imgGen
+		showAnswerNumbers      => 0,
 		showAttemptPreviews    => ($previewMode or $submitMode or $showCorrectMode),
 		showAttemptResults     => ($submitMode or $showCorrectMode),
 		showCorrectAnswers     => ($showCorrectMode),
@@ -182,7 +183,7 @@ sub formatRenderedProblem {
 	);
 
 	my $answerTemplate = $tbl->answerTemplate;
-	my $color_input_blanks_script = $tbl->color_answer_blanks;
+	my $color_input_blanks_script = $tbl->color_answer_blanks if ($submitMode or $checkMode);
 	$tbl->imgGen->render(refresh => 1) if $tbl->displayMode eq 'images';
 
 	# warn "imgGen is ", $tbl->imgGen;
@@ -215,7 +216,7 @@ sub formatRenderedProblem {
 # Return interpolated problem template
 ######################################################
 
-	my $format_name = $self->{inputs_ref}->{outputformat}//'simple';
+	my $format_name = $self->{inputs_ref}->{outputformat}//'formatRenderedProblemFailure';
 	# find the appropriate template in WebworkClient folder
 	my $template = do("WebworkClient/${format_name}_format.pl")//'';
 	die "Unknown format name $format_name" unless $template;

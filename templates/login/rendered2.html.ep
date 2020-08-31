@@ -1,3 +1,3 @@
-<%== renderedProblem() %>
+%= $renderedHTML
 
 %= link_to Edit => 'editor' if (session 'showEdit')

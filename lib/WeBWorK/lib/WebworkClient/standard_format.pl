@@ -16,6 +16,7 @@ $standard_format = <<'ENDPROBLEMTEMPLATE';
 <link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
 
 <!-- JS Loads -->
+<script>function submitAction() {}</script>
 <script type="text/javascript" src="/webwork2_files/js/jquery.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/jquery-ui.min.js"></script>
 <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-MML-AM_CHTML"></script>
@@ -40,7 +41,7 @@ $problemHeadText
 <h2> WeBWorK using host: $SITE_URL, course: $courseID format: standard</h2>
 		    $answerTemplate
 		    $color_input_blanks_script
-	<form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit"submitAction()">
+	<form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit="submitAction()">
 <div id="problem_body" class="problem-content" $PROBLEM_LANG_AND_DIR>
 			$problemText
 </div>

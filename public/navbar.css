@@ -1,0 +1,149 @@
+* {box-sizing: border-box;}
+
+body * {
+  margin: 0;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 200;
+}
+
+.topnav {
+  overflow: hidden;
+  background-color: #012C4E;
+}
+
+.topnav a {
+  float: left;
+  display: block;
+  color: white;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  font-size: 17px;
+}
+
+.topnav a:hover .dropdown:hover .dropbtn {
+  background-color: #00BCD4;
+  color: black;
+}
+
+.topnav a.active {
+  background-color: #012C4E;
+  color: white;
+}
+
+.dropdown {
+  float: left;
+  overflow: hidden;
+}
+
+.dropdown .dropbtn {
+  font-size: 16px;
+  border: none;
+  outline: none;
+  color: white;
+  padding: 14px 16px;
+  background-color: inherit;
+  font-family: inherit;
+  margin: 0;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 5;
+}
+
+.dropdown-content a {
+  float: none;
+  color: white;
+  background-color: #012C4E;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  text-align: left;
+}
+
+.dropdown-content a:hover {
+  background-color: #607B90;
+  color: black;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.topnav .search-container {
+  float: right;
+}
+
+.topnav input[type=text] {
+  padding: 6px;
+  margin-top: 7px;
+  margin-right: 16px;
+  font-size: 17px;
+  border: none;
+}
+
+.topnav .search-container button {
+  float: right;
+  padding: 6px 10px;
+  margin-top: 7px;
+  margin-right: 16px;
+  background: #C0CAD3;
+  font-size: 17px;
+  border: none;
+  cursor: pointer;
+}
+
+.topnav .search-container button:hover {
+  background: #A0B0BD;
+}
+
+@media screen and (max-width: 600px) {
+  .topnav .search-container {
+    float: none;
+  }
+  .topnav a, .topnav input[type=text], .topnav .search-container button {
+    float: none;
+    display: block;
+    text-align: left;
+    width: 100%;
+    margin: 0;
+    padding: 14px;
+  }
+  .topnav input[type=text] {
+    border: 1px solid #ccc;
+  }
+}
+
+.dropdown-item .fa {
+  display: none;
+}
+
+.dropdown-item.selected .fa {
+  display: inline-block;
+}
+
+#problemSeed {
+  background-color: #DFE5E9;
+  color: #2B193D;
+}
+
+#sourceFilePath{
+  border:none;
+  background-color: #DFE5E9;
+  color:#2B193D;
+  min-width:130px;
+}
+
+#hiddenSourceFilePath{
+  display:none;
+  white-space:pre;
+  padding: 6px;
+  margin-top: 7px;
+  margin-right: 16px;
+  font-size: 17px;
+}

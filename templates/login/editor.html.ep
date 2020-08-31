@@ -1,0 +1,81 @@
+% layout 'default';
+% my $problem_source = session 'problemContents' || ' ';
+% $problem_source = fetchProblemSource() || "blankProblemTemplate.pg" unless (defined $problem_source && $problem_source =~ /\S/);
+% my $path_string = session 'filePath' || 'new blank problem';
+
+%= stylesheet 'http://codemirror.net/theme/monokai.css'
+%= stylesheet 'http://codemirror.net/theme/material-palenight.css'
+%= stylesheet '/webwork2_files/js/vendor/codemirror/codemirror.css'
+%= javascript '/webwork2_files/js/vendor/codemirror/codemirror.js'
+%= javascript '/webwork2_files/js/vendor/codemirror/PG.js'
+%= javascript '/webwork2_files/js/vendor/codemirror/PGaddons.js'
+
+% if ( my $message = stash 'message' ) {
+  <span id='message'><b><%= $message %></b></span><br>
+% }
+
+%= form_for editor => (method=>'POST') => begin
+  <b>Editing problem:</b><br>
+  <i><%= $path_string %></i> <br> <br>
+  %= text_area problemContents => $problem_source, id => 'problemContents'
+  <br>Save as:
+  <span id='hide'></span><%= text_field 'writePathString' => $path_string, id => 'writePathString' %>
+  <br>
+  %= input_tag readPathString => $path_string, type => 'hidden'
+  <br>
+  %= submit_button 'Save', name => 'action'
+  %= submit_button 'Revert', name => 'action'
+  %= submit_button 'Render', name => 'action'
+% end
+
+%= javascript '/webwork2_files/js/vendor/jquery/jquery.js'
+%= javascript 'https://codemirror.net/addon/selection/active-line.js'
+%= javascript begin
+$(function(){
+  cm = new CodeMirror.fromTextArea(
+	  document.getElementById("problemContents"), {
+	    mode: "PG",
+      theme: "monokai",
+      styleActiveLine: {nonEmpty: true},
+	    indentUnit: 2,
+	    tabMode: "spaces",
+      lineNumbers: true,
+	    lineWrapping: true,
+      extraKeys:
+        {Tab: function(cm) {cm.execCommand('insertSoftTab')}},
+	    highlightSelectionMatches: true,
+	    matchBrackets: true,
+	  });
+	cm.setSize(700,400);
+});
+
+$(function(){
+  $('#hide').text($('#writePathString').val());
+  $('#writePathString').width($('#hide').width());
+}).on('input', function () {
+  $('#hide').text($('#writePathString').val());
+  $('#writePathString').width($('#hide').width());
+});
+% end
+
+%= stylesheet begin
+body,
+#writePathString,
+#hide{
+  font:inherit;
+  margin:0;
+  padding:0;
+}
+#writePathString{
+  border:none;
+  color:#888;
+  min-width:10px;
+}
+#hide{
+  display:none;
+  white-space:pre;
+}
+#message{
+  background-color:green;
+}
+% end
