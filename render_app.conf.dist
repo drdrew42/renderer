@@ -1,8 +1,10 @@
 {
   secrets => ['reveal_your_secrets','revelio','alohamora'],
-  url => 'http://localhost:3000',
-  form => 'http://localhost:3000/rendered',
+  url => '/',
+  form => '/render-api',
   opl_root => 'webwork-open-problem-library/OpenProblemLibrary/',
   contrib_root => 'webwork-open-problem-library/Contrib/',
-  RENDER_ROOT => '/usr/app/',
+  APP_ROOT => '/usr/app/',
+  WEBWORK_DIR => 'lib/WeBWorK',
+  PG_DIR => 'lib/PG/',
 };

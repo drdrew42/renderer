@@ -17,6 +17,7 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 <link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
 
 <!-- JS Loads -->
+<script>function submitAction() {}</script>
 <script type="text/javascript" src="/webwork2_files/js/jquery.min.js"></script>
 <script type="text/javascript" src="/webwork2_files/js/jquery-ui.min.js"></script>
 <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-MML-AM_CHTML"></script>
@@ -60,7 +61,6 @@ $problemHeadText
           <input type="hidden" name="course_password" value="$course_password">
           <input type="hidden" name="displayMode" value="$displayMode">
           <input type="hidden" name="session_key" value="$session_key">
-          <input type="hidden" name="outputformat" value="simple">
           <input type="hidden" name="language" value="$formLanguage">
           <input type="hidden" name="showSummary" value="$showSummary">
           <input type="hidden" name="forcePortNumber" value="$forcePortNumber">

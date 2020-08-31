@@ -1,30 +1,48 @@
 package RenderApp::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller';
+use Mojo::JSON qw(decode_json);
 
-sub form_check {
+sub problem {
   my $c = shift;
-  my $v = $c->validation;
+  my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
+  my $random_seed = $c->param('problemSeed');
+  my $problem = $c->newProblem({read_path => $file_path, random_seed => $random_seed});
+  return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
-  unless ($v->has_data) {
-    $c->flash(message=>'Your request contained no data.');
-    return $c->redirect_to('request');
+  my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
+  $inputs_ref{formURL} ||= $c->app->config('form');
+  $inputs_ref{baseURL} ||= $c->app->config('url');
+
+  my @errs = checkInputs(\%inputs_ref);
+  # consider passing the problem object alongside the inputs_ref - this will become unnecessary
+  $inputs_ref{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
+
+  my $ww_return_json = $problem->render(\%inputs_ref);
+  my $ww_return_hash = decode_json($ww_return_json);
+
+  $ww_return_hash->{debug}->{render_warn} = \@errs;
+
+  $c->respond_to(
+    html => { text => $ww_return_hash->{renderedHTML}},
+    json => { json => $ww_return_hash }
+  );
+}
+
+sub checkInputs {
+  my $inputs_ref = shift;
+  my @errs;
+  while (my ($k, $v) = each %$inputs_ref) {
+    next unless $v;
+    if ($v =~ /[^\x00-\x7F]/) {
+      my $err = "$k response contains nonstandard character(s): ";
+      while ($v =~ /([^\x00-\x7F])/g) {
+        $err = $err.'"'.$1.'" as '.sprintf("\\u%04x", ord($1));
+      }
+      print $err."\n";
+      push @errs, $err;
+    }
   }
-
-  $v->required('random_seed')->size(1,6)->like(qr/^[0-9]+$/);
-  $v->required('path_to_problem')->like(qr/^[a-zA-Z0-9\-_\.\/]+\.pg$/);
-  $v->optional('format');
-  $v->optional('template');
-
-  if ($v->has_error) {
-    $c->flash(message=>"Your request was malformed.");
-    return $c->redirect_to('request');
-  }
-
-  $c->session->{filePath} = $v->param('path_to_problem');
-  $c->session->{seed} = $v->param('random_seed');
-  $c->session->{template} = $v->param('template');
-  $c->session->{format} = $v->param('format');
-  $c->redirect_to('rendered');
+  return @errs;
 }
 
 1;

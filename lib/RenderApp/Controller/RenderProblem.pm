@@ -5,24 +5,6 @@ use warnings;
 
 package RenderApp::Controller::RenderProblem;
 
-BEGIN {
-	use File::Basename;
-	$main::dirname = dirname(__FILE__);
-	# Unused variable, but define it twice to avoid an error message.
-	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/../../WeBWorK";
-	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/../../PG";
-	#unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
-#		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
-	#}
-	unless (-r $WeBWorK::Constants::PG_DIRECTORY ) {
-		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
-	}
-}
-
-#######################################################
-# Find the webwork2 root directory
-#######################################################
-
 use Carp;
 #use Crypt::SSLeay;  # needed for https
 #use LWP::Protocol::https;
@@ -92,33 +74,33 @@ sub UNIVERSAL::TO_JSON {
 #######################################################################
 
 sub process_pg_file {
-	my $format = shift;
+	my $problem = shift;
 	my $inputHash = shift;
-	my $NO_ERRORS = "";
-	my $ALL_CORRECT = "";
 
 	our $seed_ce = create_course_environment();
 
-	my $file_path = $inputHash->{filePath};
+	my $file_path = $problem->{read_path};
 
 	# just make sure we have the fundamentals covered...
-	my $form_data = {
-		displayMode			=> 'MathJax',
-		outputformat		=> $inputHash->{outputformat}||'simple',
-		problemSeed		  => $inputHash->{problemSeed}||'666',
-		language				=> $inputHash->{language}||'en',
-		form_action_url => $inputHash->{form_action_url}||'http://failure.org',
-		base_url => $inputHash->{base_url}||'http://failure.org'
-		#psvn            => $psvn//'23456',
-		#forcePortNumber => $credentials{forcePortNumber}//'',
-	};
-	# pull the inputs_ref up a level into the form_data hash
-	$form_data = {%{$inputHash->{inputs_ref}}, %{$form_data}};
+	$inputHash->{displayMode}	=	'MathJax';	#	is there any reason for this to be anything else?
+	$inputHash->{outputformat} ||= 'static';
+	$inputHash->{problemSeed}	||=	'666';
+	$inputHash->{language} ||= 'en';
+
+	# HACK: required for problemRandomize.pl
+	$inputHash->{effectiveUser} = 'red.ted';
+	$inputHash->{user} = 'red.ted';
+
+	# OTHER fundamentals - urls have been handled already...
+	#	form_action_url => $inputHash->{form_action_url}||'http://failure.org',
+	#	base_url        => $inputHash->{base_url}||'http://failure.org'
+	#	#psvn            => $psvn//'23456', # DEPRECATED
+	#	#forcePortNumber => $credentials{forcePortNumber}//'',
 
 	my $pg_start = time; # this is Time::HiRes's time, which gives floating point values
 
 	my ($error_flag, $formatter, $error_string) =
-	    process_problem($seed_ce, $file_path, $form_data);
+	    process_problem($seed_ce, $file_path, $inputHash);
 
 	my $pg_stop = time;
 	my $pg_duration = $pg_stop-$pg_start;
@@ -126,18 +108,27 @@ sub process_pg_file {
 	# extract and display result
 	# print "display $file_path\n";
   my $html = $formatter->formatRenderedProblem;
-	return $html unless $format eq 'json';
+	#return $html unless $format eq 'json';
 	my $pg_obj = $formatter->{return_object};
 	my $json_rh = {
 		renderedHTML => $html,
 		answers => $pg_obj->{answers},
-		#PG_ANSWERS_HASH => $pg_obj->{PG_ANSWERS_HASH},
+		debug => {
+			perl_warn => decode_base64($pg_obj->{WARNINGS}),
+			pg_warn => $pg_obj->{warning_messages},
+			debug => $pg_obj->{debug_messages},
+			internal => $pg_obj->{internal_debug_messages}
+		},
 		problem_result => $pg_obj->{problem_result},
 		problem_state => $pg_obj->{problem_state},
 		flags => $pg_obj->{flags},
-		form_data => $form_data
+		form_data => $inputHash,
 	};
-	my $coder = JSON::XS->new->ascii->pretty->convert_blessed->allow_unknown;
+
+  # HACK: remove flags->{problemRandomize} if it exists
+	delete $json_rh->{flags}{problemRandomize} if $json_rh->{flags}{problemRandomize};
+
+	my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
 	my $json = $coder->encode ($json_rh);
 	return $json;
 }
@@ -150,31 +141,43 @@ sub process_problem {
 	my $ce 				 = shift;
 	my $file_path  = shift;
 	my $inputs_ref = shift;
+	my $adj_file_path;
+	my $source;
 
-	### get source and correct file_path name so that it is relative to templates directory
-	### revisit: DO WE NEED TO ADJUST THE FILE PATH???
-	my ($adj_file_path, $source) = get_source($file_path);
-	#print "find file at $adj_file_path ", length($source), "\n";
+	# obsolete if using JSON return format
+	# These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
+	#	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
+	#	$inputs_ref->{showAnsHashInfo}	= 1; #$print_answer_hash;
+	#	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
+	#	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
 
 	### stash inputs that get wiped by PG
 	my $problem_seed = $inputs_ref->{problemSeed};
-	die "problem seed not defined in sendXMLRPC::process_problem" unless $problem_seed;
+	die "problem seed not defined in Controller::RenderProblem::process_problem" unless $problem_seed;
 	my $display_mode = $inputs_ref->{displayMode};
 
-#  my $local_psvn = $form_data->{psvn}//34567;
-# formerly updated_input -- now inputs_ref
-# removed ->{envir}{...}
-	#$inputs_ref->{fileName} = $adj_file_path;
-	#$inputs_ref->{probFileName} = $adj_file_path;
-	$inputs_ref->{sourceFilePath} = $adj_file_path;
-	#$inputs_ref->{pathToProblemFile} = $adj_file_path;
-	#$inputs_ref->{problemSeed} = $problem_seed;
+	if ($inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/) {
+		$source = decode_base64($inputs_ref->{problemSource});
+	} else {
+		($adj_file_path, $source) = get_source($file_path);
+		# WHY are there so many fields in which to stash the file path?
+		#$inputs_ref->{fileName} = $adj_file_path;
+		#$inputs_ref->{probFileName} = $adj_file_path;
+		#$inputs_ref->{sourceFilePath} = $adj_file_path;
+		#$inputs_ref->{pathToProblemFile} = $adj_file_path;
+		#$inputs_ref->{problemSeed} = $problem_seed;
+	}
 
-# These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
-#	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
-#	$inputs_ref->{showAnsHashInfo}		= 1; #$print_answer_hash;
-#	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
-#	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
+	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
+		warn "problem-level redirect found!\nMatch 1: ".$1."\nMatch 2: ".$2."\n" if $UNIT_TESTS_ON;
+		# TODO: find a non-hardcoded way to re-address the library...
+		my $redirect = $1;
+		$redirect =~ s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
+		warn "REDIRECTING TO: ".$redirect."\n" if $UNIT_TESTS_ON;
+		($adj_file_path, $source) = get_source($redirect);
+	}
+
+	$inputs_ref->{pathToProblemFile} = $adj_file_path if (defined $adj_file_path);
 
 	##################################################
 	# Process the pg file
@@ -219,10 +222,10 @@ sub process_problem {
 	#my $encoded_source = encode_base64($source); # create encoding of source_file;
 	my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
 		return_object    => $return_object,
-		encoded_source   => encode_base64($source),
+		encoded_source   => '', #encode_base64($source),
 		sourceFilePath   => $file_path,
-		url              => $inputs_ref->{base_url},   # use default hosted2
-		form_action_url  => $inputs_ref->{form_action_url},
+		url              => $inputs_ref->{base_url} || $inputs_ref->{baseURL},   # use default hosted2
+		form_action_url  => $inputs_ref->{form_action_url} || $inputs_ref->{formURL},
 		maketext         =>  sub {return @_},
 		courseID         =>  'blackbox',
 		userID           =>  'Motoko_Kusanagi',
@@ -267,22 +270,26 @@ sub standaloneRenderer {
 
 	my $user          = fake_user();
 	my $set           = fake_set();
-	my $showHints     = $form_data->{showHints} || 0;
+	my $showHints     = $form_data->{showHints} // 1; # default is to showHint if neither showHints nor numIncorrect is provided
 	my $showSolutions = $form_data->{showSolutions} || 0;
-	my $problemNumber = $form_data->{problem_number} || 1;
+	my $problemNumber = $form_data->{problemNumber} // 1; # ever even relevant?
   my $displayMode   = $form_data->{displayMode} || 'MathJax'; #$ce->{pg}->{options}->{displayMode};
-	my $problem_seed  = $form_data->{problemSeed} || 0; #$r->param('problem_seed') || 0;
+	my $problem_seed  = $form_data->{problemSeed} || 1234; #$r->param('problem_seed') || 0;
+	my $permission_level = $form_data->{permissionLevel} || 0; #permissionLevel >= 10 will show hints, solutions + open all scaffold
+	my $num_correct = $form_data->{numCorrect} || 0; # consider replacing - this may never be relevant...
+	my $num_incorrect = $form_data->{numIncorrect} // 1000; #default to exceed any problem's showHint threshold unless provided
+	my $processAnswers = $form_data->{processAnswers} || 1; #default to 1, explicitly avoid generating answer components
 
 	my $translationOptions = {
 		displayMode     	=> $displayMode,
 		showHints       	=> $showHints,
 		showSolutions   	=> $showSolutions,
 		refreshMath2img 	=> 1,
-		processAnswers  	=> 1,
+		processAnswers  	=> $processAnswers,
 		QUIZ_PREFIX     	=> '',
 		#use_site_prefix 	=> 'http://localhost:3000',
 		use_opaque_prefix => 0,
-		permissionLevel 	=> 20
+		permissionLevel 	=> 0
 	};
 	my $extras = {};   # Check what this is used for - passed as arg to renderer->new()
 
@@ -291,9 +298,15 @@ sub standaloneRenderer {
 	# Create template of problem then add source text or a path to the source file
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPreamble} = {TeX=>'',HTML=>''};
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPostamble} = {TeX=>'',HTML=>''};
+
+	#
 	my $problem = fake_problem(); # eliminated $db arg
 	$problem->{problem_seed} = $problem_seed;
 	$problem->{value} = -1;
+	$problem->{num_correct} = $num_correct;
+	$problem->{num_incorrect} = $num_incorrect;
+	$problem->{attempted} = $num_correct + $num_incorrect;
+
 	if (ref $problemFile) { #in this case the actual source is passed
 			$problem->{source_file} = $form_data->{sourceFilePath};
 			$translationOptions->{r_source} = $problemFile;
@@ -339,9 +352,7 @@ sub standaloneRenderer {
 		header_text									=> $pg->{head_text},
 		answers											=> $pg->{answers},
 		errors											=> $pg->{errors},
-		WARNINGS										=> encode_base64(
-		                               "WARNINGS\n".$warning_messages."\n<br/>More<br/>\n".$pg->{warnings}
-		                               ),
+		WARNINGS										=> encode_base64($pg->{warnings}),
 		PG_ANSWERS_HASH             => $pg->{pgcore}->{PG_ANSWERS_HASH},
 		problem_result							=> $pg->{result},
 		problem_state								=> $pg->{state},
@@ -395,7 +406,6 @@ sub insert_mathquill_responses {
 }
 
 sub fake_user {
-#	my ($db) = @_;
 	my $user = {
 		user_id => 'Motoko_Kusanagi',
 		first_name=>'Motoko',
@@ -410,24 +420,22 @@ sub fake_user {
 }
 
 sub fake_problem {
-  #	my $db = shift;
-	my $problem = {}; #$db->newGlobalProblem();
-	#$problem = global2user($db->{problem_user}->{record}, $problem);
-
-	$problem->{set_id} = "Section_9";
-	$problem->{problem_id} = 1;
-	$problem->{value} = 1;
-	$problem->{max_attempts} = -1;
-	$problem->{showMeAnother} = -1;
-	$problem->{showMeAnotherCount} = 0;
-	$problem->{problem_seed} = 666;
-	$problem->{status} = 0;
-	$problem->{sub_status} = 0;
-	$problem->{attempted} = 2000;  # Large so hints won't be blocked
-	$problem->{last_answer} = "";
-	$problem->{num_correct} = 1000;
-	$problem->{num_incorrect} = 1000;
-	$problem->{prCount} = -10; # Negative to detect fake problems and disable problem randomization.
+	my $problem = {
+		set_id => 'Section_9',
+		problem_id => 1,
+		value => 1,
+		max_attempts => -1,
+		showMeAnother => -1,
+		showMeAnotherCount => 0,
+		problem_seed => 666,
+		status => 0,
+		sub_status => 0,
+		attempted => 1000,
+		last_answer => '',
+		num_correct => 0,
+		num_incorrect => 1000,
+		prCount => -10
+	};
 
 	return($problem);
 }
@@ -483,6 +491,15 @@ sub get_source {
 		}
 	};
 	die "Something is wrong with the contents of $file_path\n" if $@;
+
+	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
+		warn "problem-level redirect found! ".$1."\n" if $UNIT_TESTS_ON;;
+		my $redirect = $1;
+		$redirect =~ s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
+		warn "REDIRECTING TO: ".$redirect."\n" if $UNIT_TESTS_ON;
+		($file_path, $source) = get_source($redirect);
+	}
+
 	### adjust file_path so that it is relative to the rendering course directory
 	#$file_path =~ s|/opt/webwork/libraries/NationalProblemLibrary|Library|;
 	#$file_path =~ s|^.*?/webwork-open-problem-library/OpenProblemLibrary|Library|;
@@ -536,7 +553,7 @@ sub create_course_environment {
 	my $self = shift;
 	my $courseName = $self->{courseName} || 'rederly';
 	my $ce = WeBWorK::CourseEnvironment->new(
-				{webwork_dir		=> $WeBWorK::Constants::WEBWORK_DIRECTORY,
+				{webwork_dir		=> $ENV{WEBWORK_ROOT},
 				 courseName			=> $courseName
 				});
 	warn "Unable to find environment for course: |$courseName|" unless ref($ce);

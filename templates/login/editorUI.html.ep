@@ -1,0 +1,51 @@
+%= my $problem_source
+
+%= stylesheet 'http://codemirror.net/theme/monokai.css'
+%= stylesheet 'http://codemirror.net/theme/material-palenight.css'
+%= stylesheet '/webwork2_files/js/vendor/codemirror/codemirror.css'
+%= javascript '/webwork2_files/js/vendor/codemirror/codemirror.js'
+%= javascript '/webwork2_files/js/vendor/codemirror/PG.js'
+%= javascript '/webwork2_files/js/vendor/codemirror/PGaddons.js'
+
+  <b>Editing problem:</b><br>
+  <i><div id="currentEditPath"></div></i>
+  %= text_area problemContentsEditor => $problem_source, id => 'problemContentsEditor'
+
+%= javascript '/webwork2_files/js/jquery.min.js'
+%= javascript 'https://codemirror.net/addon/selection/active-line.js'
+%= javascript begin
+$(function(){
+  cm = new CodeMirror.fromTextArea(
+	  document.getElementById("problemContentsEditor"), {
+	    mode: "PG",
+      theme: "monokai",
+      styleActiveLine: {nonEmpty: true},
+	    indentUnit: 2,
+	    tabMode: "spaces",
+      lineNumbers: true,
+	    lineWrapping: true,
+      extraKeys:
+        {Tab: function(cm) {cm.execCommand('insertSoftTab')}},
+	    highlightSelectionMatches: true,
+	    matchBrackets: true,
+	  });
+	// cm.setSize(700,400);
+});
+% end
+
+%= stylesheet begin
+#message{
+  background-color:green;
+}
+.CodeMirror {
+  border: 1px solid #eee;
+  height: auto;
+}
+.CodeMirror-scroll {
+  max-height: 100vh;
+}
+.CodeMirror * {
+  font-family: Arial, monospace;
+  font-size: 16px;
+}
+% end
