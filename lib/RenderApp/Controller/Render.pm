@@ -10,19 +10,39 @@ sub problem {
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
   my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
-  $inputs_ref{formURL} = $c->app->config('form') unless $inputs_ref{formURL};
-  $inputs_ref{baseURL} = $c->app->config('url') unless $inputs_ref{baseURL};
+  $inputs_ref{formURL} ||= $c->app->config('form');
+  $inputs_ref{baseURL} ||= $c->app->config('url');
 
+  my @errs = checkInputs(\%inputs_ref);
   # consider passing the problem object alongside the inputs_ref - this will become unnecessary
   $inputs_ref{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
   my $ww_return_json = $problem->render(\%inputs_ref);
   my $ww_return_hash = decode_json($ww_return_json);
-  
+
+  $ww_return_hash->{debug}->{render_warn} = \@errs;
+
   $c->respond_to(
     html => { text => $ww_return_hash->{renderedHTML}},
     json => { json => $ww_return_hash }
   );
+}
+
+sub checkInputs {
+  my $inputs_ref = shift;
+  my @errs;
+  while (my ($k, $v) = each %$inputs_ref) {
+    next unless $v;
+    if ($v =~ /[^\x00-\x7F]/) {
+      my $err = "$k response contains nonstandard character(s): ";
+      while ($v =~ /([^\x00-\x7F])/g) {
+        $err = $err.'"'.$1.'" as '.sprintf("\\u%04x", ord($1));
+      }
+      print $err."\n";
+      push @errs, $err;
+    }
+  }
+  return @errs;
 }
 
 1;

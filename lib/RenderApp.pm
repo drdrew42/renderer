@@ -18,11 +18,6 @@ BEGIN {
 #$ENV{MOD_PERL_API_VERSION} = 2;
 use lib "$main::dirname";
 print "home directory ".$main::dirname."\n";
-print "RENDER_ROOT: ".$ENV{RENDER_ROOT}."\n";
-print "WEBWORK ROOT: ".$ENV{WEBWORK_ROOT}."\n";
-print "WEBWORK_DIRECTORY: ".$WeBWorK::Constants::WEBWORK_DIRECTORY."\n";
-print "OPL_DIRECTORY: ".$ENV{OPL_DIRECTORY}."\n";
-print "PG_DIRECTORY: ".$WeBWorK::Constants::PG_DIRECTORY."\n";
 
 BEGIN {
 	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
@@ -51,56 +46,20 @@ sub startup {
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
-	# helper for rendering problem
-	# needs to capture request data and pass along
-	$self->helper(renderedProblem => sub{
-    my $c = shift;
-		my $opl_root = $c->app->config('opl_root');
-		my $contrib_root = $c->app->config('contrib_root');
-    my $file_path = $c->param('sourceFilePath') || $c->session('filePath');
-		$file_path =~ s!^Library/!$opl_root!;
-		$file_path =~ s!^Contrib/!$contrib_root!;
-		my $format = $c->param('format') || $c->session('format');
-		my $hash = {};
-		# it seems that ->Vars encodes an array in case key=>array
-		my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
-		$hash->{filePath} = $file_path;
-		$hash->{problemSeed} = $c->param('problemSeed') || $c->session('seed');
-		$hash->{form_action_url} = $c->param('formURL') || $c->app->config('form');
-		$hash->{base_url} = $c->param('baseURL') || $c->app->config('url');
-		$hash->{outputformat} = $c->param('template') || $c->session('template');
-		$hash->{inputs_ref} = \%inputs_ref;
-    return RenderApp::Controller::RenderProblem::process_pg_file($hash);
-  });
-
-  $self->helper(fetchProblemSource => sub{
-		my $c = shift;
-		my $file_path = $c->param('sourceFilePath') || $c->session('filePath');
-		return unless $file_path;
-		my $opl_root = $c->app->config('opl_root');
-		my $contrib_root = $c->app->config('contrib_root');
-		$file_path =~ s!^Library/!$opl_root!;
-		$file_path =~ s!^Contrib/!$contrib_root!;
-		$file_path = Mojo::File->new($file_path);
-		return unless (-r $file_path);
-		#$c->session( pathString => $file_path->to_string );
-		return $file_path->slurp;
-	});
-
 	# helper to expose request data
-  $self->helper(requestData => sub {
+  $self->helper(requestData2JSON => sub {
 		my $c = shift;
-		my $string = "";
+		my $hash = {};
 		my @all_param_names = @{$c->req->params->names};
 		foreach my $key (@all_param_names) {
-			$string = $string."[".$key."] => ".$c->param($key)."<br>";
+			my $val = join ',', @{$c->req->params->every_param($key)};
+			$hash->{$key} = $val;
 		}
-		return $string;
+		return $c->render(json => $hash);
 	});
 
   # Routes to controller
   my $r = $self->routes;
-  #$r->any('/')->to('login#index')->name('index');
 
 	$r->any('/')->to('login#ui');
 	$r->post('/render-api/')->to('render#problem');
@@ -108,14 +67,13 @@ sub startup {
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
 
-  #my $logged_in = $r->under('/')->to('login#is_valid');
-  $r->get('/request')->to('login#request');
-	$r->any('/render')->to('render#problem');
 	$r->any('/rendered')->to('render#problem');
+	$r->any('/request' => sub {
+		my $c =shift;
+		$c->requestData2JSON;
+	});
 
-  $r->get('/logout')->to('login#logout');
-
-  # pass all requests via ww2_files through to public
+  # pass all requests via ww2_files through to lib/WeBWorK/htdocs
 	$r->any('/webwork2_files/*path' => sub {
     my $c = shift;
     $c->reply->file($staticPath.$c->stash('path'));
