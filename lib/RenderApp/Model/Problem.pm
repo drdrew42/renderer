@@ -132,7 +132,7 @@ sub save {
   $self->{_error} = "400 Nothing to write!" unless ($self->{problem_contents} =~ m/\S/);
   $self->{_error} = "412 No file paths specified." unless ($write_path =~ m/\S/);
   $self->{_error} = "403 You are not allowed to write to that path." unless $self->{write_allowed};
-  $self->{_error} = "405 I cannot write to that path." unless (-w $write_path);
+  $self->{_error} = "405 I cannot write to that path." unless (-w $write_path->dirname);
   return 0 unless $self->success();
 
   $write_path->spurt($self->{problem_contents});
