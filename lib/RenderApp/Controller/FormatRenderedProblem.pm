@@ -160,6 +160,7 @@ sub formatRenderedProblem {
 	my $problemIdentifierPrefix = $self->{inputs_ref}->{problemIdentifierPrefix} //'';
   my $problemResult    =  $rh_result->{problem_result}//'';
   my $problemState     =  $rh_result->{problem_state}//'';
+	my $showPartialCorrectAnswers = $self->{inputs_ref}->{showPartialCorrectAnswers}//$rh_result->{flags}{showPartialCorrectAnswers};
   my $showSummary      = ($self->{inputs_ref}->{showSummary})//1; #default to show summary for the moment
 	my $formLanguage     = ($self->{inputs_ref}->{language})//'en';
 
@@ -173,8 +174,9 @@ sub formatRenderedProblem {
 		imgGen                 => $imgGen,
 		ce                     => '',	#used only to build the imgGen
 		showAnswerNumbers      => 0,
+		showAttemptAnswers     => 0,
 		showAttemptPreviews    => ($previewMode or $submitMode or $showCorrectMode),
-		showAttemptResults     => ($submitMode or $showCorrectMode),
+		showAttemptResults     => ($submitMode and $showPartialCorrectAnswers),
 		showCorrectAnswers     => ($showCorrectMode),
 		showMessages           => ($previewMode or $submitMode or $showCorrectMode),
 		showSummary            => ( ($showSummary and ($submitMode or $showCorrectMode) )//0 )?1:0,
@@ -197,8 +199,8 @@ sub formatRenderedProblem {
 			 $scoreSummary .= CGI::p($problemResult->{msg});
 		}
 
-		$scoreSummary .= CGI::p('Your score on this problem has not been recorded.');
-		$scoreSummary .= CGI::hidden({id=>'problem-result-score', name=>'problem-result-score',value=>$problemResult->{score}});
+		#scoreSummary .= CGI::p('Your score on this problem has not been recorded.');
+		#$scoreSummary .= CGI::hidden({id=>'problem-result-score', name=>'problem-result-score',value=>$problemResult->{score}});
 	}
 
 	# This stuff is put here because eventually we will add locale support so the
