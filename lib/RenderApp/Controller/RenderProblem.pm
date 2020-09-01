@@ -125,7 +125,7 @@ sub process_pg_file {
 		form_data => $inputHash,
 	};
 
-  # HACK: remove flags->{problemRandomize} if it exists
+  # HACK: remove flags->{problemRandomize} if it exists -- cannot include CODE refs
 	delete $json_rh->{flags}{problemRandomize} if $json_rh->{flags}{problemRandomize};
 
 	my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
@@ -278,7 +278,9 @@ sub standaloneRenderer {
 	my $permission_level = $form_data->{permissionLevel} || 0; #permissionLevel >= 10 will show hints, solutions + open all scaffold
 	my $num_correct = $form_data->{numCorrect} || 0; # consider replacing - this may never be relevant...
 	my $num_incorrect = $form_data->{numIncorrect} // 1000; #default to exceed any problem's showHint threshold unless provided
-	my $processAnswers = $form_data->{processAnswers} || 1; #default to 1, explicitly avoid generating answer components
+	my $processAnswers = $form_data->{processAnswers} // 1; #default to 1, explicitly avoid generating answer components
+
+	print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
 	my $translationOptions = {
 		displayMode     	=> $displayMode,
@@ -361,7 +363,6 @@ sub standaloneRenderer {
 		debug_messages              => $pgdebug_messages,
 		internal_debug_messages     => $internal_debug_messages,
 	};
-	print"\n pg answers ", join(" ",  %{$pg->{answers}} ) if $UNIT_TESTS_ON;
 	$pg->free;
 	$out2;
 }
