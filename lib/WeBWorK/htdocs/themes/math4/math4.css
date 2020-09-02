@@ -1,18 +1,18 @@
 /* WeBWorK Online Homework Delivery System
  * Copyright � 2000-2007 The WeBWorK Project, http://openwebwork.sf.net/
  * $CVSHeader: webwork2/conf/templates/math2/math2.css,v 1.1.2.1 2008/06/24 17:17:36 gage Exp $
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of either: (a) the GNU General Public License as published by the
  * Free Software Foundation; either version 2, or (at your option) any later
  * version, or (b) the "Artistic License" which comes with this package.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See either the GNU General Public License or the
  * Artistic License for more details.
  */
- 
+
 /* Bootstrap overrides */
 a:focus {
     outline-style:solid;
@@ -123,7 +123,7 @@ legend {
 	text-align: right;
 	font-size: 0.85em;
 	font-weight: normal;
-} 
+}
 #loginstatus a.btn {
     margin-bottom:.5ex;
 }
@@ -150,12 +150,12 @@ legend {
 }
 
 ul.nav li a:hover {
-	background: #e1e1e1;	
+	background: #e1e1e1;
 }
 
 /* for the side navigation 'fisheye' list of problems */
 li.currentProblem{
-	background: #e1e1e1;	
+	background: #e1e1e1;
 }
 
 #site-links h2 {
@@ -186,7 +186,7 @@ div.progress-bar {
 div.correct-progress {
    height: 20px;
    background-color: #8F8; /*same colour used as 'correct' */
-   border: 2px solid #00FF00; 
+   border: 2px solid #00FF00;
    border-radius: 4px;
    display: inline-block;
    float:left;
@@ -280,7 +280,7 @@ h2.page-title {
 .problem-nav {
 	margin-bottom:1ex;
 	display: inline-block;
-	
+
 }
 
 /* Message section */
@@ -288,10 +288,10 @@ h2.page-title {
 .Message {
     display: inline-block;
     margin-bottom:1ex;
-}   
+}
 
 .font-visible   { font-weight: bold; }
-.font-hidden { font-style: italic; } 
+.font-hidden { font-style: italic; }
 
 .admin-messagebox {
     background-color:#FFFFCC;
@@ -503,7 +503,7 @@ table.classlist-table .tbody {
 
 #sp-gateway-form label{
     display: inline-block;
-	padding-right: 15px;    
+	padding-right: 15px;
 }
 
 /* Library Browser */
@@ -522,7 +522,7 @@ table.classlist-table .tbody {
 
 .lb-problem-header {
     overflow:auto;
-    background-color: #FFFFFF; 
+    background-color: #FFFFFF;
     margin: 0px auto;
     min-height:30px;
     display:block;
@@ -533,18 +533,18 @@ table.classlist-table .tbody {
 }
 
 .lb-problem-path {
-    text-align: left; 
+    text-align: left;
     cursor: pointer;
 }
 
 .lb-problem-icons {
-    float:right; 
-    text-align: right; 
+    float:right;
+    text-align: right;
     margin-right:.8em;
 }
 
 .lb-problem-stats {
-    float:right; 
+    float:right;
     text-align:right;
 }
 
@@ -638,7 +638,7 @@ table.FormLayout tr.ButtonRowCenter { text-align: center; }
 table.FormLayout td { padding-right:10px; padding-bottom:.5ex; }
 
 table.FormLayout tr.ButtonRow,
-table.FormLayout tr.ButtonRowCenter, 
+table.FormLayout tr.ButtonRowCenter,
 table.FormLayout tr.ButtonRowCenter tr {
     vertical-align: middle;
 }
@@ -667,20 +667,20 @@ span.ResultsAlert { color: #ca5000; background-color: inherit; } /* orange */
 span.correct { color: inherit; background-color: #8F8; } /* green */
 span.incorrect { color: #bf5454; background-color: inherit; } /* red */
 span.unattempted { color: inherit; background-color: #88ECFF;}
-input.correct[type="text"]{ /* green */
+input.correct { /* green */
     border-color: rgba(81,153,81, 0.8);
     outline: 0;
     outline: thin dotted \9;
     /* IE6-9 */
-    
+
     -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(81,153,81, ,.6);
     -moz-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(81,153,81,.6);
     box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(81,153,81,.6);
-    
-    color:inherit; 
+
+    color:inherit;
 }
 
-input.incorrect[type="text"] { /* red */
+input.incorrect { /* red */
   border-color: rgba(191, 84, 84, 0.8);
   outline: 0;
   outline: thin dotted \9;
@@ -689,7 +689,7 @@ input.incorrect[type="text"] { /* red */
   -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(191,84,84,.6);
   -moz-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(191,84,84,.6);
   box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(191,84,84,.6);
-    color:inherit; 
+    color:inherit;
 }
 
 input.changed[type="text"] { /* orange */
@@ -729,9 +729,9 @@ div.problemHeader {}
 
 /* styles for the attemptResults table */
 table.attemptResults {
-	border-style: outset; 
-	border-width: 1px; 
-	margin-bottom: 1em; 
+	border-style: outset;
+	border-width: 1px;
+	margin-bottom: 1em;
 	border-spacing: 1px;
 /*      removed float stuff because none of the other elements nearby are
         floated and it was causing trouble
@@ -741,9 +741,9 @@ table.attemptResults {
 
 table.attemptResults td,
 table.attemptResults th {
-	border-style: inset; 
-	border-width: 1px; 
-	text-align: center; 
+	border-style: inset;
+	border-width: 1px;
+	text-align: center;
 	vertical-align: middle;
 	/*width: 15ex;*/ /* this was erroniously commented out with "#" */
 	padding: 2px 5px 2px 5px;
@@ -757,7 +757,7 @@ table.attemptResults th {
 
 table.attemptResults td.FeedbackMessage { background-color:#EDE275;} /* Harvest Gold */
 table.attemptResults td.ResultsWithoutError { background-color:#8F8;}
-span.ResultsWithErrorInResultsTable { color: inherit; background-color: inherit; } /* used to override the older red on white span */ 
+span.ResultsWithErrorInResultsTable { color: inherit; background-color: inherit; } /* used to override the older red on white span */
 table.attemptResults td.ResultsWithError { background-color:#D69191; color: #000000} /* red */
 
 /*styles for the instructor comment box */
@@ -792,12 +792,12 @@ table.attemptResults td.ResultsWithError { background-color:#D69191; color: #000
 table.attemptResults td td,
 table.attemptResults td th,
 table.ArrayLayout td {
-	border-style: none; 
-	border-width: 0px; 
+	border-style: none;
+	border-width: 0px;
 	padding: 0px;
 }
 table.attemptResults td.Message {
-   text-align: left; 
+   text-align: left;
    padding: 2px 5px 2px 5px;
    width: auto;
 }
@@ -1062,7 +1062,7 @@ table caption{
     max-height:600px;
 }
 
-.radio_span, 
+.radio_span,
 .radio_span input,
 .radio_span label{
     display:none !important;
@@ -1111,14 +1111,14 @@ div.problem_sets_options {
     height: 100px;
     width: 90%;
     border-style: dashed;
-    border-width: 1px;	
+    border-width: 1px;
     -webkit-border-radius: 5px;
     -moz-border-radius: 5px;
     border-radius: 5px;
     margin-bottom: 20px;
 }
 
-.pdr_handle {    
+.pdr_handle {
     cursor: move;
     margin-right:2px;
     font-size:large;
@@ -1179,7 +1179,7 @@ table#grades_table pre{
 	float: left;
 }
 
-.grades-course-total, 
+.grades-course-total,
 .grades-course-total th {
     font-weight: bold;
     font-size:105%;
@@ -1238,7 +1238,7 @@ table#grades_table pre{
 
 #problem_set_form input[type="submit"] {
     margin-right:1ex;
-} 
+}
 
 #mainform .btn,
 #problem_set_form .btn {
@@ -1256,7 +1256,7 @@ table#grades_table pre{
 
 #editor input[type="radio"]{
     margin-right:.5ex;
-    
+
 }
 
 #problem-grader-form select {
