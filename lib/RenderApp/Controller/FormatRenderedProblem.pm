@@ -185,7 +185,7 @@ sub formatRenderedProblem {
 	);
 
 	my $answerTemplate = $tbl->answerTemplate;
-	my $color_input_blanks_script = $tbl->color_answer_blanks if ($submitMode or $checkMode);
+	my $color_input_blanks_script = $tbl->color_answer_blanks if (($submitMode or $checkMode) and $showPartialCorrectAnswers);
 	$tbl->imgGen->render(refresh => 1) if $tbl->displayMode eq 'images';
 
 	# warn "imgGen is ", $tbl->imgGen;
