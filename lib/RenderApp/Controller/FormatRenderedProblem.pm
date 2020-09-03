@@ -193,14 +193,15 @@ sub formatRenderedProblem {
 	#warn "answersSubmitted ", $tbl->answersSubmitted;
 	# render equation images
 
-	if ($submitMode && $problemResult) {
+	if ($submitMode && $problemResult && $showSummary) {
 		$scoreSummary = CGI::p('Your score on this attempt is '.wwRound(0, $problemResult->{score} * 100).'%');
-		if ($problemResult->{msg}) {
-			 $scoreSummary .= CGI::p($problemResult->{msg});
-		}
-
 		#scoreSummary .= CGI::p('Your score on this problem has not been recorded.');
 		#$scoreSummary .= CGI::hidden({id=>'problem-result-score', name=>'problem-result-score',value=>$problemResult->{score}});
+	}
+
+	# this should never? be blocked -- contains relevant info for
+	if ($problemResult->{msg}) {
+		 $scoreSummary .= CGI::p($problemResult->{msg});
 	}
 
 	# This stuff is put here because eventually we will add locale support so the
