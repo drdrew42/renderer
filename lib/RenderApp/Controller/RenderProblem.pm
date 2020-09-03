@@ -291,7 +291,7 @@ sub standaloneRenderer {
 		QUIZ_PREFIX     	=> '',
 		#use_site_prefix 	=> 'http://localhost:3000',
 		use_opaque_prefix => 0,
-		permissionLevel 	=> 0
+		permissionLevel 	=> $permission_level
 	};
 	my $extras = {};   # Check what this is used for - passed as arg to renderer->new()
 
@@ -455,18 +455,6 @@ sub fake_set {
 	$set->{hardcopy_header} = "defaultHeader";
 	return($set);
 }
-
-#sub display_inputs {
-#	my %correct_answers = @_;
-#	foreach my $key (sort keys %correct_answers) {
-#		print "$key => $correct_answers{$key}\n";
-#	}
-#}
-
-#sub edit_source_file {
-#	my $file_path = shift;
-#	system(EDIT_COMMAND()." $file_path");
-#}
 
 # Get problem template source and adjust file_path name
 sub get_source {
