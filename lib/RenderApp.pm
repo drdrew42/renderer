@@ -38,7 +38,7 @@ sub startup {
   my $self = shift;
   my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
-  # Config
+  # config
   $self->plugin('Config');
 	$self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
@@ -62,22 +62,36 @@ sub startup {
   my $r = $self->routes;
 
 	$r->any('/')->to('login#ui');
+
+	$r->any('/health' => sub {shift->rendered(200)});
+
 	$r->post('/render-api/')->to('render#problem');
 	$r->post('/render-api/tap')->to('IO#raw');
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
 
 	$r->any('/rendered')->to('render#problem');
-	$r->any('/request' => sub {
-		my $c =shift;
-		$c->requestData2JSON;
-	});
+	$r->any('/request' => sub {shift->requestData2JSON});
 
   # pass all requests via ww2_files through to lib/WeBWorK/htdocs
 	$r->any('/webwork2_files/*path' => sub {
     my $c = shift;
     $c->reply->file($staticPath.$c->stash('path'));
   });
+
+	# any other requests are stonewalled and logged
+	$r->any('/*fail' => sub {
+		my $c = shift;
+		my $report = $c->stash('fail')."\nCOOKIE:";
+		for my $cookie (@{$c->req->cookies}) {
+			$report .= "\n".$cookie->to_string;
+		}
+		$report .= "\nFORM DATA:";
+		foreach my $k (@{$c->req->params->names}) {
+			$report .= "\n$k = ".join ', ', @{$c->req->params->every_param($k)};
+		}
+		$c->log->fatal($report);
+		$c->rendered(404)});
 }
 
 1;

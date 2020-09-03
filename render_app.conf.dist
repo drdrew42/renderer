@@ -2,9 +2,4 @@
   secrets => ['reveal_your_secrets','revelio','alohamora'],
   url => '/',
   form => '/render-api',
-  opl_root => 'webwork-open-problem-library/OpenProblemLibrary/',
-  contrib_root => 'webwork-open-problem-library/Contrib/',
-  APP_ROOT => '/usr/app/',
-  WEBWORK_DIR => 'lib/WeBWorK',
-  PG_DIR => 'lib/PG/',
 };
