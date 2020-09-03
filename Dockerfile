@@ -3,8 +3,6 @@ MAINTAINER Rederly
 
 WORKDIR /usr/app
 
-ENV MOJO_MODE=production
-
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
     apt-utils \
@@ -34,6 +32,8 @@ RUN apt-get update \
 
 RUN cpanm install Mojo::Base Date::Format \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
+
+ENV MOJO_MODE=production
 
 COPY . .
 
