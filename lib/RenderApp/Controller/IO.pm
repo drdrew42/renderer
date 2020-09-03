@@ -7,7 +7,7 @@ use MIME::Base64 qw(decode_base64);
 sub raw {
   my $c = shift;
   my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
-  my $problem = $c->newProblem({read_path => $file_path});
+  my $problem = $c->newProblem({log => $c->log, read_path => $file_path});
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
   $c->render(text => $problem->{problem_contents});
 }
@@ -16,7 +16,7 @@ sub writer {
   my $c = shift;
   my $source = decode_base64($c->param('problemSource'));
   my $file_path = $c->param('writeFilePath');
-  my $problem = $c->newProblem({write_path=>$file_path, problem_contents=>$source});
+  my $problem = $c->newProblem({log => $c->log, write_path=>$file_path, problem_contents=>$source});
 
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 

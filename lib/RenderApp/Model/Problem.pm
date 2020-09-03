@@ -45,6 +45,8 @@ sub _init {
   my ($self, $args) = @_;
   my $availability = 'private';
 
+  $self->{log} = $args->{log} if $args->{log};
+
   my $read_path = $args->{read_path} || '';
   my $problem_contents = $args->{problem_contents} || '';
   $self->{_error} = "400 Cannot create problem without either path or contents!\n" unless ($read_path =~ m/\S/ || $problem_contents =~ m/\S/);
@@ -53,12 +55,17 @@ sub _init {
     $self->path($read_path);
     $self->load;
   }
+  # overwrite read_path file content if raw content is provided
   if ($problem_contents =~ m/\S/) {
     $self->source($problem_contents);
   }
 
   $self->target($args->{write_path}) if $args->{write_path};
   $self->seed($args->{random_seed}) if $args->{random_seed};
+
+  my $path_info = $read_path ? $read_path : "no read path provided";
+  my $seed_info = $args->{random_seed} ? "#".$args->{random_seed} : "no random seed.";
+  $self->{log}->info("CREATED: Problem created with $path_info and $seed_info");
 };
 
 sub source {
@@ -181,7 +188,10 @@ sub errport {
 
 sub DESTROY {
   my $self = shift;
-  print int(rand(2)) ? "Oh I looove trash!\n" : "I love it because it's traaash!\n";
+  my $end = "TRASH: ".$self->{read_path}." ";
+  $end .= ( $self->{_error} && $self->{_error} =~ /\S/ ) ? $self->{_error} : "with no errors.";
+  $self->{log}->info($end);
+  #print int(rand(2)) ? "Oh I looove trash!\n" : "I love it because it's traaash!\n";
 }
 
 1;

@@ -3,10 +3,7 @@ MAINTAINER Rederly
 
 WORKDIR /usr/app
 
-ENV RENDER_ROOT=/usr/app
-
-ENV WEBWORK_ROOT=$RENDER_ROOT/lib/WeBWorK \
-    PG_ROOT=$RENDER_ROOT/lib/PG
+ENV MOJO_MODE=production
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
@@ -22,7 +19,7 @@ RUN apt-get update \
     libjson-perl \
     libcgi-pm-perl \
     libjson-xs-perl \
-    ca-certificates \ 
+    ca-certificates \
     libstorable-perl \
     libdatetime-perl \
     libuuid-tiny-perl \
@@ -46,6 +43,6 @@ RUN git clone --single-branch --branch master --depth 1 https://github.com/openw
 
 EXPOSE 3000
 
-HEALTHCHECK CMD curl -I localhost:3000/request
+HEALTHCHECK CMD curl -I localhost:3000/health
 
 CMD morbo ./script/render_app
