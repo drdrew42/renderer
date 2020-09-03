@@ -25,8 +25,8 @@ savebutton.addEventListener("click", event => {
   const writeurl = '/render-api/can'
 
   let formData = new FormData()
-  formData.append("problemSource", window.btoa(cm.getValue()))
-  formData.append("writeFilePath", document.getElementById('sourceFilePath').value)
+  formData.set("problemSource", window.btoa(cm.getValue()))
+  formData.set("writeFilePath", document.getElementById('sourceFilePath').value)
   const write_params = {
     body : formData,
     method : "post"
@@ -54,7 +54,7 @@ loadbutton.addEventListener("click", event => {
   const sourceurl = '/render-api/tap'
 
   let formData = new FormData();
-  formData.append("sourceFilePath", document.getElementById('sourceFilePath').value);
+  formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   const source_params = {
     body : formData,
     method : "post"
@@ -81,10 +81,10 @@ renderbutton.addEventListener("click", event => {
   const renderurl = '/render-api'
 
   let formData = new FormData();
-  formData.append("sourceFilePath", document.getElementById('sourceFilePath').value);
-  formData.append("problemSeed", document.getElementById('problemSeed').value);
-  formData.append("outputformat", document.querySelector(".dropdown-item.selected").id);
-  formData.append("problemSource", window.btoa(cm.getValue()));
+  formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
+  formData.set("problemSeed", document.getElementById('problemSeed').value);
+  formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
+  formData.set("problemSource", window.btoa(cm.getValue()));
   [...document.querySelectorAll('.checkbox-input:checked')].map(e => e.name).forEach( (box) => {
     formData.append(box, 1);
   });
@@ -130,9 +130,9 @@ function insertListener() {
     event.preventDefault()
     let formData = new FormData(problemForm)
     let clickedButton = problemForm.querySelector('.btn-clicked')
-    formData.append("format", "json")
-    formData.append("outputformat", document.querySelector(".dropdown-item.selected").id);
-    formData.append(clickedButton.name, clickedButton.value)
+    formData.set("format", "json")
+    formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
+    formData.set(clickedButton.name, clickedButton.value)
     const submiturl = '/render-api'
     const submit_params = {
       body : formData,
@@ -146,6 +146,7 @@ function insertListener() {
         throw new Error("Could not submit your answers: " + response.statusText)
       }
     }).then( function(data) {
+      console.log(data);
       problemiframe.srcdoc = data.renderedHTML
     }).catch( function(error) {
       document.getElementById("rendered-problem").innerHTML = error.message
