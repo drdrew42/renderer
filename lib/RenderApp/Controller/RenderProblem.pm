@@ -291,7 +291,8 @@ sub standaloneRenderer {
 		QUIZ_PREFIX     	=> '',
 		#use_site_prefix 	=> 'http://localhost:3000',
 		use_opaque_prefix => 0,
-		permissionLevel 	=> $permission_level
+		permissionLevel 	=> $permission_level,
+		effectivePermissionLevel => $permission_level
 	};
 	my $extras = {};   # Check what this is used for - passed as arg to renderer->new()
 
