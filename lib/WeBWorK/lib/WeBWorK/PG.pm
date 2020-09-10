@@ -28,6 +28,8 @@ use WeBWorK::PG::ImageGenerator;
 use WeBWorK::Utils qw(runtime_use formatDateTime makeTempDirectory);
 use WeBWorK::Utils::RestrictedClosureClass; #likely removable...
 use WeBWorK::Localize;
+use DateTime;
+use DateTime::Duration;
 
 use constant DISPLAY_MODES => {
 	# display name   # mode name
@@ -77,7 +79,7 @@ sub defineProblemEnvir {
 		$extras,
 	) = @_;
 
-	my %envir;
+	my %envir = %main::envir;
 
 	debug("in WEBWORK::PG");
 
@@ -149,7 +151,7 @@ sub defineProblemEnvir {
 #	$envir{DueDateTimeZone}     = formatDateTime($envir{dueDate}, $ce->{siteDefaults}{timezone}, "%Z", $ce->{siteDefaults}{locale});
 #	$envir{DueDateTime12}       = formatDateTime($envir{dueDate}, $ce->{siteDefaults}{timezone}, "%I:%M%P", $ce->{siteDefaults}{locale});
 #	$envir{DueDateTime24}       = formatDateTime($envir{dueDate}, $ce->{siteDefaults}{timezone}, "%R", $ce->{siteDefaults}{locale});
-#	$envir{answerDate}          = $set->answer_date;
+	$envir{answerDate}          = DateTime->now->add(days=>1)->epoch();
 #	$envir{formattedAnswerDate} = formatDateTime($envir{answerDate}, $ce->{siteDefaults}{timezone});
 #	$envir{AnsDateDayOfWeek}    = formatDateTime($envir{answerDate}, $ce->{siteDefaults}{timezone}, "%A", $ce->{siteDefaults}{locale});
 #	$envir{AnsDateDayOfWeekAbbrev} = formatDateTime($envir{answerDate}, $ce->{siteDefaults}{timezone}, "%a", $ce->{siteDefaults}{locale});
@@ -291,6 +293,8 @@ sub defineProblemEnvir {
 	for my $SPGEV (keys %{$specialPGEnvironmentVarHash}) {
 		$envir{$SPGEV} = $specialPGEnvironmentVarHash->{$SPGEV};
 	}
+
+	#%main::envir = %envir;
 
 	return \%envir;
 }
