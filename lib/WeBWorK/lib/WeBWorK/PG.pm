@@ -151,7 +151,7 @@ sub defineProblemEnvir {
 #	$envir{DueDateTimeZone}     = formatDateTime($envir{dueDate}, $ce->{siteDefaults}{timezone}, "%Z", $ce->{siteDefaults}{locale});
 #	$envir{DueDateTime12}       = formatDateTime($envir{dueDate}, $ce->{siteDefaults}{timezone}, "%I:%M%P", $ce->{siteDefaults}{locale});
 #	$envir{DueDateTime24}       = formatDateTime($envir{dueDate}, $ce->{siteDefaults}{timezone}, "%R", $ce->{siteDefaults}{locale});
-	$envir{answerDate}          = DateTime->now->add(days=>1)->epoch();
+	$envir{answerDate}          = ($formFields->{showSolutions})?DateTime->now->subtract(days=>1)->epoch():DateTime->now->add(days=>1)->epoch();
 #	$envir{formattedAnswerDate} = formatDateTime($envir{answerDate}, $ce->{siteDefaults}{timezone});
 #	$envir{AnsDateDayOfWeek}    = formatDateTime($envir{answerDate}, $ce->{siteDefaults}{timezone}, "%A", $ce->{siteDefaults}{locale});
 #	$envir{AnsDateDayOfWeekAbbrev} = formatDateTime($envir{answerDate}, $ce->{siteDefaults}{timezone}, "%a", $ce->{siteDefaults}{locale});
