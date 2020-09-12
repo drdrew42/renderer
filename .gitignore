@@ -1,6 +1,7 @@
 *.DS_Store
 render_app.conf
-lib/WeBWorK/htdocs/tmp/
+lib/WeBWorK/htdocs/tmp/rederly/gif/*
+lib/WeBWorK/htdocs/tmp/rederly/images/*
 lib/PG
 webwork-open-problem-library/
 private/
