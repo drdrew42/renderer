@@ -3,7 +3,6 @@ use Mojo::Base 'Mojolicious';
 use Mojo::File;
 
 BEGIN {
-	#use File::Basename;
 	use Mojo::File;
 	$main::dirname = Mojo::File::curfile->dirname;
 	#RENDER_ROOT is required for initializing conf files
@@ -15,7 +14,7 @@ BEGIN {
 	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
 	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
 }
-#$ENV{MOD_PERL_API_VERSION} = 2;
+
 use lib "$main::dirname";
 print "home directory ".$main::dirname."\n";
 
@@ -79,7 +78,7 @@ sub startup {
     $c->reply->file($staticPath.$c->stash('path'));
   });
 
-	# any other requests are stonewalled and logged
+	# any other requests fall through
 	$r->any('/*fail' => sub {
 		my $c = shift;
 		my $report = $c->stash('fail')."\nCOOKIE:";

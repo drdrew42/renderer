@@ -105,10 +105,8 @@ sub process_pg_file {
 	my $pg_stop = time;
 	my $pg_duration = $pg_stop-$pg_start;
 
-	# extract and display result
-	# print "display $file_path\n";
+	# format result
   my $html = $formatter->formatRenderedProblem;
-	#return $html unless $format eq 'json';
 	my $pg_obj = $formatter->{return_object};
 	my $json_rh = {
 		renderedHTML => $html,
@@ -125,6 +123,7 @@ sub process_pg_file {
 		form_data => $inputHash,
 	};
 
+	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
   # HACK: remove flags->{problemRandomize} if it exists -- cannot include CODE refs
 	delete $json_rh->{flags}{problemRandomize} if $json_rh->{flags}{problemRandomize};
 
@@ -156,6 +155,7 @@ sub process_problem {
 	die "problem seed not defined in Controller::RenderProblem::process_problem" unless $problem_seed;
 	my $display_mode = $inputs_ref->{displayMode};
 
+	# if base64 source is provided, use that over fetching problem path
 	if ($inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/) {
 		$source = decode_base64($inputs_ref->{problemSource});
 	} else {
@@ -165,12 +165,11 @@ sub process_problem {
 		#$inputs_ref->{probFileName} = $adj_file_path;
 		#$inputs_ref->{sourceFilePath} = $adj_file_path;
 		#$inputs_ref->{pathToProblemFile} = $adj_file_path;
-		#$inputs_ref->{problemSeed} = $problem_seed;
 	}
 
+	# TODO: rework using app_root level symlinks instead
 	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
 		warn "problem-level redirect found!\nMatch 1: ".$1."\nMatch 2: ".$2."\n" if $UNIT_TESTS_ON;
-		# TODO: find a non-hardcoded way to re-address the library...
 		my $redirect = $1;
 		$redirect =~ s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
 		warn "REDIRECTING TO: ".$redirect."\n" if $UNIT_TESTS_ON;
@@ -296,13 +295,10 @@ sub standaloneRenderer {
 	};
 	my $extras = {};   # Check what this is used for - passed as arg to renderer->new()
 
-	#REDUNDANT $form_data->{displayMode} = $displayMode;
-
 	# Create template of problem then add source text or a path to the source file
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPreamble} = {TeX=>'',HTML=>''};
 	local $ce->{pg}{specialPGEnvironmentVars}{problemPostamble} = {TeX=>'',HTML=>''};
 
-	#
 	my $problem = fake_problem(); # eliminated $db arg
 	$problem->{problem_seed} = $problem_seed;
 	$problem->{value} = -1;
@@ -310,21 +306,16 @@ sub standaloneRenderer {
 	$problem->{num_incorrect} = $num_incorrect;
 	$problem->{attempted} = $num_correct + $num_incorrect;
 
-	if (ref $problemFile) { #in this case the actual source is passed
+	if (ref $problemFile) {
 			$problem->{source_file} = $form_data->{sourceFilePath};
 			$translationOptions->{r_source} = $problemFile;
 			# warn "standaloneProblemRenderer: setting source_file = $problemFile";
-			# print "source is already read\n";
-			# a text string containing the problem
 	} else {
+			#in this case the actual source is passed
 			$problem->{source_file} = $problemFile;
 			warn "standaloneProblemRenderer: setting source_file = $problemFile";
 			# a path to the problem (relative to the course template directory?)
 	}
-
-	#FIXME temporary hack
-	#$set->set_id('this set') unless $set->set_id();
-	#$problem->problem_id('1') unless $problem->problem_id();
 
 	my $pg = WeBWorK::PG->new(
 		$ce,
@@ -482,6 +473,7 @@ sub get_source {
 	};
 	die "Something is wrong with the contents of $file_path\n" if $@;
 
+	# TODO: rework using app_root level symlinks instead
 	while ( $source =~ m/^# This file is just a pointer/ && $source =~ m/includePGproblem\("(.*)"\);/ ) {
 		warn "problem-level redirect found! ".$1."\n" if $UNIT_TESTS_ON;;
 		my $redirect = $1;
@@ -490,11 +482,6 @@ sub get_source {
 		($file_path, $source) = get_source($redirect);
 	}
 
-	### adjust file_path so that it is relative to the rendering course directory
-	#$file_path =~ s|/opt/webwork/libraries/NationalProblemLibrary|Library|;
-	#$file_path =~ s|^.*?/webwork-open-problem-library/OpenProblemLibrary|Library|;
-	print "file_path changed to $file_path\n" if $UNIT_TESTS_ON;
-	print $source  if  $UNIT_TESTS_ON;
 	return $file_path, $source;
 }
 
