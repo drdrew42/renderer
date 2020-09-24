@@ -1,4 +1,4 @@
-$simple_format = <<'ENDPROBLEMTEMPLATE';
+$nosubmit_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
 <html $COURSE_LANG_AND_DIR>
 <head>
@@ -34,7 +34,7 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 
 $problemHeadText
 
-<title>WeBWorK using host: $SITE_URL, format: simple seed: $problemSeed</title>
+<title>Rederly Standalone Renderer</title>
 </head>
 <body>
   <div class="container-fluid">
@@ -57,9 +57,7 @@ $problemHeadText
           <input type="hidden" name="showSummary" value="$showSummary">
           <p>
 
-            <input type="submit" name="previewAnswers"  value="$STRING_Preview" />
             <input type="submit" name="submitAnswers" value="$STRING_Submit"/>
-            <input type="submit" name="showCorrectAnswers" value="$STRING_ShowCorrect"/>
           </p>
         </form>
       </div>
@@ -70,4 +68,4 @@ $problemHeadText
 
 ENDPROBLEMTEMPLATE
 
-$simple_format;
+$nosubmit_format;
