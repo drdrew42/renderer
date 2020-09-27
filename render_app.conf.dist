@@ -2,4 +2,7 @@
   secrets => ['reveal_your_secrets','revelio','alohamora'],
   url => '/',
   form => '/render-api',
+  hypnotoad => {
+    listen => ['http://*:3000']
+  }
 };

@@ -45,4 +45,4 @@ EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
 
-CMD morbo ./script/render_app
+CMD hypnotoad ./script/render_app
