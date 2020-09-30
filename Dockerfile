@@ -45,4 +45,4 @@ EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
 
-CMD hypnotoad ./script/render_app
+CMD hypnotoad -f ./script/render_app

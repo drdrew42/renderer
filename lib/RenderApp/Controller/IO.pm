@@ -39,7 +39,12 @@ sub catalog {
     statusCode => 403,
     error => "Forbidden",
     message => "I'm sorry Dave, I'm afraid I can't do that."
-  }, status => 403) unless ( $root_path =~ m/^webwork-open-problem-library\/?/ || $root_path =~ m/^private\/?/);
+  }, status => 403) unless (
+    $root_path =~ m/^webwork-open-problem-library\/?/ ||
+    $root_path =~ m/^private\/?/ ||
+    $root_path =~ m/^Library\/?/ ||
+    $root_path =~ m/^Contrib\/?/
+  );
 
   if ( $depth == 0 || !-d $root_path ) {
     return (-e $root_path) ? $c->rendered(200) : $c->rendered(404);
@@ -57,6 +62,47 @@ sub catalog {
   File::Find::find {wanted=>$wanted, no_chdir=>1}, $root_path;
 
   $c->render( json => \%all );
+}
+
+sub search {
+  my $c = shift;
+  return $c->render(json => {
+    statusCode => 412,
+    error => "Precondition Failed",
+    message => "You must provide a valid path to search."
+  }, status => 412) unless ( defined($c->param('basePath')) && $c->param('basePath') =~ m/\S/ );
+
+  my $target = $c->param('basePath');
+  # cannot search for a path that doesn't end in a pg file
+  return $c->render(json => {
+    statusCode => 403,
+    error => "Forbidden",
+    message => "I'm sorry Dave, I'm afraid I can't do that."
+  }, status => 403) unless ( $target =~ m!.+\.pg$! );
+  my @targetArray = split /\//, $target;
+
+  local $File::Find::skip_pattern = qr/^\./; #skip any hidden folders
+  my @sources = ('private/', 'webwork-open-problem-library/Library/', 'webwork-open-problem-library/Contrib/');
+  my %found;
+  my $wanted = sub {
+    my $path = $File::Find::name;
+    my %pathHash = map { $_ => 1 } split /\//, $path;
+    my $matchCount = 0;
+    # don't continue unless the actual pg file matches...
+    unless ( defined($pathHash{ $targetArray[-1] }) ) {
+      return;
+    }
+    # when we have a matching filename, measure how much of the requested target is a match
+    for my $piece (@targetArray) {
+      $matchCount++ if defined($pathHash{$piece})
+    }
+    $found{$path} = $matchCount/($#targetArray+1); # only happens if the filename matches
+  };
+  for my $source (@sources) {
+    File::Find::find {wanted=>$wanted, no_chdir=>1}, $source;
+  }
+
+  $c->render( json => \%found );
 }
 
 1;

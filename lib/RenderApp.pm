@@ -68,6 +68,7 @@ sub startup {
 	$r->post('/render-api/tap')->to('IO#raw');
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
+	$r->any('/render-api/find')->to('IO#search');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/request' => sub {shift->requestData2JSON});
