@@ -61,7 +61,7 @@ sub free {
 	#
 	$self->{pgcore}{OUTPUT_ARRAY} = [];
 	$self->{answers} = {};
-	undef $self->{translator};
+	undef $self->{translator}{safe};
 	foreach (keys %{$self->{pgcore}{PG_ANSWERS_HASH}}) {undef $self->{pgcore}{PG_ANSWERS_HASH}{$_}}
 }
 
