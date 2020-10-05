@@ -278,6 +278,7 @@ sub standaloneRenderer {
 	my $num_correct = $form_data->{numCorrect} || 0; # consider replacing - this may never be relevant...
 	my $num_incorrect = $form_data->{numIncorrect} // 1000; #default to exceed any problem's showHint threshold unless provided
 	my $processAnswers = $form_data->{processAnswers} // 1; #default to 1, explicitly avoid generating answer components
+    my $psvn = $form_data->{psvn} // 123; # by request from Tani
 
 	print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
@@ -323,7 +324,7 @@ sub standaloneRenderer {
 		$key,
 		$set,
 		$problem,
-		123, # PSVN (practically unused in PG)  only used as an identifier
+        $psvn, # by request from Tani
 		$form_data,
 		$translationOptions,
 		$extras,
