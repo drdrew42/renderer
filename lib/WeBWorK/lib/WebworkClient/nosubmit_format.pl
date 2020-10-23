@@ -57,7 +57,6 @@ $problemHeadText
           <input type="hidden" name="showSummary" value="$showSummary">
           <p>
 
-            <input type="submit" name="submitAnswers" value="$STRING_Submit"/>
           </p>
         </form>
       </div>
