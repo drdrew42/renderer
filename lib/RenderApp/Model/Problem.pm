@@ -94,6 +94,7 @@ sub path {
   my $self = shift;
   if (scalar(@_) == 1) {
     my $read_path = shift;
+    $read_path =~ s!\s+|\.\./!!g; # prevent backtracking and whitespace
     my $opl_root = $ENV{OPL_DIRECTORY};
     if ($read_path =~ m!^Library/!) {
       $read_path =~ s!^Library/!$opl_root/OpenProblemLibrary/!;
@@ -117,6 +118,7 @@ sub target {
   my $self = shift;
   if (scalar(@_) == 1) {
     my $write_path = shift;
+    $write_path =~ s!\s+|\.\./!!g; # prevent backtracking and whitespace
     my $opl_root = $ENV{OPL_DIRECTORY};
     if ($write_path =~ m!^Library/!) {
       $write_path =~ s!^Library/!$opl_root/OpenProblemLibrary/!;
@@ -125,7 +127,7 @@ sub target {
     }
 
     # TODO: include permission check to write to this path...
-    $self->{write_allowed} = ($write_path =~ m/^private\// ) ? 1 : 0;
+    $self->{write_allowed} = ($write_path =~ m/^private\/(?:[^\s.])*\.pg$/ ) ? 1 : 0;
     $self->{write_path} = Mojo::File->new($write_path);
   }
   return $self->{write_path};
@@ -139,22 +141,30 @@ sub save {
   $self->{_error} = "400 Nothing to write!" unless ($self->{problem_contents} =~ m/\S/);
   $self->{_error} = "412 No file paths specified." unless ($write_path =~ m/\S/);
   $self->{_error} = "403 You are not allowed to write to that path." unless $self->{write_allowed};
-  $self->{_error} = "405 I cannot write to that path." unless (-w $write_path->dirname);
+
+  my $errs;
+  Mojo::File::make_path($self->{write_path}->dirname, {error => $errs}) if !(-e $write_path);
+  if ($errs) {
+    $self->log->warn(join("\n", @$errs)) if $errs;
+    $self->{_error} = "405 ".join("\n", @$errs) if $errs;
+  }
+
   return 0 unless $self->success();
 
   $write_path->spurt($self->{problem_contents});
-
+  $self->path($write_path); # update the read_path to match
   return 1;
 }
 
 sub load {
   my $self = shift;
   my $success = 0;
-  if (-r $self->{read_path}) {
-    $self->{problem_contents} = $self->{read_path}->slurp;
+  my $read_path = $self->{read_path};
+  if (-r $read_path) {
+    $self->{problem_contents} = $read_path->slurp;
     $success = 1;
   } else {
-    $self->{_error} = "404 Problem set with un-read-able read_path.";
+    $self->{_error} = "404 Problem set with un-read-able read_path: $read_path";
   }
   return $success;
 }
