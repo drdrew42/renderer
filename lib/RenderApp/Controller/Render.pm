@@ -16,18 +16,24 @@ sub problem {
 
   $inputs_ref{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
-  my @errs = checkInputs(\%inputs_ref);
-  if (@errs) {
-    my $err_log = "Form data submitted for ".$inputs_ref{sourceFilePath}." contained errors:\n";
-    $err_log .= join "\n", @errs;
-    $c->log->warn($err_log);
+  my @input_errs = checkInputs(\%inputs_ref);
+  if (@input_errs) {
+    my $err_log = "Form data submitted for ".$inputs_ref{sourceFilePath}." contained errors: {";
+    $err_log .= join "}, {", @input_errs;
+    $c->log->error($err_log."}");
   }
 
   # consider passing the problem object alongside the inputs_ref - this will become unnecessary
   my $ww_return_json = $problem->render(\%inputs_ref);
   my $ww_return_hash = decode_json($ww_return_json);
+  my @output_errs = checkOutputs($ww_return_hash);
+  if (@output_errs) {
+    my $err_log = "Output from rendering ".$inputs_ref{sourceFilePath}." contained errors: {";
+    $err_log .= join "}, {", @output_errs;
+    $c->log->error($err_log."}");
+  }
 
-  $ww_return_hash->{debug}->{render_warn} = \@errs;
+  $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
 
   $c->respond_to(
     html => { text => $ww_return_hash->{renderedHTML}},
@@ -51,6 +57,34 @@ sub checkInputs {
         $inputs_ref->{$k} = \@v_array;
       }
       push @errs, $err;
+    }
+  }
+  return @errs;
+}
+
+sub checkOutputs {
+  my $outputs_ref = shift;
+  my @errs;
+  my @expected_keys = (
+    'answers',
+    'debug',
+    'flags',
+    'form_data',
+    'problem_result',
+    'problem_state',
+    'renderedHTML'
+  );
+  if (ref $outputs_ref ne ref {}) {
+    push @errs, "renderer result is not a hash: $outputs_ref";
+  } else {
+    for my $key (@expected_keys) {
+      if (! defined $outputs_ref->{$key}) {
+        if (! exists $outputs_ref->{$key}) {
+          push @errs, "expected key: $key is missing";
+        } else {
+          push @errs, "expected key: $key is empty";
+        }
+      }
     }
   }
   return @errs;
