@@ -20,7 +20,7 @@ sub writer {
 
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
-  return ($problem->save) ? $c->render(text=>$file_path) : $c->render(json => $problem->errport(), status => $problem->{status});
+  return ($problem->save) ? $c->render(text=>$problem->{write_path}) : $c->render(json => $problem->errport(), status => $problem->{status});
 }
 
 sub catalog {
