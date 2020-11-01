@@ -6,7 +6,8 @@ sub problem {
   my $c = shift;
   my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
   my $random_seed = $c->param('problemSeed');
-  my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed});
+  my $problem_contents = $c->param('problemSource');
+  my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents});
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
   my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
