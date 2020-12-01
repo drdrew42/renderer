@@ -13,12 +13,6 @@ BEGIN {
 	$ENV{OPL_DIRECTORY}	=	"webwork-open-problem-library";
 	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
 	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
-}
-
-use lib "$main::dirname";
-print "home directory ".$main::dirname."\n";
-
-BEGIN {
 	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
 		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
 	}
@@ -26,6 +20,18 @@ BEGIN {
 		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
 	}
 }
+
+use lib "$main::dirname";
+print "home directory ".$main::dirname."\n";
+
+# BEGIN {
+# 	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
+# 		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
+# 	}
+# 	unless (-r $WeBWorK::Constants::PG_DIRECTORY ) {
+# 		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
+# 	}
+# }
 
 use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
@@ -41,6 +47,7 @@ sub startup {
   $self->plugin('Config');
 	$self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
+#   $self->plugin('leak_tracker');
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
