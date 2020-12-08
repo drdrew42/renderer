@@ -34,6 +34,8 @@ sub catalog {
   my $root_path = $c->param('basePath');
   my $depth = $c->param('maxDepth') // 2;
 
+  # $root_path =~ s!^Library!webwork-open-problem-library/OpenProblemLibrary!;
+
   # no peeking outside of these two directory trees
   return $c->render(json => {
     statusCode => 403,
@@ -47,6 +49,7 @@ sub catalog {
   );
 
   if ( $depth == 0 || !-d $root_path ) {
+    # warn($root_path) if !(-e $root_path);
     return (-e $root_path) ? $c->rendered(200) : $c->rendered(404);
   }
 
@@ -82,7 +85,7 @@ sub search {
   my @targetArray = split /\//, $target;
 
   local $File::Find::skip_pattern = qr/^\./; #skip any hidden folders
-  my @sources = ('private/', 'webwork-open-problem-library/Library/', 'webwork-open-problem-library/Contrib/');
+  my @sources = ('private/', 'webwork-open-problem-library/OpenProblemLibrary/', 'webwork-open-problem-library/Contrib/');
   my %found;
   my $wanted = sub {
     my $path = $File::Find::name;
@@ -94,7 +97,7 @@ sub search {
     }
     # when we have a matching filename, measure how much of the requested target is a match
     for my $piece (@targetArray) {
-      $matchCount++ if defined($pathHash{$piece})
+      $matchCount++ if (defined($pathHash{$piece}) || ($piece eq 'Library' && defined($pathHash{'OpenProblemLibrary'})))
     }
     $found{$path} = $matchCount/($#targetArray+1); # only happens if the filename matches
   };

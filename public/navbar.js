@@ -81,6 +81,7 @@ renderbutton.addEventListener("click", event => {
   const renderurl = '/render-api'
 
   let formData = new FormData();
+  // formData.set("permissionLevel", 20);
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   formData.set("problemSeed", document.getElementById('problemSeed').value);
   formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
@@ -103,6 +104,9 @@ renderbutton.addEventListener("click", event => {
   }).then(function(data) {
     console.log("render data: ", data)
     problemiframe.srcdoc = data.renderedHTML;
+    if (data.debug.errors !== "") {
+      alert(data.debug.errors.replace(/<br\/>/,"\n"));
+    }
   }).catch(function(error) {
     document.getElementById("rendered-problem").innerHTML = error.message;
   });
@@ -134,6 +138,9 @@ function insertListener() {
     formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
     formData.set(clickedButton.name, clickedButton.value);
     formData.set("problemSource", window.btoa(cm.getValue()));
+    [...document.querySelectorAll('.checkbox-input:checked')].map(e => e.name).forEach((box) => {
+      formData.append(box, 1);
+    });
     const submiturl = '/render-api'
     const submit_params = {
       body : formData,
@@ -147,7 +154,7 @@ function insertListener() {
         throw new Error("Could not submit your answers: " + response.statusText)
       }
     }).then( function(data) {
-      console.log(data);
+      console.log("render data: ", data)
       problemiframe.srcdoc = data.renderedHTML
     }).catch( function(error) {
       document.getElementById("rendered-problem").innerHTML = error.message
