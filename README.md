@@ -1,5 +1,9 @@
 # Rederly Standalone Problem Renderer & Editor
 
+![Commit Activity](https://img.shields.io/github/commit-activity/m/rederly/renderer?style=plastic)
+![License](https://img.shields.io/github/license/rederly/renderer?style=plastic)
+
+
 This is a PG Renderer derived from the WeBWorK2 codebase
 * https://github.com/openwebwork/WeBWorK2
 
@@ -78,7 +82,7 @@ Can be interfaced through `/render-api`
 | Key | Value |
 | --- | ----- |
 | student | 0 |
-| prof | 10 | 
+| prof | 10 |
 | admin | 20 |
 
 ## Permission logic summary for hints and solutions
