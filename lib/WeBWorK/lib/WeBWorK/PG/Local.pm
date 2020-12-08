@@ -171,6 +171,7 @@ sub new_helper {
         [qw(JSON)],
         [qw(Rserve Class::Tiny IO::Handle)],
         [qw(Mojo::Base Mojo::Exception)],
+        [qw(Data::Dumper)],
     );
 
     #	# HACK for apache2
@@ -418,8 +419,7 @@ EOF
     # !!!!!!!! IMPORTANT: $envir shouldn't be trusted after problem code runs!
     ############################################################################
 
-    my ( $result, $state )
-      ;    # we'll need these on the other side of the if block!
+    my ( $result, $state );    # we'll need these on the other side of the if block!
     if ( $translationOptions->{processAnswers} ) {
 
         ############################################################################
