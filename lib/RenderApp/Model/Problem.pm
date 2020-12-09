@@ -223,7 +223,7 @@ sub errport {
 sub DESTROY {
     my $self = shift;
     my $end  = "TRASH: ";
-	if ($self->{read_path}) $end .= $self->{read_path} . " ";
+	$end .= $self->{read_path} . " " if ( $self->{read_path} );
     $end .=
       ( $self->{_error} && $self->{_error} =~ /\S/ )
       ? $self->{_error}
