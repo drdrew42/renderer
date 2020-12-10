@@ -34,7 +34,9 @@ sub catalog {
   my $root_path = $c->param('basePath');
   my $depth = $c->param('maxDepth') // 2;
 
-  # $root_path =~ s!^Library!webwork-open-problem-library/OpenProblemLibrary!;
+  $root_path =~ s!\s+|\.\./!!g;
+  $root_path =~ s!^Library/!webwork-open-problem-library/OpenProblemLibrary/!;
+  $root_path =~ s!^Contrib/!webwork-open-problem-library/Contrib/!;
 
   # no peeking outside of these two directory trees
   return $c->render(json => {
@@ -43,9 +45,7 @@ sub catalog {
     message => "I'm sorry Dave, I'm afraid I can't do that."
   }, status => 403) unless (
     $root_path =~ m/^webwork-open-problem-library\/?/ ||
-    $root_path =~ m/^private\/?/ ||
-    $root_path =~ m/^Library\/?/ ||
-    $root_path =~ m/^Contrib\/?/
+    $root_path =~ m/^private\/?/
   );
 
   if ( $depth == 0 || !-d $root_path ) {
