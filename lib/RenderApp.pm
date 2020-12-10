@@ -78,6 +78,7 @@ sub startup {
 	$r->any('/render-api/find')->to('IO#search');
 
 	$r->any('/rendered')->to('render#problem');
+	$r->any('/version' => sub {shift->reply->file($staticPath.'version.txt')});
 	$r->any('/request' => sub {shift->requestData2JSON});
 
   # pass all requests via ww2_files through to lib/WeBWorK/htdocs
