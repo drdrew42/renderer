@@ -3,35 +3,31 @@ use Mojo::Base 'Mojolicious';
 use Mojo::File;
 
 BEGIN {
-	use Mojo::File;
-	$main::dirname = Mojo::File::curfile->dirname;
-	#RENDER_ROOT is required for initializing conf files
-	$ENV{RENDER_ROOT} = $main::dirname->dirname unless ( defined($ENV{RENDER_ROOT}) );
-	#WEBWORK_ROOT is required for PG/lib/WeBWorK/IO
-	$ENV{WEBWORK_ROOT} = $main::dirname.'/WeBWorK' unless ( defined($ENV{WEBWORK_ROOT}) );
-	#used for reconstructing library paths from sym-links
-	$ENV{OPL_DIRECTORY}	=	"webwork-open-problem-library";
-	$WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname."/WeBWorK";
-	$WeBWorK::Constants::PG_DIRECTORY      = $main::dirname."/PG";
-	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
-		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
-	}
-	unless (-r $WeBWorK::Constants::PG_DIRECTORY ) {
-		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
-	}
+    use Mojo::File;
+    $main::dirname = Mojo::File::curfile->dirname;
+
+    #RENDER_ROOT is required for initializing conf files
+    $ENV{RENDER_ROOT} = $main::dirname->dirname
+      unless ( defined( $ENV{RENDER_ROOT} ) );
+
+    #WEBWORK_ROOT is required for PG/lib/WeBWorK/IO
+    $ENV{WEBWORK_ROOT} = $main::dirname . '/WeBWorK'
+      unless ( defined( $ENV{WEBWORK_ROOT} ) );
+
+    #used for reconstructing library paths from sym-links
+    $ENV{OPL_DIRECTORY}                    = "webwork-open-problem-library";
+    $WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname . "/WeBWorK";
+    $WeBWorK::Constants::PG_DIRECTORY      = $main::dirname . "/PG";
+    unless ( -r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
+        die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
+    }
+    unless ( -r $WeBWorK::Constants::PG_DIRECTORY ) {
+        die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
+    }
 }
 
 use lib "$main::dirname";
-print "home directory ".$main::dirname."\n";
-
-# BEGIN {
-# 	unless (-r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
-# 		die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
-# 	}
-# 	unless (-r $WeBWorK::Constants::PG_DIRECTORY ) {
-# 		die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
-# 	}
-# }
+print "home directory " . $main::dirname . "\n";
 
 use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
