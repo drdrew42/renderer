@@ -3,6 +3,14 @@
   url => '/',
   form => '/render-api',
   hypnotoad => {
-    listen => ['http://*:3000']
+    listen => ['http://*:3000'],
+    accepts => 100,
+    workers => 10,
+    spare => 5,
+    clients => 1,
+    graceful_timeout => 15,
+    inactivity_timeout => 10,
+    keep_alive_timeout => 10,
+    requests => 5,
   }
 };
