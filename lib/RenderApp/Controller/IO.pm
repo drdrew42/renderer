@@ -59,59 +59,47 @@ sub upload {
 }
 
 sub catalog {
-    my $c = shift;
-    return $c->render(
-        json => {
-            statusCode => 412,
-            error      => "Precondition Failed",
-            message    => "You must provide a valid base path."
-        },
-        status => 412
-      )
-      unless ( defined( $c->param('basePath') )
-        && $c->param('basePath') =~ m/\S/ );
+  my $c = shift;
+  return $c->render(json => {
+    statusCode => 412,
+    error => "Precondition Failed",
+    message => "You must provide a valid base path."
+  }, status => 412) unless ( defined($c->param('basePath')) && $c->param('basePath') =~ m/\S/ );
 
-    my $root_path = $c->param('basePath');
-    my $depth     = $c->param('maxDepth') // 2;
+  my $root_path = $c->param('basePath');
+  my $depth = $c->param('maxDepth') // 2;
 
-    # $root_path =~ s!^Library!webwork-open-problem-library/OpenProblemLibrary!;
+  $root_path =~ s!\s+|\.\./!!g;
+  $root_path =~ s!^Library/!webwork-open-problem-library/OpenProblemLibrary/!;
+  $root_path =~ s!^Contrib/!webwork-open-problem-library/Contrib/!;
 
-    # no peeking outside of these two directory trees
-    return $c->render(
-        json => {
-            statusCode => 403,
-            error      => "Forbidden",
-            message    => "I'm sorry Dave, I'm afraid I can't do that."
-        },
-        status => 403
-      )
-      unless ( $root_path =~ m/^webwork-open-problem-library\/?/
-        || $root_path =~ m/^private\/?/
-        || $root_path =~ m/^Library\/?/
-        || $root_path =~ m/^Contrib\/?/ );
+  # no peeking outside of these two directory trees
+  return $c->render(json => {
+    statusCode => 403,
+    error => "Forbidden",
+    message => "I'm sorry Dave, I'm afraid I can't do that."
+  }, status => 403) unless (
+    $root_path =~ m/^webwork-open-problem-library\/?/ ||
+    $root_path =~ m/^private\/?/
+  );
 
-    if ( $depth == 0 || !-d $root_path ) {
+  if ( $depth == 0 || !-d $root_path ) {
+    # warn($root_path) if !(-e $root_path);
+    return (-e $root_path) ? $c->rendered(200) : $c->rendered(404);
+  }
 
-        # warn($root_path) if !(-e $root_path);
-        return ( -e $root_path ) ? $c->rendered(200) : $c->rendered(404);
-    }
+  local $File::Find::skip_pattern = qr/^\./; #skip any hidden folders
+  my %all;
+  my $wanted = sub {
+    (my $rel = $File::Find::name) =~ s!^\Q$root_path\E/?!!; #measure depth relative to root_path
+    my $path = $File::Find::name;
+    $File::Find::prune = 1 if File::Spec::Functions::splitdir($rel) >= $depth;
+    $path = $path.'/' if -d $File::Find::name;
+    $all{$path}++ if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ); #only report .pg files and directories
+  };
+  File::Find::find {wanted=>$wanted, no_chdir=>1}, $root_path;
 
-    local $File::Find::skip_pattern = qr/^\./;    #skip any hidden folders
-    my %all;
-    my $wanted = sub {
-        ( my $rel = $File::Find::name ) =~
-          s!^\Q$root_path\E/?!!;    #measure depth relative to root_path
-        my $path = $File::Find::name;
-        $File::Find::prune = 1
-          if File::Spec::Functions::splitdir($rel) >= $depth;
-        $path = $path . '/' if -d $File::Find::name;
-        $all{$path}++
-          if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! )
-          ;                         #only report .pg files and directories
-    };
-    File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
-
-    $c->render( json => \%all );
+  $c->render( json => \%all );
 }
 
 sub search {
