@@ -1,3 +1,3 @@
-[submodule "rederly/pg"]
-    path = lib/PG
-    url = https://github.com/rederly/pg.git
+[submodule "lib/PG"]
+	path = lib/PG
+	url = https://github.com/rederly/pg.git
