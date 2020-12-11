@@ -13,7 +13,7 @@ This is a PG Renderer derived from the WeBWorK2 codebase
 mkdir volumes
 mkdir container
 git clone https://github.com/openwebwork/webwork-open-problem-library volumes/webwork-open-problem-library
-git clone https://github.com/rederly/renderer container/
+git clone --recursive https://github.com/rederly/renderer container/
 docker build --tag renderer:1.0 ./container
 
 docker run -d \
