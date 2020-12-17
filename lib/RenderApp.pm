@@ -72,6 +72,7 @@ sub startup {
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
 	$r->any('/render-api/find')->to('IO#search');
+    $r->post('/render-api/upload')->to('IO#upload');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/version' => sub {shift->reply->file($staticPath.'version.txt')});
