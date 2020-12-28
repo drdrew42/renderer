@@ -31,6 +31,7 @@ print "home directory " . $main::dirname . "\n";
 
 use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
+use RenderApp::Controller::IO;
 
 use WeBWorK::Form;
 use WeBWorK::Constants;
@@ -41,14 +42,14 @@ sub startup {
 
   # config
   $self->plugin('Config');
-	$self->plugin('TagHelpers');
+  $self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
 #   $self->plugin('leak_tracker');
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
-	# helper to expose request data
+  # helper to expose request data
   $self->helper(requestData2JSON => sub {
 		my $c = shift;
 		my $hash = {};
@@ -59,6 +60,9 @@ sub startup {
 		}
 		return $c->render(json => $hash);
 	});
+
+  # helper to validate incoming request parameters
+  $self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
 
   # Routes to controller
   my $r = $self->routes;
@@ -73,16 +77,18 @@ sub startup {
 	$r->any('/render-api/cat')->to('IO#catalog');
 	$r->any('/render-api/find')->to('IO#search');
     $r->post('/render-api/upload')->to('IO#upload');
+	$r->post('/render-api/sma')->to('IO#findNewVersion');
+	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/version' => sub {shift->reply->file($staticPath.'version.txt')});
 	$r->any('/request' => sub {shift->requestData2JSON});
 
-  # pass all requests via ww2_files through to lib/WeBWorK/htdocs
+	# pass all requests via ww2_files through to lib/WeBWorK/htdocs
 	$r->any('/webwork2_files/*path' => sub {
-    my $c = shift;
-    $c->reply->file($staticPath.$c->stash('path'));
-  });
+		my $c = shift;
+		$c->reply->file($staticPath.$c->stash('path'));
+	});
 
 	# any other requests fall through
 	$r->any('/*fail' => sub {
