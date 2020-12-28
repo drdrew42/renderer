@@ -3,10 +3,23 @@ use Mojo::Base 'Mojolicious::Controller';
 use File::Spec::Functions qw(splitdir);
 use File::Find qw(find);
 use MIME::Base64 qw(decode_base64);
+use Mojo::JSON qw(decode_json);
+use Mojolicious::Validator;
+use Crypt::Random qw( makerandom_itv );
 
 sub raw {
-    my $c         = shift;
-    my $file_path = $c->param('sourceFilePath');   # || $c->session('filePath');
+    my $c = shift;
+    my $required = [];
+    push @$required,
+      {
+        field     => 'sourceFilePath',
+        checkType => 'like',
+        check     => qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)/,
+      };
+    my $validatedInput = $c->validateRequest( { required => $required } );
+    return unless $validatedInput;
+
+    my $file_path = $validatedInput->{sourceFilePath};
     my $problem   = $c->newProblem( { log => $c->log, read_path => $file_path } );
     return $c->render(
         json   => $problem->errport(),
@@ -38,94 +51,100 @@ sub writer {
 }
 
 sub upload {
-	my $c = shift;
-	# check size
-	return $c->render(text=>'File exceeded size cap.', status=>431) if $c->req->is_limit_exceeded;
+    my $c = shift;
 
-	my $error;
-	# process upload
-	$error = 'No file provided' unless my $upload = $c->req->param('file');
-	$error = 'No path provided' unless my $path = $c->req->param('path');
-	$error = 'Bad path provided' unless $path =~ m!^private/(?:[\s]*).pg$!;
+    # check size
+    return $c->render( text => 'File exceeded size cap.', status => 431 )
+      if $c->req->is_limit_exceeded;
 
-	# static images must share a folder with an existing pg file
-	my $mf_path = Mojo::File->new($path);
-	$error = 'No orphaned uploads' unless (-e $mf_path->dirname and -d $mf_path->dirname and -w $mf_path->dirname);
+    my $required = [];
+    my $optional = [];
+    push @$required,
+      {
+        field     => 'path',
+        checkType => 'like',
+        check     => qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)/,
+      };
+    push @$optional,
+      {
+        field     => 'file',
+        checkType => 'upload',
+      };
+    my $validatedInput = $c->validateRequest( { required => $required, optional => $optional } );
+    return unless $validatedInput;
+    my $upload = $validatedInput->{file};
+    my $path   = $validatedInput->{path};
 
-	$c->render(text=>$error, status=>400) if $error;
-	
-	$upload->move_to($path);
-	return $c->render(text=>'File successfully uploaded', status=>200);
+    # static images must share a folder with an existing pg file
+    my $mf_path = Mojo::File->new($path);
+    return $c->render( text => 'No orphaned uploads', status => 400 )
+      unless ( -e $mf_path->dirname
+        and -d $mf_path->dirname
+        and -w $mf_path->dirname );
+
+    $upload->move_to($path);
+    return $c->render( text => 'File successfully uploaded', status => 200 );
 }
 
 sub catalog {
-  my $c = shift;
-  return $c->render(json => {
-    statusCode => 412,
-    error => "Precondition Failed",
-    message => "You must provide a valid base path."
-  }, status => 412) unless ( defined($c->param('basePath')) && $c->param('basePath') =~ m/\S/ );
+    my $c = shift;
+    my $required = [];
+    my $optional = [];
+    push @$required,
+      {
+        field     => 'basePath',
+        checkType => 'like',
+        check     => qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)/,
+      };
+    push @$optional,
+      {
+        field     => 'maxDepth',
+        checkType => 'like',
+        check     => qr/^\d+$/,
+      };
+    my $validatedInput = $c->validateRequest( { required => $required, optional => $optional } );
+    return unless $validatedInput;
+    my $root_path = $validatedInput->{basePath};
+    my $depth     = $validatedInput->{maxDepth} // 2;
 
-  my $root_path = $c->param('basePath');
-  my $depth = $c->param('maxDepth') // 2;
+    $root_path =~ s!\s+|\.\./!!g;
+    $root_path =~ s!^Library/!webwork-open-problem-library/OpenProblemLibrary/!;
+    $root_path =~ s!^Contrib/!webwork-open-problem-library/Contrib/!;
 
-  $root_path =~ s!\s+|\.\./!!g;
-  $root_path =~ s!^Library/!webwork-open-problem-library/OpenProblemLibrary/!;
-  $root_path =~ s!^Contrib/!webwork-open-problem-library/Contrib/!;
+    if ( $depth == 0 || !-d $root_path ) {
+        # warn($root_path) if !(-e $root_path);
+        return ( -e $root_path ) ? $c->rendered(200) : $c->rendered(404);
+    }
 
-  # no peeking outside of these two directory trees
-  return $c->render(json => {
-    statusCode => 403,
-    error => "Forbidden",
-    message => "I'm sorry Dave, I'm afraid I can't do that."
-  }, status => 403) unless (
-    $root_path =~ m/^webwork-open-problem-library\/?/ ||
-    $root_path =~ m/^private\/?/
-  );
+    local $File::Find::skip_pattern = qr/^\./; # skip any hidden folders
+    my %all;
+    my $wanted = sub {
+        ( my $rel = $File::Find::name ) =~ s!^\Q$root_path\E/?!!; # measure depth relative to root_path
+        my $path = $File::Find::name;
+        $File::Find::prune = 1
+          if File::Spec::Functions::splitdir($rel) >= $depth;
+        $path = $path . '/' if -d $File::Find::name;
+        $all{$path}++
+          if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ); # only report .pg files and directories
+    };
+    File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
 
-  if ( $depth == 0 || !-d $root_path ) {
-    # warn($root_path) if !(-e $root_path);
-    return (-e $root_path) ? $c->rendered(200) : $c->rendered(404);
-  }
-
-  local $File::Find::skip_pattern = qr/^\./; #skip any hidden folders
-  my %all;
-  my $wanted = sub {
-    (my $rel = $File::Find::name) =~ s!^\Q$root_path\E/?!!; #measure depth relative to root_path
-    my $path = $File::Find::name;
-    $File::Find::prune = 1 if File::Spec::Functions::splitdir($rel) >= $depth;
-    $path = $path.'/' if -d $File::Find::name;
-    $all{$path}++ if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ); #only report .pg files and directories
-  };
-  File::Find::find {wanted=>$wanted, no_chdir=>1}, $root_path;
-
-  $c->render( json => \%all );
+    $c->render( json => \%all );
 }
 
 sub search {
     my $c = shift;
-    return $c->render(
-        json => {
-            statusCode => 412,
-            error      => "Precondition Failed",
-            message    => "You must provide a valid path to search."
-        },
-        status => 412
-      )
-      unless ( defined( $c->param('basePath') )
-        && $c->param('basePath') =~ m/\S/ );
 
-    my $target = $c->param('basePath');
-
-    # cannot search for a path that doesn't end in a pg file
-    return $c->render(
-        json => {
-            statusCode => 403,
-            error      => "Forbidden",
-            message    => "I'm sorry Dave, I'm afraid I can't do that."
-        },
-        status => 403
-    ) unless ( $target =~ m!.+\.pg$! );
+    my $required = [];
+    push @$required,
+      {
+        field     => 'basePath',
+        checkType => 'like',
+        check     => qr/.+\.pg$/,
+      };
+    my $validatedInput = $c->validateRequest( { required => $required } );
+    return unless $validatedInput;
+    my $target = $validatedInput->{basePath};
     my @targetArray = split /\//, $target;
 
     local $File::Find::skip_pattern = qr/^\./;    #skip any hidden folders
@@ -145,7 +164,7 @@ sub search {
             return;
         }
 
-# when we have a matching filename, measure how much of the requested target is a match
+		# when we have a matching filename, measure how much of the requested target is a match
         for my $piece (@targetArray) {
             $matchCount++
               if (
@@ -161,7 +180,238 @@ sub search {
         File::Find::find { wanted => $wanted, no_chdir => 1 }, $source;
     }
 
-    $c->render( json => \%found );
+    return $c->render( json => \%found );
+}
+
+sub findNewVersion {
+	my $c = shift;
+    my $required = [];
+    my $optional = [];
+    push @$required,
+      {
+        field     => 'sourceFilePath',
+        checkType => 'like',
+        check     =>  qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/).*\.pg$/,
+      };
+    push @$required,
+      {
+        field     => 'avoidSeeds',
+        checkType => 'like',
+        check     => qr/^[\d\s,]+$/,
+      };
+    push @$optional,
+      {
+        field     => 'maxIterations',
+        checkType => 'like',
+        check     => qr/^\d+$/,
+      };
+    my $validatedInput = $c->validateRequest( { required => $required, optional => $optional } );
+    return unless $validatedInput;
+
+	my $filePath = $validatedInput->{sourceFilePath};
+	my $seedString = $validatedInput->{avoidSeeds};
+	my $maxIterations = $c->param('maxIterations') || 5;
+    $seedString =~ s/\s//g;
+	my @avoidSeeds = split(',', $seedString);
+
+	my $avoidProblems = {};
+	for my $seed (@avoidSeeds) {
+		my $problem = $c->newProblem( {log=>$c->log, read_path=>$filePath, random_seed=>$seed} );
+		$avoidProblems->{$seed} = decode_json( $problem->render( {} ) );
+	}
+
+	my ($newSeed, $newProblem);
+    my $newFailed = [];
+	for my $i (1..$maxIterations) {
+		do {
+            $newSeed = int makerandom_itv(
+                Size     => 20,
+                Strength => 1,
+                Uniform  => 1,
+                Lower    => 1,
+                Upper    => 999999
+            );
+		} until (!exists($avoidProblems->{$newSeed}));
+
+        my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
+        my $newProblemJson = $newProblemObj->render( {} );
+        $newProblem = decode_json( $newProblemJson );
+
+        if ( _isNewVersion( $newProblem, $avoidProblems ) ) {
+            last;
+        } else {
+            push @$newFailed, $newSeed;
+            $newProblem = undef;
+        }
+	}
+
+    if ( $newProblem ) {
+        return $c->respond_to(
+            html => { text => $newProblem->{renderedHTML} },
+            # respond to format: json
+            json => { 
+                # with a json from an anon hashRef
+                json => {
+                    problem => $newProblem,
+                    problemSeed => $newSeed,
+                }
+            }
+        );
+    } else {
+        return $c->render(
+            json => {
+                statusCode => 404,
+                error    => "Not Found",
+                message  => "Could not find a different version",
+                data     => $newFailed
+            },
+            status => 404
+        );
+    }
+}
+
+sub findUniqueSeeds {
+	my $c = shift;
+    my $required = [];
+    my $optional = [];
+    push @$required,
+      {
+        field     => 'sourceFilePath',
+        checkType => 'like',
+        check     =>  qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/).*\.pg$/,
+      };
+    push @$required,
+      {
+        field     => 'numberOfSeeds',
+        checkType => 'like',
+        check     => qr/^[\d\s,]+$/,
+      };
+    push @$optional,
+      {
+        field     => 'maxIterations',
+        checkType => 'like',
+        check     => qr/^\d+$/,
+      };
+    my $validatedInput = $c->validateRequest( { required => $required, optional => $optional } );
+    return unless $validatedInput;
+
+	my $filePath = $validatedInput->{sourceFilePath};
+	my $numberOfSeeds = $validatedInput->{numberOfSeeds};
+	my $maxIterations = $c->param('maxIterations') || 2 * $numberOfSeeds;
+
+	my $uniqueProblems = {};
+    my $triedSeeds = {};
+
+	my ($newSeed, $newProblem);
+    my $newFailed = [];
+	for my $i (1..$maxIterations) {
+		do {
+            $newSeed = int makerandom_itv(
+                Size     => 20,
+                Strength => 1,
+                Uniform  => 1,
+                Lower    => 1,
+                Upper    => 999999
+            );
+		} until (!exists($triedSeeds->{$newSeed}));
+        my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
+        my $newProblemJson = $newProblemObj->render( {} );
+        $newProblem = decode_json( $newProblemJson );
+
+        if ( _isNewVersion( $newProblem, $uniqueProblems ) ) {
+            $uniqueProblems->{$newSeed} = $newProblem;
+            if (scalar(keys %$uniqueProblems) >= $numberOfSeeds) {
+                last;
+            }
+        } else {
+            push @$newFailed, $newSeed;
+        }
+	}
+
+    my @returnKeys = keys %$uniqueProblems;
+    if ( scalar @returnKeys >= $numberOfSeeds ) {
+        return $c->render(
+            json => { uniqueKeys => \@returnKeys }
+        );
+    } else {
+        return $c->render(
+            json => {
+                statusCode => 404,
+                error    => "Not Found",
+                message  => "Could not find $numberOfSeeds different versions.",
+                data     => {
+                    uniqueKeys => \@returnKeys,
+                    duplicates => $newFailed,
+                }
+            },
+            status => 404
+        );
+    }
+}
+
+sub _isNewVersion {
+	my $newProblem = shift;
+	my $avoidProblems = shift;
+	my $isNew = 0;
+
+    return 1 unless ( keys %$avoidProblems );
+
+	for my $avoidProblemKey (keys %$avoidProblems) {
+		if ($newProblem->{renderedHTML} ne $avoidProblems->{$avoidProblemKey}->{renderedHTML}) {
+			$isNew = 1;
+			last;
+		}
+	}
+
+	return $isNew;
+}
+
+sub validate {
+    my $c = shift;
+    my $options = shift;
+    my $required = $options->{required} // [];
+    my $optional = $options->{optional} // [];
+
+    my $validator = Mojolicious::Validator->new;
+    my $v = $validator->validation;
+    $v->input($c->req->params->to_hash);
+    warn Dumper $c->req->params->to_hash;
+
+    for my $req (@$required) {
+        my $warnString = $c->req->param($req->{field}) . ' =~ ' . $req->{check} . "\n";
+        $warnString .= ($c->req->param( $req->{field} ) =~ $req->{check}) ? 'PASSED' : 'FAILED';
+        $warnString .= "\n";
+        warn $warnString;
+        $v->required( $req->{field} )->check( $req->{checkType}, $req->{check} );
+    }
+    for my $req (@$optional) {
+        $v->optional( $req->{field} )->check( $req->{checkType}, $req->{check} );
+    }
+
+    if ($v->has_error) {
+        $c->log->error( "Request data failed to validate: " . join( ', ', @{ $v->failed } ) );
+        my $errMessage = [];
+        for my $field (@{$v->failed}) {
+            my ($check, $result, @args) = @{$v->error($field)};
+            my $errString = "Field '$field' failed to validate '$check' check";
+            push @$errMessage, $errString;
+        }
+        $c->render(
+            json => {
+                statusCode => 412,
+                error      => "Precondition Failed",
+                message    => $errMessage,
+                data       => {
+                    failed => $v->failed,
+                    passed => $v->passed,
+                }
+            },
+            status => 412
+        );
+        return undef;
+    } else {
+        return $v->output;
+    }
 }
 
 1;
