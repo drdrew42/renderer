@@ -84,14 +84,16 @@ sub process_pg_file {
 
     our $seed_ce = create_course_environment();
 
-    my $file_path = $problem->{read_path};
+    my $file_path = $problem->path;
+    my $problem_seed = $problem->seed || '666';
 
     # just make sure we have the fundamentals covered...
     $inputHash->{displayMode} =
       'MathJax';    #	is there any reason for this to be anything else?
-    $inputHash->{outputformat} ||= 'static';
-    $inputHash->{problemSeed}  ||= '666';
-    $inputHash->{language}     ||= 'en';
+    $inputHash->{sourceFilePath} ||= $file_path;
+    $inputHash->{outputformat}   ||= 'static';
+    $inputHash->{problemSeed}    ||= $problem_seed;
+    $inputHash->{language}       ||= 'en';
 
     # HACK: required for problemRandomize.pl
     $inputHash->{effectiveUser} = 'red.ted';
@@ -243,7 +245,7 @@ sub process_problem {
     ##################################################
 
     # PG/macros/PG.pl wipes out problemSeed -- put it back!
-    $inputs_ref->{problemSeed} = $problem_seed;
+    # $inputs_ref->{problemSeed} = $problem_seed;
     $inputs_ref->{displayMode} = $display_mode;
 
  	# my $encoded_source = encode_base64($source); # create encoding of source_file;
