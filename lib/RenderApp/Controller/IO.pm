@@ -378,10 +378,6 @@ sub validate {
     warn Dumper $c->req->params->to_hash;
 
     for my $req (@$required) {
-        my $warnString = $c->req->param($req->{field}) . ' =~ ' . $req->{check} . "\n";
-        $warnString .= ($c->req->param( $req->{field} ) =~ $req->{check}) ? 'PASSED' : 'FAILED';
-        $warnString .= "\n";
-        warn $warnString;
         $v->required( $req->{field} )->check( $req->{checkType}, $req->{check} );
     }
     for my $req (@$optional) {
