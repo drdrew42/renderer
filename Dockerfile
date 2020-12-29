@@ -30,7 +30,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
-RUN cpanm install Mojo::Base Date::Format \
+RUN cpanm install Mojo::Base Date::Format Crypt::Random \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 ENV MOJO_MODE=production
