@@ -5,7 +5,7 @@ use File::Find qw(find);
 use MIME::Base64 qw(decode_base64);
 use Mojo::JSON qw(decode_json);
 use Mojolicious::Validator;
-use Crypt::Random qw( makerandom_itv );
+use Math::Random::Secure qw( rand );
 
 sub raw {
     my $c = shift;
@@ -82,7 +82,7 @@ sub upload {
         and -d $mf_path->dirname
         and -w $mf_path->dirname );
 
-    $upload->move_to($path);
+    $upload->move_to($mf_path);
     return $c->render( text => 'File successfully uploaded', status => 200 );
 }
 
@@ -223,14 +223,8 @@ sub findNewVersion {
 	my ($newSeed, $newProblem);
     my $newFailed = [];
 	for my $i (1..$maxIterations) {
-		do {
-            $newSeed = int makerandom_itv(
-                Size     => 20,
-                Strength => 1,
-                Uniform  => 1,
-                Lower    => 1,
-                Upper    => 999999
-            );
+		do { 
+            $newSeed = 1 + int rand( 999999 );
 		} until (!exists($avoidProblems->{$newSeed}));
 
         my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
@@ -306,13 +300,7 @@ sub findUniqueSeeds {
     my $newFailed = [];
 	for my $i (1..$maxIterations) {
 		do {
-            $newSeed = int makerandom_itv(
-                Size     => 20,
-                Strength => 1,
-                Uniform  => 1,
-                Lower    => 1,
-                Upper    => 999999
-            );
+            $newSeed = 1 + int rand(999999);
 		} until (!exists($triedSeeds->{$newSeed}));
         my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
         my $newProblemJson = $newProblemObj->render( {} );
@@ -374,8 +362,14 @@ sub validate {
 
     my $validator = Mojolicious::Validator->new;
     my $v = $validator->validation;
-    $v->input($c->req->params->to_hash);
-    warn Dumper $c->req->params->to_hash;
+
+    # file uploads are stripped from incoming params 
+    my $inputHash = $c->req->params->to_hash;
+    # add them individually from the array of uploads
+    for my $upload (@{$c->req->uploads}) {
+      $inputHash->{$upload->name} = $upload;
+    }
+    $v->input($inputHash);
 
     for my $req (@$required) {
         $v->required( $req->{field} )->check( $req->{checkType}, $req->{check} );

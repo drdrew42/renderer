@@ -1,7 +1,9 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 MAINTAINER Rederly
 
 WORKDIR /usr/app
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/New_York
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
@@ -25,12 +27,13 @@ RUN apt-get update \
     libclass-accessor-perl \
     libstring-shellquote-perl \
     libproc-processtable-perl \
+    libmath-random-secure-perl \
     libdata-structure-util-perl \
     liblocale-maketext-lexicon-perl \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
-RUN cpanm install Mojo::Base Date::Format Crypt::Random \
+RUN cpanm install Mojo::Base Date::Format \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 ENV MOJO_MODE=production
