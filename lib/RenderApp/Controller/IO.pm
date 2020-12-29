@@ -82,7 +82,7 @@ sub upload {
         and -d $mf_path->dirname
         and -w $mf_path->dirname );
 
-    $upload->move_to($path);
+    $upload->move_to($mf_path);
     return $c->render( text => 'File successfully uploaded', status => 200 );
 }
 
@@ -362,7 +362,14 @@ sub validate {
 
     my $validator = Mojolicious::Validator->new;
     my $v = $validator->validation;
-    $v->input($c->req->params->to_hash);
+
+    # file uploads are stripped from incoming params 
+    my $inputHash = $c->req->params->to_hash;
+    # add them individually from the array of uploads
+    for my $upload (@{$c->req->uploads}) {
+      $inputHash->{$upload->name} = $upload;
+    }
+    $v->input($inputHash);
 
     for my $req (@$required) {
         $v->required( $req->{field} )->check( $req->{checkType}, $req->{check} );
