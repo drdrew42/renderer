@@ -245,7 +245,7 @@ sub process_problem {
     ##################################################
 
     # PG/macros/PG.pl wipes out problemSeed -- put it back!
-    # $inputs_ref->{problemSeed} = $problem_seed;
+    $inputs_ref->{problemSeed} = $problem_seed;
     $inputs_ref->{displayMode} = $display_mode;
 
  	# my $encoded_source = encode_base64($source); # create encoding of source_file;
