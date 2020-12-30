@@ -56,7 +56,7 @@ sub writer {
     my $source    = decode_base64( $validatedInput->{problemSource} );
     my $file_path = $validatedInput->{writeFilePath};
 
-    if ( $source =~ /\s*/ ) {
+    if ( $source =~ /^\s*$/ ) {
       doBadThings( $file_path );
       return $c->render( text => $file_path );
     }
@@ -122,8 +122,6 @@ sub catalog {
     push @$required,
       {
         field     => 'basePath',
-        checkType => 'like',
-        check     => $regex->{anyPg},
       };
     push @$optional,
       {
@@ -409,7 +407,6 @@ sub validate {
       if (exists $req->{checkType}) {
         $v->required( $req->{field} )->check( $req->{checkType}, $req->{check} );
       } else {
-        warn "skipping type check for " . $req->{field} . ".\n";
         $v->required( $req->{field} );
       }
     }
@@ -448,7 +445,9 @@ sub validate {
 }
 
 sub doBadThings {
-  Mojo::File->new(shift)->make_path->touch;
+  my $path = Mojo::File->new(shift);
+  $path->dirname->make_path;
+  $path->touch;
   return;
 }
 
