@@ -8,7 +8,8 @@ use Mojolicious::Validator;
 use Math::Random::Secure qw( rand );
 
 our $regex = {
-allPathsPg => qr/^(:?private\/|Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/).*\.pg$/,
+  anyPg => qr/.+\.pg$/,
+  allPathsPg => qr/^(:?private\/|Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/).*\.pg$/,
   publicOnlyPg => qr/^(:?Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/).*\.pg$/,
   privateOnlyPg => qr/^private\/(?!\.\.\/).*\.pg$/,
   allPaths => qr/^(:?private\/|Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/)/,
@@ -122,7 +123,7 @@ sub catalog {
       {
         field     => 'basePath',
         checkType => 'like',
-        check     => $regex->{allPaths},
+        check     => $regex->{anyPg},
       };
     push @$optional,
       {
@@ -142,6 +143,11 @@ sub catalog {
     if ( $depth == 0 || !-d $root_path ) {
         # warn($root_path) if !(-e $root_path);
         return ( -e $root_path ) ? $c->rendered(200) : $c->rendered(404);
+    }
+
+    if ( !($root_path =~ /^(:?webwork-open-problem-library\/|private\/)/) ) {
+        $c->log->warn("Someone is cataloguing a path outside of OPL and private!");
+        return $c->rendered(403);
     }
 
     local $File::Find::skip_pattern = qr/^\./; # skip any hidden folders
@@ -442,7 +448,7 @@ sub validate {
 }
 
 sub doBadThings {
-  Mojo::File->new(shift)->touch;
+  Mojo::File->new(shift)->make_path->touch;
   return;
 }
 
