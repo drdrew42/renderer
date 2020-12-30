@@ -7,6 +7,15 @@ use Mojo::JSON qw(decode_json);
 use Mojolicious::Validator;
 use Math::Random::Secure qw( rand );
 
+our $regex = {
+allPathsPg => qr/^(:?private\/|Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/).*\.pg$/,
+  publicOnlyPg => qr/^(:?Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/).*\.pg$/,
+  privateOnlyPg => qr/^private\/(?!\.\.\/).*\.pg$/,
+  allPaths => qr/^(:?private\/|Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/)/,
+  publicOnly => qr/^(:?Contrib\/|webwork-open-problem-library\/Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)(?!\.\.\/)/,
+  privateOnly => qr/^private\/(?!\.\.\/)/,
+};
+
 sub raw {
     my $c = shift;
     my $required = [];
@@ -14,7 +23,7 @@ sub raw {
       {
         field     => 'sourceFilePath',
         checkType => 'like',
-        check     => qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)/,
+        check     => $regex->{allPathsPg},
       };
     my $validatedInput = $c->validateRequest( { required => $required } );
     return unless $validatedInput;
@@ -30,8 +39,27 @@ sub raw {
 
 sub writer {
     my $c         = shift;
-    my $source    = decode_base64( $c->param('problemSource') );
-    my $file_path = $c->param('writeFilePath');
+    my $required = [];
+    push @$required,
+      {
+        field     => 'writeFilePath',
+        checkType => 'like',
+        check     => $regex->{privateOnlyPg},
+      };
+    push @$required,
+      {
+        field     => 'problemSource',
+      };
+    my $validatedInput = $c->validateRequest( { required => $required } );
+    return unless $validatedInput;
+    my $source    = decode_base64( $validatedInput->{problemSource} );
+    my $file_path = $validatedInput->{writeFilePath};
+
+    if ( $source =~ /\s*/ ) {
+      doBadThings( $file_path );
+      return $c->render( text => $file_path );
+    }
+
     my $problem   = $c->newProblem(
         {
             log              => $c->log,
@@ -63,7 +91,7 @@ sub upload {
       {
         field     => 'path',
         checkType => 'like',
-        check     => qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)/,
+        check     => $regex->{privateOnly},
       };
     push @$optional,
       {
@@ -94,7 +122,7 @@ sub catalog {
       {
         field     => 'basePath',
         checkType => 'like',
-        check     => qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/)/,
+        check     => $regex->{allPaths},
       };
     push @$optional,
       {
@@ -191,7 +219,7 @@ sub findNewVersion {
       {
         field     => 'sourceFilePath',
         checkType => 'like',
-        check     =>  qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/).*\.pg$/,
+        check     =>  $regex->{allPathsPg},
       };
     push @$required,
       {
@@ -272,7 +300,7 @@ sub findUniqueSeeds {
       {
         field     => 'sourceFilePath',
         checkType => 'like',
-        check     =>  qr/^(:?private\/|Contrib\/|Library\/|webwork-open-problem-library\/OpenProblemLibrary\/).*\.pg$/,
+        check     =>  $regex->{allPathsPg},
       };
     push @$required,
       {
@@ -372,10 +400,19 @@ sub validate {
     $v->input($inputHash);
 
     for my $req (@$required) {
+      if (exists $req->{checkType}) {
         $v->required( $req->{field} )->check( $req->{checkType}, $req->{check} );
+      } else {
+        warn "skipping type check for " . $req->{field} . ".\n";
+        $v->required( $req->{field} );
+      }
     }
     for my $req (@$optional) {
+      if (exists $req->{checkType}) {
         $v->optional( $req->{field} )->check( $req->{checkType}, $req->{check} );
+      } else {
+        $v->optional( $req->{field} );
+      }
     }
 
     if ($v->has_error) {
@@ -402,6 +439,11 @@ sub validate {
     } else {
         return $v->output;
     }
+}
+
+sub doBadThings {
+  Mojo::File->new(shift)->touch;
+  return;
 }
 
 1;
