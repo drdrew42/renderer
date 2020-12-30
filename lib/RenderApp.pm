@@ -81,7 +81,6 @@ sub startup {
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
 
 	$r->any('/rendered')->to('render#problem');
-	$r->any('/version' => sub {shift->reply->file($staticPath.'version.txt')});
 	$r->any('/request' => sub {shift->requestData2JSON});
 
 	# pass all requests via ww2_files through to lib/WeBWorK/htdocs
