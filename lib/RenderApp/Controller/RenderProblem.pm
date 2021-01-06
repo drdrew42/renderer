@@ -198,11 +198,11 @@ sub process_problem {
     # this does not capture _all_ image asset references, unfortunately...
     # asset filenames may be stored as variables before image() is called
     while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
-        warn "Image asset reference found!\n" . $1 . "\n";
+        warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
         my $image = $1;
         $image =~ s/['"]//g;
         $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
-        warn "Recording image asset as: $image\n";
+        warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
         push @$assets, $image;
     }
 

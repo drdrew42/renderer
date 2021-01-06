@@ -377,7 +377,12 @@ sub _isNewVersion {
     return 1 unless ( keys %$avoidProblems );
 
 	for my $avoidProblemKey (keys %$avoidProblems) {
-		if ($newProblem->{renderedHTML} ne $avoidProblems->{$avoidProblemKey}->{renderedHTML}) {
+    my $newHTML = $newProblem->{renderedHTML};
+    # rendered HTML needs to have this removed...
+    $newHTML =~ s/<input type="hidden" name="problemSeed" value = "\d+">//g;
+    my $avoidHTML = $avoidProblems->{$avoidProblemKey}->{renderedHTML};
+    $avoidHTML =~ s/<input type="hidden" name="problemSeed" value = "\d+">//g;
+		if ($newHTML ne $avoidHTML) {
 			$isNew = 1;
 			last;
 		}
