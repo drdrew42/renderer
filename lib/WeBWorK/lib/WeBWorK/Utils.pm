@@ -23,6 +23,7 @@ use DateTime;
 use DateTime::TimeZone;
 use Date::Format;
 use Encode qw(encode_utf8 decode_utf8);
+use File::Spec::Functions qw(canonpath);
 
 use constant DATE_FORMAT => "%m/%d/%Y at %I:%M%P %Z";
 use constant MKDIR_ATTEMPTS => 10;

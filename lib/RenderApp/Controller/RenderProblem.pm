@@ -16,6 +16,7 @@ use Getopt::Long qw[:config no_ignore_case bundling];
 use File::Find;
 use FileHandle;
 use File::Path;
+use File::Basename;
 
 #use File::Temp qw/tempdir/;
 use String::ShellQuote;
@@ -130,6 +131,7 @@ sub process_pg_file {
         problem_state  => $pg_obj->{problem_state},
         flags          => $pg_obj->{flags},
         form_data      => $inputHash,
+        assets         => $pg_obj->{assets},
     };
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
@@ -181,24 +183,31 @@ sub process_problem {
         #$inputs_ref->{pathToProblemFile} = $adj_file_path;
     }
 
-    # TODO: rework using app_root level symlinks instead
-    while ($source =~ m/^# This file is just a pointer/
-        && $source =~ m/includePGproblem\("(.*)"\);/ )
+    my $assets = [];
+    while ($source =~ m/includePG(?:problem|file)\(["'](.*)["']\);/g )
     {
-        warn "problem-level redirect found!\nMatch 1: "
-          . $1
-          . "\nMatch 2: "
-          . $2 . "\n"
-          if $UNIT_TESTS_ON;
-        my $redirect = $1;
-        $redirect =~
-          s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
-        warn "REDIRECTING TO: " . $redirect . "\n" if $UNIT_TESTS_ON;
-        ( $adj_file_path, $source ) = get_source($redirect);
+        warn "PG asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
+        my $pgAsset = $1;
+        $pgAsset = dirname($file_path) . "/" . $pgAsset if ($pgAsset =~ /^[^\/]*\.pg$/);
+        warn "Recording PG asset as: $pgAsset\n" if $UNIT_TESTS_ON;
+        # warn "REDIRECTING TO: " . $redirect . "\n" if $UNIT_TESTS_ON;
+        # ( $adj_file_path, $source ) = get_source($redirect);
+        push @$assets, $pgAsset;
     }
 
-    $inputs_ref->{pathToProblemFile} = $adj_file_path
-      if ( defined $adj_file_path );
+    # this does not capture _all_ image asset references, unfortunately...
+    # asset filenames may be stored as variables before image() is called
+    while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
+        warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
+        my $image = $1;
+        $image =~ s/['"]//g;
+        $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
+        warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
+        push @$assets, $image;
+    }
+
+    # $inputs_ref->{pathToProblemFile} = $adj_file_path
+    #   if ( defined $adj_file_path );
 
     ##################################################
     # Process the pg file
@@ -219,6 +228,9 @@ sub process_problem {
 
     # can include @args as fourth input below
     $return_object = standaloneRenderer( $ce, \$source, $inputs_ref );
+
+    # stash assets list in $return_object
+    $return_object->{assets} = $assets;
 
     #######################################################################
     # Handle errors
@@ -511,14 +523,13 @@ sub get_source {
         local $/ = undef;
         if ( $file_path eq '-' ) {
             $source = <STDIN>;
-        }
-        else {
-# To support proper behavior with UTF-8 files, we need to open them with "<:encoding(UTF-8)"
-# as otherwise, the first HTML file will render properly, but when "Preview" "Submit answer"
-# or "Show correct answer" is used it will make problems, as in process_problem() the
-# encodeSource() method is called on a data which is still UTF-8 encoded, and leads to double
-# encoding and gibberish.
-# NEW:
+        } else {
+            # To support proper behavior with UTF-8 files, we need to open them with "<:encoding(UTF-8)"
+            # as otherwise, the first HTML file will render properly, but when "Preview" "Submit answer"
+            # or "Show correct answer" is used it will make problems, as in process_problem() the
+            # encodeSource() method is called on a data which is still UTF-8 encoded, and leads to double
+            # encoding and gibberish.
+            # NEW:
             open( FH, "<:encoding(UTF-8)", $file_path )
               or die "Couldn't open file $file_path: $!";
 
@@ -529,19 +540,6 @@ sub get_source {
         }
     };
     die "Something is wrong with the contents of $file_path\n" if $@;
-
-    # TODO: rework using app_root level symlinks instead
-    while ($source =~ m/^# This file is just a pointer/
-        && $source =~ m/includePGproblem\("(.*)"\);/ )
-    {
-        warn "problem-level redirect found! " . $1 . "\n" if $UNIT_TESTS_ON;
-        my $redirect = $1;
-        $redirect =~
-          s/^Library/webwork-open-problem-library\/OpenProblemLibrary/;
-        warn "REDIRECTING TO: " . $redirect . "\n" if $UNIT_TESTS_ON;
-        ( $file_path, $source ) = get_source($redirect);
-    }
-
     return $file_path, $source;
 }
 
