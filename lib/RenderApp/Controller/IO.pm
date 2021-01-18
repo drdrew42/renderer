@@ -53,7 +53,7 @@ sub writer {
       };
     my $validatedInput = $c->validateRequest( { required => $required } );
     return unless $validatedInput;
-    my $source    = decode_base64( $validatedInput->{problemSource} );
+    my $source = Encode::decode("UTF-8",decode_base64( $validatedInput->{problemSource} ) );
     my $file_path = $validatedInput->{writeFilePath};
 
     if ( $source =~ /^\s*$/ ) {
