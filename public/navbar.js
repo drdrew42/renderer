@@ -161,7 +161,19 @@ function insertListener() {
     formData.set("format", "json");
     formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
     formData.set(clickedButton.name, clickedButton.value);
-    formData.set("problemSource", window.btoa(cm.getValue()));
+
+//  // Version tracking steps to replace window.btoa with code supporting Unicode text
+//  encoder = new TextEncoder();
+//  let text16 = cm.getValue();
+//  let text8array = encoder.encode(text16);
+//  console.log( text8array );
+//  let textbase64 = Base64.fromUint8Array( text8array );
+//  console.log( textbase64 );
+//  formData.set("problemSource", textbase64 );
+
+    encoder = new TextEncoder();
+    formData.set("problemSource", Base64.fromUint8Array(encoder.encode(cm.getValue())));
+
     [...document.querySelectorAll('.checkbox-input:checked')].map(e => e.name).forEach((box) => {
       formData.append(box, 1);
     });
