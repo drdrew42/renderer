@@ -31,6 +31,7 @@ $static_format = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqstatic.js"></script>
 
 $problemHeadText
+$problemPostHeaderText
 
 <title>Rederly Standalone Renderer</title>
 </head>

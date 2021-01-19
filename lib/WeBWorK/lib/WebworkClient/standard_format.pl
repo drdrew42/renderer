@@ -32,7 +32,7 @@ $standard_format = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="/webwork2_files/js/submithelper.js"></script>
 
 $problemHeadText
-
+$problemPostHeaderText
 
 <title>WeBWorK using host: $SITE_URL, format: standard seed: $problemSeed course: $courseID</title>
 </head>
