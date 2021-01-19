@@ -172,7 +172,7 @@ sub save {
 
     return 0 unless $self->success();
 
-    $write_path->spurt( $self->{problem_contents} );
+    $write_path->spurt( Encode::encode('UTF-8', $self->{problem_contents} ) );
     $self->path($write_path);    # update the read_path to match
     return 1;
 }
@@ -182,7 +182,7 @@ sub load {
     my $success   = 0;
     my $read_path = $self->{read_path};
     if ( -r $read_path ) {
-        $self->{problem_contents} = $read_path->slurp;
+        $self->{problem_contents} = Encode::decode( "UTF-8", $read_path->slurp );
         $success = 1;
     }
     else {
