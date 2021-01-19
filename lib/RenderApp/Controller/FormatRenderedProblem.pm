@@ -106,7 +106,9 @@ sub formatRenderedProblem {
 
 	if ( defined ($rh_result->{WARNINGS}) and $rh_result->{WARNINGS} ){
 		$warnings = "<div style=\"background-color:pink\">
-		             <p >WARNINGS</p><p>".decode_base64($rh_result->{WARNINGS})."</p></div>";
+		             <p >WARNINGS</p><p>"
+		             . Encode::decode("UTF-8", decode_base64($rh_result->{WARNINGS}) )
+		             . "</p></div>";
 	}
 	#warn "keys: ", join(" | ", sort keys %{$rh_result });
 
