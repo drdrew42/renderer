@@ -403,6 +403,7 @@ sub standaloneRenderer {
     my $out2 = {
         text                    => $pg->{body_text},
         header_text             => $pg->{head_text},
+        post_header_text        => $pg->{post_header_text},
         answers                 => $pg->{answers},
         errors                  => $pg->{errors},
         WARNINGS                => encode_base64( $pg->{warnings} ),
