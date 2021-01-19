@@ -1,6 +1,7 @@
 % layout 'navbar';
 %= stylesheet '/twocolumn.css'
 %= javascript '/iframeResizer.min.js'
+%= javascript 'https://cdn.jsdelivr.net/npm/js-base64@3.5.2/base64.min.js'
 <div class="row">
   <div class="column" style="background-color:#aaa;">
     %= include 'login/editorUI'

@@ -122,7 +122,7 @@ sub process_pg_file {
         renderedHTML => $html,
         answers      => $pg_obj->{answers},
         debug        => {
-            perl_warn => decode_base64( $pg_obj->{WARNINGS} ),
+            perl_warn => Encode::decode("UTF-8", decode_base64( $pg_obj->{WARNINGS} ) ),
             pg_warn   => $pg_obj->{warning_messages},
             debug     => $pg_obj->{debug_messages},
             internal  => $pg_obj->{internal_debug_messages}
@@ -171,7 +171,7 @@ sub process_problem {
     # if base64 source is provided, use that over fetching problem path
     if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/ )
     {
-        $source = decode_base64( $inputs_ref->{problemSource} );
+        $source = Encode::decode("UTF-8",decode_base64( $inputs_ref->{problemSource} ) );
     }
     else {
         ( $adj_file_path, $source ) = get_source($file_path);
@@ -405,7 +405,7 @@ sub standaloneRenderer {
         header_text             => $pg->{head_text},
         answers                 => $pg->{answers},
         errors                  => $pg->{errors},
-        WARNINGS                => encode_base64( $pg->{warnings} ),
+        WARNINGS                => encode_base64( Encode::encode("UTF-8", $pg->{warnings} ) ),
         PG_ANSWERS_HASH         => $pg->{pgcore}->{PG_ANSWERS_HASH},
         problem_result          => $pg->{result},
         problem_state           => $pg->{state},
