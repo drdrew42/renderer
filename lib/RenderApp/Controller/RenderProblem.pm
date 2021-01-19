@@ -138,6 +138,9 @@ sub process_pg_file {
 	# HACK: remove flags->{problemRandomize} if it exists -- cannot include CODE refs
     delete $json_rh->{flags}{problemRandomize}
       if $json_rh->{flags}{problemRandomize};
+    # similar things happen with compoundProblem -- delete CODE refs
+    delete $json_rh->{flags}{compoundProblem}{grader}
+      if $json_rh->{flags}{compoundProblem}{grader};
 
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($json_rh);
@@ -403,6 +406,7 @@ sub standaloneRenderer {
     my $out2 = {
         text                    => $pg->{body_text},
         header_text             => $pg->{head_text},
+        post_header_text        => $pg->{post_header_text},
         answers                 => $pg->{answers},
         errors                  => $pg->{errors},
         WARNINGS                => encode_base64( Encode::encode("UTF-8", $pg->{warnings} ) ),

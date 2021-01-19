@@ -92,13 +92,16 @@ sub formatRenderedProblem {
 		$self->{error_string}."\n".
 		format_hash_ref($rh_result);
 	}
-	my $problemHeadText   = $rh_result->{header_text}//'';  ##head_text vs header_text
-	my $rh_answers        = $rh_result->{answers}//{};
-	print"\n return_object answers ", join(" ",  %{$rh_result->{PG_ANSWERS_HASH}} ) if $UNIT_TESTS_ON;
-	my $answerOrder       = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}; #[sort keys %{ $rh_result->{answers} }];
-	my $encoded_source    = $self->encoded_source//'';
-	my $sourceFilePath    = $self->{sourceFilePath}//'';
-	my $warnings          = '';
+	my $problemHeadText       = $rh_result->{header_text}//'';  ##head_text vs header_text
+	my $problemPostHeaderText = $rh_result->{post_header_text}//'';
+	my $rh_answers            = $rh_result->{answers}//{};
+	my $answerOrder           = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}; #[sort keys %{ $rh_result->{answers} }];
+	my $encoded_source        = $self->encoded_source//'';
+	my $sourceFilePath        = $self->{sourceFilePath}//'';
+	my $warnings              = '';
+	print "\n return_object answers ",
+		join( " ", %{ $rh_result->{PG_ANSWERS_HASH} } )
+		if $UNIT_TESTS_ON;
 
 	#################################################
 	# regular Perl warning messages generated with warn
