@@ -54,14 +54,15 @@ sub _init {
       "400 Cannot create problem without either path or contents!\n"
       unless ( $read_path =~ m/\S/ || $problem_contents =~ m/\S/ );
 
-    if ( $read_path =~ m/\S/ ) {
-        $self->path($read_path);
-        $self->load;
-    }
-
-    # overwrite read_path file content if raw content is provided
+    # sourcecode takes precedence over reading from file path
     if ( $problem_contents =~ m/\S/ ) {
         $self->source($problem_contents);
+        # set read_path without failing for !-e
+        # this supports images in problems via editor
+        $self->path($read_path, 1);
+    } else {
+        $self->path($read_path);
+        $self->load;
     }
 
     $self->target( $args->{write_path} ) if $args->{write_path};
@@ -101,8 +102,9 @@ sub seed {
 
 sub path {
     my $self = shift;
-    if ( scalar(@_) == 1 ) {
+    if ( scalar(@_) >= 1 ) {
         my $read_path = shift;
+        my $force = shift if @_;
         $read_path =~ s!\s+|\.\./!!g;    # prevent backtracking and whitespace
         my $opl_root = $ENV{OPL_DIRECTORY};
         if ( $read_path =~ m!^Library/! ) {
@@ -120,7 +122,7 @@ sub path {
             $self->{write_allowed} = $read_path =~ m!^private\/!;
         }
         $self->{_error} = "404 I cannot find a problem with that file path."
-          unless ( -e $read_path );
+          unless ( -e $read_path || $force );
         $self->{read_path} = Mojo::File->new($read_path);
     }
     return $self->{read_path};
