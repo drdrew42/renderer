@@ -25,6 +25,16 @@ sub problem {
 
   # consider passing the problem object alongside the inputs_ref - this will become unnecessary
   my $ww_return_json = $problem->render(\%inputs_ref);
+  unless ($problem->success()) {
+    my $errport = $problem->errport();
+    $errport->{stack} = $problem->{exception}->frames;
+    $c->log->error($errport->{message});
+    return $c->render(
+      json   => $errport,
+      status => $problem->{status}
+    );
+  }
+
   my $ww_return_hash = decode_json($ww_return_json);
   my @output_errs = checkOutputs($ww_return_hash);
   if (@output_errs) {
