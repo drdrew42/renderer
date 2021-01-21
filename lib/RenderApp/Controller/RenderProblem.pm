@@ -5,10 +5,6 @@ use warnings;
 
 package RenderApp::Controller::RenderProblem;
 
-use Carp;
-
-#use Crypt::SSLeay;  # needed for https
-#use LWP::Protocol::https;
 use Time::HiRes qw/time/;
 use Date::Format;
 use MIME::Base64 qw(encode_base64 decode_base64);
@@ -398,7 +394,7 @@ sub standaloneRenderer {
     }
     else {
         $internal_debug_messages =
-          ['Error in obtaining debug messages from PGcore'];
+          ['Problem failed during render - no PGcore received.'];
     }
 
     insert_mathquill_responses( $form_data, $pg );

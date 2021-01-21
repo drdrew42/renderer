@@ -4,6 +4,8 @@ use strict;
 use warnings;
 
 use Mojo::File;
+use Mojo::Exception qw( check );
+use Mojo::JSON qw( encode_json );
 use RenderApp::Controller::RenderProblem;
 
 ##### Problem params: #####
@@ -31,7 +33,8 @@ our $codes = {
     403 => 'Forbidden',
     404 => 'Not Found',
     405 => 'Method Not Allowed',
-    412 => 'Precondition Failed'
+    412 => 'Precondition Failed',
+    500 => 'Internal Server Error',
 };
 
 sub new {
@@ -197,8 +200,18 @@ sub load {
 sub render {
     my $self       = shift;
     my $inputs_ref = shift;
-    return RenderApp::Controller::RenderProblem::process_pg_file( $self,
-        $inputs_ref );
+    my $renderResult;
+    eval {
+        $renderResult = RenderApp::Controller::RenderProblem::process_pg_file( $self, $inputs_ref )
+    };
+    check(
+        default => sub {
+            my $e = shift;
+            $self->{exception} = $e;
+            $self->{_error} = "500 Render failed: " . $e->message;
+        }
+    );
+    return $renderResult;
 }
 
 sub success {
@@ -216,7 +229,7 @@ sub errport {
     return unless $self->{_error};
     my $err_ref = {
         statusCode => $self->{status},
-        error      => $self->{_error},
+        status     => $self->{_error},
         message    => $self->{_message}
     };
     return $err_ref;
