@@ -93,7 +93,7 @@ renderbutton.addEventListener("click", event => {
   const renderurl = '/render-api'
 
   let formData = new FormData();
-  // formData.set("permissionLevel", 20);
+  formData.set("permissionLevel", 20);
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   formData.set("problemSeed", document.getElementById('problemSeed').value);
   formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
