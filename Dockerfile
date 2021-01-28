@@ -13,6 +13,7 @@ RUN apt-get update \
     make \
     curl \
     dvipng \
+    libc-dev \
     cpanminus \
     libgd-perl \
     libdbi-perl \
