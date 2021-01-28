@@ -4,13 +4,13 @@
   form => '/render-api',
   hypnotoad => {
     listen => ['http://*:3000'],
-    accepts => 100,
+    accepts => 1000,
     workers => 10,
     spare => 5,
-    clients => 1,
-    graceful_timeout => 15,
-    inactivity_timeout => 10,
-    keep_alive_timeout => 10,
+    clients => 100,
+    graceful_timeout => 45,
+    inactivity_timeout => 30,
+    keep_alive_timeout => 30,
     requests => 5,
   }
 };

@@ -4,8 +4,10 @@ use strict;
 use warnings;
 
 use Mojo::File;
-use Mojo::Exception qw( check );
+use Mojo::IOLoop;
 use Mojo::JSON qw( encode_json );
+use Mojo::Base -async_await;
+use Time::HiRes qw( time );
 use RenderApp::Controller::RenderProblem;
 
 ##### Problem params: #####
@@ -39,8 +41,13 @@ our $codes = {
 
 sub new {
     my $class       = shift;
-    my $problem_ref = {};
+    my $problem_ref = {
+        _error      => '',
+        action      => '',
+        code_origin => '',
+    };
     bless $problem_ref, $class;
+    $problem_ref->{start} = time;
     $problem_ref->_init(@_);
     return $problem_ref;
 }
@@ -48,34 +55,33 @@ sub new {
 sub _init {
     my ( $self, $args ) = @_;
     my $availability = 'private';
-
     $self->{log} = $args->{log} if $args->{log};
 
     my $read_path        = $args->{read_path}        || '';
+    my $write_path       = $args->{write_path}       || '';
     my $problem_contents = $args->{problem_contents} || '';
+    my $random_seed      = $args->{random_seed}      || '';
     $self->{_error} =
       "400 Cannot create problem without either path or contents!\n"
-      unless ( $read_path =~ m/\S/ || $problem_contents =~ m/\S/ );
+      unless ( $problem_contents =~ /\S/ || $read_path =~ /\S/ );
 
     # sourcecode takes precedence over reading from file path
-    if ( $problem_contents =~ m/\S/ ) {
+    if ( $problem_contents =~ /\S/ ) {
         $self->source($problem_contents);
+        $self->{code_origin} = 'pg source (' . $self->path( $read_path, 'force' ) .')';
         # set read_path without failing for !-e
         # this supports images in problems via editor
-        $self->path($read_path, 1);
     } else {
-        $self->path($read_path);
+        $self->{code_origin} = $self->path($read_path);
         $self->load;
     }
 
-    $self->target( $args->{write_path} ) if $args->{write_path};
-    $self->seed( $args->{random_seed} )  if $args->{random_seed};
+    $self->target( $write_path ) if $write_path =~ /\S/;
+    $self->seed( $random_seed )  if $random_seed =~ /\S/;
 
-    my $path_info = $read_path ? $read_path : "no read path provided";
-    my $seed_info =
-      $args->{random_seed} ? "#" . $args->{random_seed} : "no random seed.";
-    $self->{log}
-      ->info("CREATED: Problem created with $path_info and $seed_info");
+    my $path_info = $self->{code_origin};
+    my $seed_info = $args->{random_seed} ? "random seed #" . $args->{random_seed} : "no random seed.";
+    $self->{log}->info("CREATED: Problem created from $path_info with $seed_info");
 }
 
 sub source {
@@ -152,13 +158,16 @@ sub target {
     return $self->{write_path};
 }
 
+# RETURNS PROMISE
 sub save {
     my $self    = shift;
     my $success = 0;
     my $write_path =
-      ( $self->{write_path} =~ m/\S/ )
-      ? $self->{write_path}
-      : $self->{read_path};
+      ( $self->{write_path} =~ /\S/ ) ? 
+        $self->{write_path} :
+        $self->{read_path};
+
+    $self->{action} = 'save to ' . $self->{write_path};
 
     $self->{_error} = "400 Nothing to write!"
       unless ( $self->{problem_contents} =~ m/\S/ );
@@ -175,11 +184,17 @@ sub save {
         $self->{_error} = "405 " . join( "\n", @$errs ) if $errs;
     }
 
-    return 0 unless $self->success();
+    my $savePromise = Mojo::IOLoop->subprocess->run_p( sub {
+        $write_path->spurt( Encode::encode( 'UTF-8', $self->{problem_contents} ) );
+        $self->path($write_path); # update the read_path to match
+        return $self->success();
+    })->catch( sub {
+        $self->{exception} = Mojo::Exception->new(shift)->trace;
+        $self->{_error} = "500 Write failed: " . $self->{exception}->message;
+        return $self->success();
+    });
 
-    $write_path->spurt( Encode::encode('UTF-8', $self->{problem_contents} ) );
-    $self->path($write_path);    # update the read_path to match
-    return 1;
+    return $savePromise;
 }
 
 sub load {
@@ -197,26 +212,26 @@ sub load {
     return $success;
 }
 
+# RETURNS PROMISE
 sub render {
-    my $self       = shift;
+    my $self    = shift;
     my $inputs_ref = shift;
-    my $renderResult;
-    eval {
-        $renderResult = RenderApp::Controller::RenderProblem::process_pg_file( $self, $inputs_ref )
-    };
-    check(
-        default => sub {
-            my $e = shift;
-            $self->{exception} = $e;
-            $self->{_error} = "500 Render failed: " . $e->message;
-        }
-    );
-    return $renderResult;
+    $self->{action} = 'render';
+    my $renderPromise = Mojo::IOLoop->subprocess->run_p( sub {
+        return RenderApp::Controller::RenderProblem::process_pg_file( $self, $inputs_ref );
+    })->catch(sub {
+        $self->{exception} = Mojo::Exception->new(shift)->trace;
+        $self->{_error} = "500 Render failed: " . $self->{exception}->message;
+        $self->{log}->debug( $self->{_error} );
+    });
+    return $renderPromise;
 }
 
 sub success {
     my $self = shift;
-    return 1 unless $self->{_error};
+    # my $report = ( $self->{_error} =~ /\S/ ) ? $self->{_error} : 'NO ERRORS';
+    # $self->{log}->debug('CHECKING SUCCESS... ' . $report);
+    return 1 unless $self->{_error} =~ /\S/;
     my ( $code, $mesg ) = split( / /, $self->{_error}, 2 );
     $self->{status}   = $code;
     $self->{_error}   = $codes->{$code};
@@ -230,20 +245,22 @@ sub errport {
     my $err_ref = {
         statusCode => $self->{status},
         status     => $self->{_error},
-        message    => $self->{_message}
+        message    => $self->{_message},
     };
     return $err_ref;
 }
 
 sub DESTROY {
-    my $self = shift;
-    my $end  = "TRASH: ";
-	$end .= $self->{read_path} . " " if ( $self->{read_path} );
-    $end .=
-      ( $self->{_error} && $self->{_error} =~ /\S/ )
-      ? $self->{_error}
-      : "with no errors.";
-    $self->{log}->info($end);
+    my $self     = shift;
+    my $duration = time - $self->{start};
+    my $logmsg   = 'TRASH: [' . sprintf("%.1f",$duration*1000) . 'ms] ';
+    $logmsg     .= $self->{action} . ' from ';
+	$logmsg     .= $self->{code_origin};
+    if ( $self->{_error} && $self->{_error} =~ /\S/ ) {
+        $self->{log}->error("$logmsg failed with error: " . $self->{_error});
+    } else {
+        $self->{log}->info("$logmsg succeeded.");
+    }
 }
 
 1;
