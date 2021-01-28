@@ -1,4 +1,5 @@
 package RenderApp::Controller::IO;
+use Mojo::Base -async_await;
 use Mojo::Base 'Mojolicious::Controller';
 use File::Spec::Functions qw(splitdir);
 use File::Find qw(find);
@@ -6,6 +7,7 @@ use MIME::Base64 qw(decode_base64);
 use Mojo::JSON qw(decode_json);
 use Mojolicious::Validator;
 use Math::Random::Secure qw( rand );
+use Mojo::IOLoop;
 
 our $regex = {
   anyPg => qr/.+\.pg$/,
@@ -31,6 +33,7 @@ sub raw {
 
     my $file_path = $validatedInput->{sourceFilePath};
     my $problem   = $c->newProblem( { log => $c->log, read_path => $file_path } );
+    $problem->{action} = 'fetch source';
     return $c->render(
         json   => $problem->errport(),
         status => $problem->{status}
@@ -38,7 +41,7 @@ sub raw {
     $c->render( text => $problem->{problem_contents} );
 }
 
-sub writer {
+async sub writer {
     my $c         = shift;
     my $required = [];
     push @$required,
@@ -74,9 +77,12 @@ sub writer {
         status => $problem->{status}
     ) unless $problem->success();
 
-    return ( $problem->save )
-      ? $c->render( text => $problem->{write_path} )
-      : $c->render( json => $problem->errport(), status => $problem->{status} );
+    $c->render_later;
+    my $saveSuccess = await $problem->save;
+
+    return ( $saveSuccess ) ?
+      $c->render( text => $problem->{write_path} ) :
+      $c->render( json => $problem->errport(), status => $problem->{status} );
 }
 
 sub upload {
@@ -115,7 +121,7 @@ sub upload {
     return $c->render( text => 'File successfully uploaded', status => 200 );
 }
 
-sub catalog {
+async sub catalog {
     my $c = shift;
     my $required = [];
     my $optional = [];
@@ -147,24 +153,47 @@ sub catalog {
         $c->log->warn("Someone is cataloguing a path outside of OPL and private!");
         return $c->rendered(403);
     }
-
-    local $File::Find::skip_pattern = qr/^\./; # skip any hidden folders
-    my %all;
-    my $wanted = sub {
-        ( my $rel = $File::Find::name ) =~ s!^\Q$root_path\E/?!!; # measure depth relative to root_path
-        my $path = $File::Find::name;
-        $File::Find::prune = 1
-          if File::Spec::Functions::splitdir($rel) >= $depth;
-        $path = $path . '/' if -d $File::Find::name;
-        $all{$path}++
-          if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ); # only report .pg files and directories
-    };
-    File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
-
-    $c->render( json => \%all );
+    $c->render_later;
+    my ($results, $status) = await depthSearch_p($root_path, $depth);
+    $c->render( json => $results, status => $status );
 }
 
-sub search {
+sub depthSearch_p {
+    my ( $root_path, $depth )= @_;
+
+    my $promise = Mojo::IOLoop->subprocess->run_p(
+        sub {
+            # skip any hidden folders
+            local $File::Find::skip_pattern = qr/^\./;
+            my %all;
+            my $wanted = sub {
+                # measure depth relative to root_path
+                ( my $rel = $File::Find::name ) =~ s!^\Q$root_path\E/?!!;
+                my $path = $File::Find::name;
+                $File::Find::prune = 1
+                  if File::Spec::Functions::splitdir($rel) >= $depth;
+                $path = $path . '/' if -d $File::Find::name;
+                # only report .pg files and directories
+                $all{$path}++
+                  if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! );
+            };
+            File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
+            return \%all, 200;
+        }
+    )->catch(
+        sub {
+            warn( '-' x 10 . "PROMISE REJECTED" . '-' x 10 );
+            return {
+                message    => 'Error occurred during catalog: ' . shift,
+                status     => 'Internal Server Failure',
+                statusCode => 500
+            }, 500;
+        }
+    );
+    return $promise;
+}
+
+async sub search {
     my $c = shift;
 
     my $required = [];
@@ -179,40 +208,61 @@ sub search {
     my $target = $validatedInput->{basePath};
     my @targetArray = split /\//, $target;
 
-    local $File::Find::skip_pattern = qr/^\./;    #skip any hidden folders
-    my @sources = (
+    my $sources = [
         'private/',
         'webwork-open-problem-library/OpenProblemLibrary/',
         'webwork-open-problem-library/Contrib/'
+    ];
+    $c->render_later;
+    my ($results, $status) = await rankedSearch_p($sources, \@targetArray);
+    return $c->render( json => $results, status => $status );
+}
+
+sub rankedSearch_p {
+    my $sources_ref = shift;
+    my @sources = @$sources_ref;
+    my $targetArray_ref = shift;
+    my @targetArray = @$targetArray_ref;
+    my $searchPromise = Mojo::IOLoop->subprocess->run_p(
+        sub {
+            local $File::Find::skip_pattern = qr/^\./;    #skip any hidden folders
+            my %found;
+            my $wanted = sub {
+                my $path       = $File::Find::name;
+                my %pathHash   = map { $_ => 1 } split /\//, $path;
+                my $matchCount = 0;
+
+                # don't continue unless the actual pg file matches...
+                unless ( defined( $pathHash{ $targetArray[-1] } ) ) {
+                    return;
+                }
+
+                # when we have a matching filename, measure how much of the requested target is a match
+                for my $piece (@targetArray) {
+                    $matchCount++
+                      if ( defined( $pathHash{$piece} )
+                        || ( $piece eq 'Library' && defined( $pathHash{'OpenProblemLibrary'} ) )
+                      );
+                }
+                # we only get here if the filename matches
+                $found{$path} = $matchCount / ( $#targetArray + 1 );
+            };
+            for my $source (@sources) {
+                File::Find::find { wanted => $wanted, no_chdir => 1 }, $source;
+            }
+            return \%found, 200;
+        }
+    )->catch(
+        sub {
+            warn( '*' x 10 . "PROMISE REJECTED" . '*' x 10 );
+            return {
+                message    => 'Error occurred during file search: ' . shift,
+                status     => 'Internal Server Failure',
+                statusCode => 500
+            }, 500;
+        }
     );
-    my %found;
-    my $wanted = sub {
-        my $path       = $File::Find::name;
-        my %pathHash   = map { $_ => 1 } split /\//, $path;
-        my $matchCount = 0;
-
-        # don't continue unless the actual pg file matches...
-        unless ( defined( $pathHash{ $targetArray[-1] } ) ) {
-            return;
-        }
-
-		# when we have a matching filename, measure how much of the requested target is a match
-        for my $piece (@targetArray) {
-            $matchCount++
-              if (
-                defined( $pathHash{$piece} )
-                || ( $piece eq 'Library'
-                    && defined( $pathHash{'OpenProblemLibrary'} ) )
-              );
-        }
-        $found{$path} = $matchCount / ( $#targetArray + 1 )
-          ;    # only happens if the filename matches
-    };
-    for my $source (@sources) {
-        File::Find::find { wanted => $wanted, no_chdir => 1 }, $source;
-    }
-
-    return $c->render( json => \%found );
+    return $searchPromise;
 }
 
 sub findNewVersion {

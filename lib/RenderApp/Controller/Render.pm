@@ -1,8 +1,9 @@
 package RenderApp::Controller::Render;
+use Mojo::Base -async_await;
 use Mojo::Base 'Mojolicious::Controller';
 use Mojo::JSON qw(decode_json);
 
-sub problem {
+async sub problem {
   my $c = shift;
   my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
   my $random_seed = $c->param('problemSeed');
@@ -23,14 +24,13 @@ sub problem {
     $c->log->error($err_log."}");
   }
 
-  # consider passing the problem object alongside the inputs_ref - this will become unnecessary
-  my $ww_return_json = $problem->render(\%inputs_ref);
+  $c->render_later;
+  my $ww_return_json = await $problem->render(\%inputs_ref);
+
   unless ($problem->success()) {
-    my $errport = $problem->errport();
-    $errport->{stack} = $problem->{exception}->frames;
-    $c->log->error($errport->{message});
+    $c->log->warn($problem->{_message});
     return $c->render(
-      json   => $errport,
+      json   => $problem->errport(),
       status => $problem->{status}
     );
   }
