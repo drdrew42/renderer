@@ -120,7 +120,7 @@
   box-sizing: border-box;
 }
 .mq-math-mode .mq-empty {
-  background: skyblue;
+  background: #ccc;
 }
 .mq-math-mode .mq-empty.mq-root-block {
   background: transparent;
@@ -231,10 +231,10 @@
 .mq-math-mode .mq-supsub .mq-fraction {
   font-size: 70%;
 }
-.mq-math-mode span.mq-nthroot {
-  font-size: 60%;
-  vertical-align: 0.9em;
-  margin-right: -0.9em;
+.mq-math-mode sup.mq-nthroot {
+  font-size: 80%;
+  vertical-align: 0.8em;
+  margin-right: -0.6em;
   margin-left: 0.2em;
   min-width: 0.5em;
 }
