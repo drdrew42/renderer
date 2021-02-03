@@ -76,7 +76,9 @@ Can be interfaced through `/render-api`
 | static | zero buttons, locked form fields (read-only) |
 | nosubmit | zero buttons, editable (for exams, save problem state and submit all together) |
 | single | one submit button (intended for graded content) |
-| simple | submit button + show answers button |
+| classic | preview + submit buttons |
+| simple | preview + submit + show answers buttons |
+| practice | check answers + show answers buttons |
 
 ## Permission level
 | Key | Value |
