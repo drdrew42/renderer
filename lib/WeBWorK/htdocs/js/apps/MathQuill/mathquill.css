@@ -232,9 +232,9 @@
   font-size: 70%;
 }
 .mq-math-mode sup.mq-nthroot {
-  font-size: 80%;
-  vertical-align: 0.8em;
-  margin-right: -0.6em;
+  font-size: 60%;
+  vertical-align: 0.9em;
+  margin-right: -0.9em;
   margin-left: 0.2em;
   min-width: 0.5em;
 }
