@@ -265,7 +265,7 @@ sub rankedSearch_p {
     return $searchPromise;
 }
 
-sub findNewVersion {
+async sub findNewVersion {
 	my $c = shift;
     my $required = [];
     my $optional = [];
@@ -297,56 +297,60 @@ sub findNewVersion {
 	my @avoidSeeds = split(',', $seedString);
 
 	my $avoidProblems = {};
+  $c->render_later;
 	for my $seed (@avoidSeeds) {
 		my $problem = $c->newProblem( {log=>$c->log, read_path=>$filePath, random_seed=>$seed} );
-		$avoidProblems->{$seed} = decode_json( $problem->render( {} ) );
+    my $renderedProblem = await $problem->render( {} );
+    next unless ($problem->success());
+		$avoidProblems->{$seed} = decode_json( $renderedProblem );
 	}
 
 	my ($newSeed, $newProblem);
     my $newFailed = [];
 	for my $i (1..$maxIterations) {
 		do { 
-            $newSeed = 1 + int rand( 999999 );
+        $newSeed = 1 + int rand( 999999 );
 		} until (!exists($avoidProblems->{$newSeed}));
 
-        my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
-        my $newProblemJson = $newProblemObj->render( {} );
-        $newProblem = decode_json( $newProblemJson );
+    my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
+    my $newProblemJson = await $newProblemObj->render( {} );
+    next unless ($newProblemObj->success());
+    $newProblem = decode_json( $newProblemJson );
 
-        if ( _isNewVersion( $newProblem, $avoidProblems ) ) {
-            last;
-        } else {
-            push @$newFailed, $newSeed;
-            $newProblem = undef;
-        }
+    if ( _isNewVersion( $newProblem, $avoidProblems ) ) {
+        last;
+    } else {
+        push @$newFailed, $newSeed;
+        $newProblem = undef;
+    }
 	}
 
-    if ( $newProblem ) {
-        return $c->respond_to(
-            html => { text => $newProblem->{renderedHTML} },
-            # respond to format: json
-            json => { 
-                # with a json from an anon hashRef
-                json => {
-                    problem => $newProblem,
-                    problemSeed => $newSeed,
-                }
-            }
-        );
-    } else {
-        return $c->render(
-            json => {
-                statusCode => 404,
-                error    => "Not Found",
-                message  => "Could not find a different version",
-                data     => $newFailed
-            },
-            status => 404
-        );
-    }
+  if ( $newProblem ) {
+      return $c->respond_to(
+          html => { text => $newProblem->{renderedHTML} },
+          # respond to format: json
+          json => { 
+              # with a json from an anon hashRef
+              json => {
+                  problem => $newProblem,
+                  problemSeed => $newSeed,
+              }
+          }
+      );
+  } else {
+      return $c->render(
+          json => {
+              statusCode => 404,
+              error    => "Not Found",
+              message  => "Could not find a different version",
+              data     => $newFailed
+          },
+          status => 404
+      );
+  }
 }
 
-sub findUniqueSeeds {
+async sub findUniqueSeeds {
 	my $c = shift;
     my $required = [];
     my $optional = [];
@@ -376,16 +380,19 @@ sub findUniqueSeeds {
 	my $maxIterations = $c->param('maxIterations') || 2 * $numberOfSeeds;
 
 	my $uniqueProblems = {};
-    my $triedSeeds = {};
+  my $triedSeeds = {};
 
 	my ($newSeed, $newProblem);
-    my $newFailed = [];
+  my $newFailed = [];
+  $c->render_later;
+
 	for my $i (1..$maxIterations) {
 		do {
-            $newSeed = 1 + int rand(999999);
+        $newSeed = 1 + int rand(999999);
 		} until (!exists($triedSeeds->{$newSeed}));
         my $newProblemObj = $c->newProblem( { log => $c->log, read_path => $filePath, random_seed => $newSeed } );
-        my $newProblemJson = $newProblemObj->render( {} );
+        my $newProblemJson = await $newProblemObj->render( {} );
+        next unless ($newProblemObj->success());
         $newProblem = decode_json( $newProblemJson );
 
         if ( _isNewVersion( $newProblem, $uniqueProblems ) ) {
@@ -398,25 +405,25 @@ sub findUniqueSeeds {
         }
 	}
 
-    my @returnKeys = keys %$uniqueProblems;
-    if ( scalar @returnKeys >= $numberOfSeeds ) {
-        return $c->render(
-            json => { uniqueKeys => \@returnKeys }
-        );
-    } else {
-        return $c->render(
-            json => {
-                statusCode => 404,
-                error    => "Not Found",
-                message  => "Could not find $numberOfSeeds different versions.",
-                data     => {
-                    uniqueKeys => \@returnKeys,
-                    duplicates => $newFailed,
-                }
-            },
-            status => 404
-        );
-    }
+  my @returnKeys = keys %$uniqueProblems;
+  if ( scalar @returnKeys >= $numberOfSeeds ) {
+      return $c->render(
+          json => { uniqueKeys => \@returnKeys }
+      );
+  } else {
+      return $c->render(
+          json => {
+              statusCode => 404,
+              error    => "Not Found",
+              message  => "Could not find $numberOfSeeds different versions.",
+              data     => {
+                  uniqueKeys => \@returnKeys,
+                  duplicates => $newFailed,
+              }
+          },
+          status => 404
+      );
+  }
 }
 
 sub _isNewVersion {

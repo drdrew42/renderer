@@ -27,6 +27,7 @@ RUN apt-get update \
     libtie-ixhash-perl \
     libclass-accessor-perl \
     libstring-shellquote-perl \
+    libextutils-cbuilder-perl \
     libproc-processtable-perl \
     libmath-random-secure-perl \
     libdata-structure-util-perl \
