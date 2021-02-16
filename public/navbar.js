@@ -167,7 +167,15 @@ function insertListener() {
     let formData = new FormData(problemForm)
     let clickedButton = problemForm.querySelector('.btn-clicked')
     formData.set("format", "json");
-    formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
+    const selectedformat = document.querySelector(".dropdown-item.selected");
+    let outputformat;
+    if (typeof selectedformat !== 'Element') {
+      alert("No output format selected. Defaulting to 'classic' format.");
+      outputformat = 'classic';
+    } else {
+      outputformat = selectedformat.id;
+    }
+    formData.set("outputformat", outputformat);
     formData.set(clickedButton.name, clickedButton.value);
 
 //  // Version tracking steps to replace window.btoa with code supporting Unicode text
