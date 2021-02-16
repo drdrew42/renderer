@@ -89,14 +89,22 @@ loadbutton.addEventListener("click", event => {
 
 renderbutton.addEventListener("click", event => {
   event.preventDefault();
-  document.getElementById("rendered-problem").srcdoc = "Loading..."
-  const renderurl = '/render-api'
+  document.getElementById("rendered-problem").srcdoc = "Loading...";
+  const renderurl = '/render-api';
 
+  const selectedformat = document.querySelector(".dropdown-item.selected");
+  let outputformat;
+  if (typeof selectedformat !== 'Element') {
+    alert("No output format selected. Defaulting to 'classic' format.");
+    outputformat = 'classic';
+  } else {
+    outputformat = selectedformat.id;
+  }
   let formData = new FormData();
   formData.set("permissionLevel", 20);
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   formData.set("problemSeed", document.getElementById('problemSeed').value);
-  formData.set("outputformat", document.querySelector(".dropdown-item.selected").id);
+  formData.set("outputformat", outputformat);
 
 //  // Version tracking steps to replace window.btoa with code supporting Unicode text
 //  encoder = new TextEncoder();
