@@ -84,9 +84,9 @@ sub startup {
 	$r->any('/request' => sub {shift->requestData2JSON});
 
 	# pass all requests via ww2_files through to lib/WeBWorK/htdocs
-	$r->any('/webwork2_files/*path' => sub {
+	$r->any('/webwork2_files/*static' => sub {
 		my $c = shift;
-		$c->reply->file($staticPath.$c->stash('path'));
+		$c->reply->file($staticPath.$c->stash('static'));
 	});
 
 	# any other requests fall through
