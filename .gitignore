@@ -4,6 +4,7 @@ lib/WeBWorK/htdocs/tmp/rederly/gif/*
 lib/WeBWorK/htdocs/tmp/rederly/images/*
 webwork-open-problem-library/
 private/
+.idea/
 tmp/
 logs/*.log
 
@@ -44,3 +45,4 @@ inc/
 /MANIFEST.bak
 /pm_to_blib
 /*.zip
+/endpoint/node_modules/

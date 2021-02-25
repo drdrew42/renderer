@@ -2,9 +2,12 @@
   secrets => ['reveal_your_secrets','revelio','alohamora'],
   url => '/',
   form => '/render-api',
+  JWTsecret => "webwork",
+  JWTanswerURL => "http://host.docker.internal/receive",
+  JWTanswerHost => "http://localhost:3000/",
   hypnotoad => {
     listen => ['http://*:3000'],
-    accepts => 1000,
+    accepts => 100,
     workers => 10,
     spare => 5,
     clients => 100,
