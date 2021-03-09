@@ -229,16 +229,13 @@ sub new {
     eval {
         SWITCH: {
             if (/^#+\s*\bDESCRIPTION/i) {
-                warn "DESCRIPTION FOUND\n";
                 $inDescription = 1;
                 last SWITCH;
             }
             if ($inDescription) {
                 if (/^#+\s*\bENDDESCRIPTION/i) {
-                    warn "ENDDESCRIPTION FOUND\n";
                     $inDescription = 0;
                 } elsif (/^#+\s*(.*)/) {
-                    warn "DESCRIPTION CONTENT: $1\n";
                     push @{ $self->{DESCRIPTION} }, $1;
                 }
                 last SWITCH;
