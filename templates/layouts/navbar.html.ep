@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Rederly WeBWorK Renderer</title>
+    <title>WeBWorK Standalone Renderer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css?family=Montserrat:400" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -16,6 +16,8 @@
         <div class="dropdown-content">
           <a href="#" class="dropdown-item" id="static" onclick="templateSelect(this)">Static <i class="fa fa-check" aria-hidden="true"></i></a>
           <a href="#" class="dropdown-item" id="single" onclick="templateSelect(this)">Single <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="practice" onclick="templateSelect(this)">Practice <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="classic" onclick="templateSelect(this)">Classic <i class="fa fa-check" aria-hidden="true"></i></a>
           <a href="#" class="dropdown-item" id="simple" onclick="templateSelect(this)">Simple <i class="fa fa-check" aria-hidden="true"></i></a>
           <a href="#" class="dropdown-item" id="standard" onclick="templateSelect(this)">Standard <i class="fa fa-check" aria-hidden="true"></i></a>
         </div>

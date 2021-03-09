@@ -1,25 +1,33 @@
 %= my $problem_source
 
 %= stylesheet 'http://codemirror.net/theme/monokai.css'
+%= stylesheet 'http://codemirror.net/theme/rubyblue.css'
 %= stylesheet 'http://codemirror.net/theme/material-palenight.css'
+%= stylesheet 'http://codemirror.net/theme/tomorrow-night-eighties.css'
 %= stylesheet '/webwork2_files/js/vendor/codemirror/codemirror.css'
 %= javascript '/webwork2_files/js/vendor/codemirror/codemirror.js'
 %= javascript '/webwork2_files/js/vendor/codemirror/PG.js'
 %= javascript '/webwork2_files/js/vendor/codemirror/PGaddons.js'
 
-  <b>Editing problem:</b><br>
-  <i><div id="currentEditPath"></div></i>
-  %= text_area problemContentsEditor => $problem_source, id => 'problemContentsEditor'
+  <div id='edit-header' class='header'>
+    <b>Editing problem:</b><br>
+    <i><div id="currentEditPath"></div></i>
+  </div>
+  <div id='problem-editor' class='content'>
+    %= text_area problemContentsEditor => q(Load a problem, then click on "render contents."), id => 'problemContentsEditor'
+  </div>
 
 %= javascript '/webwork2_files/js/jquery.min.js'
 %= javascript 'https://codemirror.net/addon/selection/active-line.js'
+%= javascript 'https://codemirror.net/addon/edit/matchbrackets.js'
+%= javascript 'https://codemirror.net/addon/edit/closebrackets.js'
 %= javascript begin
 $(function(){
   cm = new CodeMirror.fromTextArea(
 	  document.getElementById("problemContentsEditor"), {
 	    mode: "PG",
-      theme: "monokai",
-      styleActiveLine: {nonEmpty: true},
+      theme: "tomorrow-night-eighties",
+      styleActiveLine: true,
 	    indentUnit: 2,
 	    tabMode: "spaces",
       lineNumbers: true,
@@ -28,8 +36,9 @@ $(function(){
         {Tab: function(cm) {cm.execCommand('insertSoftTab')}},
 	    highlightSelectionMatches: true,
 	    matchBrackets: true,
+      closeBrackets: true,
 	  });
-	// cm.setSize(700,400);
+	cm.setSize("100%","100%");
 });
 % end
 
@@ -40,9 +49,6 @@ $(function(){
 .CodeMirror {
   border: 1px solid #eee;
   height: auto;
-}
-.CodeMirror-scroll {
-  max-height: 100vh;
 }
 .CodeMirror * {
   font-family: Arial, monospace;

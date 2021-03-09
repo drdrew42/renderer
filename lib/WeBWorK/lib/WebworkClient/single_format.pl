@@ -35,7 +35,7 @@ $single_format = <<'ENDPROBLEMTEMPLATE';
 $problemHeadText
 $problemPostHeaderText
 
-<title>Rederly Standalone Renderer</title>
+<title>WeBWorK Standalone Renderer</title>
 </head>
 <body>
   <div class="container-fluid">

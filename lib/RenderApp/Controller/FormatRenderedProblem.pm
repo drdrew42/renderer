@@ -87,6 +87,7 @@ sub formatRenderedProblem {
 	print "\nformatRenderedProblem return_object $rh_result = ",join(" ", sort keys %$rh_result),"\n" if $UNIT_TESTS_ON;
 	if (ref($rh_result) and $rh_result->{text} ) {  ##text vs body_text
 		$problemText       =  $rh_result->{text};
+		$problemText      .= $rh_result->{flags}{comment} if $rh_result->{flags}{comment};
 	} else {
 		$problemText       .= "Unable to decode problem text<br/>\n".
 		$self->{error_string}."\n".

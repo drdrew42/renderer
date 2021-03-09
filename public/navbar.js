@@ -19,7 +19,7 @@ let savebutton=document.getElementById("save-problem");
 let renderbutton=document.getElementById("render-button");
 let problemiframe = document.getElementById("rendered-problem");
 
-problemiframe.addEventListener('load', () => { insertListener(); activeButton(); console.log("loaded..."); } )
+problemiframe.addEventListener('load', () => { console.log("loaded..."); insertListener(); activeButton(); } )
 
 savebutton.addEventListener("click", event => {
   const writeurl = '/render-api/can'
@@ -54,6 +54,7 @@ savebutton.addEventListener("click", event => {
     if (data.message) {
       throw new Error("Could not write to file: " + data.message);
     } else {
+      document.getElementById("currentEditPath").innerText = document.getElementById('sourceFilePath').value;
       alert("Successfully written to file: " + data);
     }
   }).catch(function(e) {
@@ -94,7 +95,8 @@ renderbutton.addEventListener("click", event => {
 
   const selectedformat = document.querySelector(".dropdown-item.selected");
   let outputformat;
-  if (typeof selectedformat !== 'Element') {
+  if ( selectedformat === null) {
+    console.log(typeof selectedformat);
     alert("No output format selected. Defaulting to 'classic' format.");
     outputformat = 'classic';
   } else {
@@ -147,7 +149,7 @@ renderbutton.addEventListener("click", event => {
 
 function activeButton() {
   let problemForm = problemiframe.contentWindow.document.getElementById('problemMainForm')
-  if (!problemForm) {console.log("could not find form!"); return;}
+  if (!problemForm) {console.log("could not find form! has a problem been rendered?"); return;}
   problemForm.querySelectorAll('.btn-primary').forEach( button => {
     button.addEventListener('click', () => {
       button.classList.add("btn-clicked");
@@ -160,8 +162,7 @@ function insertListener() {
   // assuming global problemiframe - too sloppy?
   let problemForm = problemiframe.contentWindow.document.getElementById('problemMainForm')
   // don't croak when the empty iframe is first loaded
-  // problably not an issue for rederly/frontend
-  if (!problemForm) {console.log("could not find form!"); return;}
+  if (!problemForm) {console.log("could not find form! has a problem been rendered?"); return;}
   problemForm.addEventListener("submit", event => {
     event.preventDefault()
     let formData = new FormData(problemForm)
@@ -169,12 +170,15 @@ function insertListener() {
     formData.set("format", "json");
     const selectedformat = document.querySelector(".dropdown-item.selected");
     let outputformat;
-    if (typeof selectedformat !== 'Element') {
+    if ( selectedformat === null ) {
       alert("No output format selected. Defaulting to 'classic' format.");
       outputformat = 'classic';
     } else {
       outputformat = selectedformat.id;
     }
+    formData.set("permissionLevel", 20);
+    formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
+    formData.set("problemSeed", document.getElementById('problemSeed').value);
     formData.set("outputformat", outputformat);
     formData.set(clickedButton.name, clickedButton.value);
 

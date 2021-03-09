@@ -25,6 +25,7 @@ use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
 use Proc::ProcessTable;    # use for log memory use
 use WeBWorK::PG;           #webwork2 (use to set up environment)
 use WeBWorK::CourseEnvironment;
+use WeBWorK::Utils::Tags;
 use RenderApp::Controller::FormatRenderedProblem;
 
 use 5.10.0;
@@ -138,6 +139,8 @@ sub process_pg_file {
     delete $json_rh->{flags}{compoundProblem}{grader}
       if $json_rh->{flags}{compoundProblem}{grader};
 
+
+    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path);
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($json_rh);
     return $json;
@@ -278,7 +281,7 @@ sub process_problem {
     ##################################################
     # log elapsed time
     ##################################################
-    my $scriptName     = 'rederlyPGproblemRenderer';
+    my $scriptName     = 'standalonePGproblemRenderer';
     my $log_file_path  = $file_path // 'source provided without path';
     my $cg_end         = time;
     my $cg_duration    = $cg_end - $cg_start;
@@ -594,7 +597,7 @@ sub pretty_print_rh {
 
 sub create_course_environment {
     my $self       = shift;
-    my $courseName = $self->{courseName} || 'rederly';
+    my $courseName = $self->{courseName} || 'renderer';
     my $ce         = WeBWorK::CourseEnvironment->new(
         {
             webwork_dir => $ENV{WEBWORK_ROOT},

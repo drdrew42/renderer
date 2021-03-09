@@ -67,7 +67,7 @@ sub startup {
   # Routes to controller
   my $r = $self->routes;
 
-	$r->any('/')->to('login#ui');
+	$r->any('/')->to('pages#twocolumn');
 
 	$r->any('/health' => sub {shift->rendered(200)});
 
