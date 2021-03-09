@@ -141,8 +141,8 @@ async sub catalog {
     my $depth     = $validatedInput->{maxDepth} // 2;
 
     $root_path =~ s!\s+|\.\./!!g;
-    $root_path =~ s!^Library/!webwork-open-problem-library/OpenProblemLibrary/!;
-    $root_path =~ s!^Contrib/!webwork-open-problem-library/Contrib/!;
+    $root_path =~ s!^Library/?!webwork-open-problem-library/OpenProblemLibrary!;
+    $root_path =~ s!^Contrib/?!webwork-open-problem-library/Contrib!;
 
     if ( $depth == 0 || !-d $root_path ) {
         # warn($root_path) if !(-e $root_path);
@@ -169,13 +169,14 @@ sub depthSearch_p {
             my $wanted = sub {
                 # measure depth relative to root_path
                 ( my $rel = $File::Find::name ) =~ s!^\Q$root_path\E/?!!;
+                warn "ROOT PATH: $root_path RELATIVE PATH: $rel\n";
                 my $path = $File::Find::name;
                 $File::Find::prune = 1
                   if File::Spec::Functions::splitdir($rel) >= $depth;
                 $path = $path . '/' if -d $File::Find::name;
                 # only report .pg files and directories
                 $all{$path}++
-                  if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! );
+                  if ( $rel =~ /\S/ && ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ) );
             };
             File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
             return \%all, 200;
