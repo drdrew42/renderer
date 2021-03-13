@@ -28,6 +28,7 @@ use MIME::Base64 qw( encode_base64 decode_base64);
 use WeBWorK::Utils::AttemptsTable; #import from ww2
 use WeBWorK::PG::ImageGenerator; # import from ww2
 use WeBWorK::Utils qw( wwRound);   # required for score summary
+use Crypt::JWT qw(decode_jwt encode_jwt);
 our $UNIT_TESTS_ON  = 0;
 
 #####################
@@ -153,6 +154,8 @@ sub formatRenderedProblem {
 	my $problemSeed      =  $self->{inputs_ref}->{problemSeed}//6666;
 	my $session_key      =  $rh_result->{session_key}//'';
 	my $displayMode      =  $self->{inputs_ref}->{displayMode}//'MathJax';
+	my $problemJWT       =  $self->{inputs_ref}->{problemJWT};
+	# print($problemJWT);
 
 	my $previewMode      =  defined($self->{inputs_ref}->{previewAnswers})||0;
 	my $checkMode        =  defined($self->{inputs_ref}->{checkAnswers})||0;
@@ -188,6 +191,24 @@ sub formatRenderedProblem {
 		maketext               => WeBWorK::Localize::getLoc($formLanguage//'en'),
 		summary                => $problemResult->{summary} //'', # can be set by problem grader???
 	);
+
+
+	my $wwHash = {
+		iss              => $ENV{JWTanswerHost},
+		answersSubmitted => 1,
+		sourceFilePath   => "$sourceFilePath",
+		problemSource    => "$encoded_source",
+		problemSeed      => "$problemSeed",
+		language         => "$formLanguage",
+		showSummary      => "$showSummary",
+		problemJWT       => "$problemJWT",
+		JWTanswerURL     => $self->{inputs_ref}->{JWTanswerURL},
+		outputformat     => $self->{inputs_ref}->{outputformat},
+	};
+	# $wwHash = ($self->{inputs_ref}, $wwHash);
+
+	# TODO: Swap to JWE with alg PBES2-HS512+A256KW and enc A256GCM
+	my $webworkJWT = encode_jwt(payload=>$wwHash, auto_iat=>1, alg=>'HS256', key=>$ENV{webworkJWTsecret});
 
 	my $answerTemplate = $tbl->answerTemplate;
 	my $color_input_blanks_script = $tbl->color_answer_blanks if (($submitMode or $checkMode) and $showPartialCorrectAnswers);

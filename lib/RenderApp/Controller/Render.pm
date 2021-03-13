@@ -12,24 +12,24 @@ async sub problem {
   my $sessionJWT;
 
 
-
   # set up inputs_ref
   my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
   delete $inputs_ref{JWTanswerURL};
-  if (defined($c->req->param('webworkJWT'))) { # Use encrypted data from webworkJWT or problemJWT if present instead of params
+  if (defined($c->req->param('webworkJWT'))) {
+    # Use encrypted data from webworkJWT or problemJWT if present instead of params
     my $webworkJWT = $c->req->param('webworkJWT');
-    print("Can't touch this\n");
-    my $claims = decode_jwt(token => $webworkJWT, key => $ENV{webworkJWTsecret}, verify_iss=>$ENV{JWTanswerHost});
+    print("Using webworkJWT claims");
+    my $claims = decode_jwt(token => $webworkJWT, key => $ENV{webworkJWTsecret}, verify_iss => $ENV{JWTanswerHost});
     %inputs_ref = (%inputs_ref, %$claims)
   }
   elsif (defined($c->req->param('problemJWT'))) {
     $problemJWT = $c->req->param('problemJWT');
     # my $claims = Mojo::JWT->new(secret => $ENV{JWTsecret})->decode($problemJWT);
-    my $claims = decode_jwt(token => $problemJWT, key => $ENV{problemJWTsecret}, verify_aud=>$ENV{JWTanswerHost}); # TODO Add error handling
+    my $claims = decode_jwt(token => $problemJWT, key => $ENV{problemJWTsecret}, verify_aud => $ENV{JWTanswerHost}); # TODO Add error handling
 
     # flatten down webwork key if present
     if (defined($claims->{webwork})) {
-      $claims = decode_jwt(token => $claims->{webwork}, key => $ENV{problemJWTsecret}, verify_aud=>$ENV{JWTanswerHost}); # TODO Add error handling
+      $claims = $claims->{webwork}
     }
     $claims->{problemJWT} = $problemJWT;
     # $JWTanswerURL = $claims->{JWTanswerURL} || $JWTanswerURL;
@@ -42,17 +42,16 @@ async sub problem {
   $inputs_ref{baseURL} ||= $c->app->config('url');
   print Dumper(%inputs_ref);
 
-
-  my $problem = $c->newProblem({log => $c->log, read_path => $inputs_ref{sourceFilePath}, random_seed => $inputs_ref{problemSeed}, problem_contents => $inputs_ref{problemSource}});
+  my $problem = $c->newProblem({ log => $c->log, read_path => $inputs_ref{sourceFilePath}, random_seed => $inputs_ref{problemSeed}, problem_contents => $inputs_ref{problemSource} });
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
   $inputs_ref{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
   my @input_errs = checkInputs(\%inputs_ref);
   if (@input_errs) {
-    my $err_log = "Form data submitted for ".$inputs_ref{sourceFilePath}." contained errors: {";
+    my $err_log = "Form data submitted for " . $inputs_ref{sourceFilePath} . " contained errors: {";
     $err_log .= join "}, {", @input_errs;
-    $c->log->error($err_log."}");
+    $c->log->error($err_log . "}");
   }
 
   $c->render_later;
@@ -69,26 +68,25 @@ async sub problem {
   my $ww_return_hash = decode_json($ww_return_json);
   my @output_errs = checkOutputs($ww_return_hash);
   if (@output_errs) {
-    my $err_log = "Output from rendering ".$inputs_ref{sourceFilePath}." contained errors: {";
+    my $err_log = "Output from rendering " . $inputs_ref{sourceFilePath} . " contained errors: {";
     $err_log .= join "}, {", @output_errs;
-    $c->log->error($err_log."}");
+    $c->log->error($err_log . "}");
   }
 
-  $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
-
+  $ww_return_hash->{debug}->{render_warn} = [ @input_errs, @output_errs ];
 
   if (defined($inputs_ref{submitAnswers})) {
     my $scoreHash = {};
-    my $answerNum =0;
+    my $answerNum = 0;
     # $sessionJWT = Mojo::JWT->new(claims=>\%inputs_ref, secret=>$ENV{JWTsecret})->encode;
     # $sessionJWT = encode_jwt(payload=>\%inputs_ref, alg=>'HS256', key=>$ENV{JWTsecret}); TODO: FIX sessionJWT
 
     foreach my $ans_id (keys %{$ww_return_hash->{answers}}) {
-      $answerNum++;  # start with 1, this is also the row number
+      $answerNum++; # start with 1, this is also the row number
       $scoreHash->{$answerNum} = {
-          ans_id => $ans_id,
-          answer => $ww_return_hash->{answers}{$ans_id} // {},
-          score => $ww_return_hash->{answers}{$ans_id}{score} // 0,
+        ans_id => $ans_id,
+        answer => $ww_return_hash->{answers}{$ans_id} // {},
+        score  => $ww_return_hash->{answers}{$ans_id}{score} // 0,
       };
     }
     my $scoreJSON = encode_json($scoreHash);
@@ -99,9 +97,9 @@ async sub problem {
       sessionJWT => 'World',
     };
     # my $answerJWT = Mojo::JWT->new(claims=>$responseHash, secret=>$ENV{JWTsecret})->encode;
-    my $answerJWT = encode_jwt(payload=>$responseHash, alg=>'HS256', key=>$ENV{JWTsecret}, auto_iat=>1,);
+    my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{JWTsecret}, auto_iat => 1,);
 
-    my $ua  = Mojo::UserAgent->new;
+    my $ua = Mojo::UserAgent->new;
     # print Dumper({
     #     'Accept' => 'application/json',
     #     'Authorization' => "Bearer $answerJWT",
@@ -109,15 +107,15 @@ async sub problem {
     # });
 
     say $ua->post($inputs_ref{JWTanswerURL}, { # TODO: Handle if endpoint is offline
-        'Accept' => 'application/json',
-        'answerJWT' => "$answerJWT",
-        'Host' => $ENV{JWTanswerHost},
+      'Accept'    => 'application/json',
+      'answerJWT' => "$answerJWT",
+      'Host'      => $ENV{JWTanswerHost},
     })->result->body;
     # warn "$JWTanswerURL\n";
   }
 
   $c->respond_to(
-    html => { text => $ww_return_hash->{renderedHTML}},
+    html => { text => $ww_return_hash->{renderedHTML} },
     json => { json => $ww_return_hash }
   );
 }
@@ -130,9 +128,9 @@ sub checkInputs {
     if ($v =~ /[^\x01-\x7F]/) {
       my $err = "UNICODE: $k contains nonstandard character(s):";
       while ($v =~ /([^\x00-\x7F])/g) {
-        $err .= ' "'.$1.'" as '.sprintf("\\u%04x", ord($1));
+        $err .= ' "' . $1 . '" as ' . sprintf("\\u%04x", ord($1));
       }
-      if ( $v =~ /\x00/ ) {
+      if ($v =~ /\x00/) {
         $err .= " NUL byte -- creating array.";
         my @v_array = split(/\x00/, $v);
         $inputs_ref->{$k} = \@v_array;
@@ -157,12 +155,14 @@ sub checkOutputs {
   );
   if (ref $outputs_ref ne ref {}) {
     push @errs, "renderer result is not a hash: $outputs_ref";
-  } else {
+  }
+  else {
     for my $key (@expected_keys) {
-      if (! defined $outputs_ref->{$key}) {
-        if (! exists $outputs_ref->{$key}) {
+      if (!defined $outputs_ref->{$key}) {
+        if (!exists $outputs_ref->{$key}) {
           push @errs, "expected key: $key is missing";
-        } else {
+        }
+        else {
           push @errs, "expected key: $key is empty";
         }
       }
