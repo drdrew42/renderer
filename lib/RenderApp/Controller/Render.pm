@@ -8,28 +8,43 @@ use Data::Dumper;
 
 async sub problem {
   my $c = shift;
-  my $isLibreText = 0;
   my $problemJWT;
   my $sessionJWT;
-  my $file_path = $c->param('sourceFilePath'); # || $c->session('filePath');
-  my $random_seed = $c->param('problemSeed');
-  my $problem_contents = $c->param('problemSource');
 
-  if (defined($c->req->param('problemJWT'))) {
+
+
+  # set up inputs_ref
+  my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
+  delete $inputs_ref{JWTanswerURL};
+  if (defined($c->req->param('webworkJWT'))) { # Use encrypted data from webworkJWT or problemJWT if present instead of params
+    my $webworkJWT = $c->req->param('webworkJWT');
+    print("Can't touch this\n");
+    my $claims = decode_jwt(token => $webworkJWT, key => $ENV{webworkJWTsecret}, verify_iss=>$ENV{JWTanswerHost});
+    %inputs_ref = (%inputs_ref, %$claims)
+  }
+  elsif (defined($c->req->param('problemJWT'))) {
     $problemJWT = $c->req->param('problemJWT');
     # my $claims = Mojo::JWT->new(secret => $ENV{JWTsecret})->decode($problemJWT);
-    my $claims = decode_jwt(token=>$problemJWT, key =>$ENV{JWTsecret});
-    $isLibreText = 1;
-    $file_path = $claims->{webwork}{sourceFilePath};
-    $random_seed = $claims->{webwork}{problemSeed};
+    my $claims = decode_jwt(token => $problemJWT, key => $ENV{problemJWTsecret}, verify_aud=>$ENV{JWTanswerHost}); # TODO Add error handling
+
+    # flatten down webwork key if present
+    if (defined($claims->{webwork})) {
+      $claims = decode_jwt(token => $claims->{webwork}, key => $ENV{problemJWTsecret}, verify_aud=>$ENV{JWTanswerHost}); # TODO Add error handling
+    }
+    $claims->{problemJWT} = $problemJWT;
+    # $JWTanswerURL = $claims->{JWTanswerURL} || $JWTanswerURL;
+
+    %inputs_ref = %$claims;
   }
 
-  my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents});
-  return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
-
-  my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
+  $inputs_ref{JWTanswerURL} ||= $ENV{JWTanswerURL};
   $inputs_ref{formURL} ||= $c->app->config('form');
   $inputs_ref{baseURL} ||= $c->app->config('url');
+  print Dumper(%inputs_ref);
+
+
+  my $problem = $c->newProblem({log => $c->log, read_path => $inputs_ref{sourceFilePath}, random_seed => $inputs_ref{problemSeed}, problem_contents => $inputs_ref{problemSource}});
+  return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
   $inputs_ref{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
@@ -62,7 +77,7 @@ async sub problem {
   $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
 
 
-  if ($isLibreText) {
+  if (defined($inputs_ref{submitAnswers})) {
     my $scoreHash = {};
     my $answerNum =0;
     # $sessionJWT = Mojo::JWT->new(claims=>\%inputs_ref, secret=>$ENV{JWTsecret})->encode;
@@ -79,12 +94,12 @@ async sub problem {
     my $scoreJSON = encode_json($scoreHash);
 
     my $responseHash = {
-        problemJWT => 'Hello',
-        sessionJWT => 'World',
-        score => $scoreHash
+      score      => $scoreHash,
+      problemJWT => $problemJWT,
+      sessionJWT => 'World',
     };
     # my $answerJWT = Mojo::JWT->new(claims=>$responseHash, secret=>$ENV{JWTsecret})->encode;
-    my $answerJWT = encode_jwt(payload=>$responseHash, alg=>'HS256', key=>$ENV{JWTsecret});;
+    my $answerJWT = encode_jwt(payload=>$responseHash, alg=>'HS256', key=>$ENV{JWTsecret}, auto_iat=>1,);
 
     my $ua  = Mojo::UserAgent->new;
     # print Dumper({
@@ -92,13 +107,13 @@ async sub problem {
     #     'Authorization' => "Bearer $answerJWT",
     #     'Host' => $ENV{JWTanswerHost},
     # });
-    # say
-    say $ua->post($ENV{JWTanswerURL}, {
+
+    say $ua->post($inputs_ref{JWTanswerURL}, { # TODO: Handle if endpoint is offline
         'Accept' => 'application/json',
-        'Authorization' => "Bearer $answerJWT",
+        'answerJWT' => "$answerJWT",
         'Host' => $ENV{JWTanswerHost},
     })->result->body;
-    warn "$ENV{JWTanswerURL}\n";
+    # warn "$JWTanswerURL\n";
   }
 
   $c->respond_to(

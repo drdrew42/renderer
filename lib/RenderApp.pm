@@ -45,9 +45,10 @@ sub startup {
   $self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
 #   $self->plugin('leak_tracker');
-  $ENV{JWTsecret} = $self->config('JWTsecret');
-  $ENV{JWTanswerHost} = $self->config('JWTanswerHost');
-  $ENV{JWTanswerURL} = $self->config('JWTanswerURL');
+  $ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
+  $ENV{webworkJWTsecret} //= $self->config('webworkJWTsecret');
+  $ENV{JWTanswerHost} //= $self->config('JWTanswerHost');
+  $ENV{JWTanswerURL} //= $self->config('JWTanswerURL');
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
