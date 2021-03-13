@@ -308,7 +308,7 @@ sub standaloneRenderer {
     #print "entering standaloneRenderer\n\n";
     my $ce          = shift;
     my $problemFile = shift // '';
-    my $form_data   = shift // '';
+    my $inputs_ref   = shift // '';
     my %args        = @_;
 
     # my $key = $r->param('key');
@@ -317,16 +317,16 @@ sub standaloneRenderer {
 
     my $user             = fake_user();
     my $set              = fake_set();
-    my $showHints        = $form_data->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
-    my $showSolutions    = $form_data->{showSolutions} // 0;
-    my $problemNumber    = $form_data->{problemNumber} // 1;          # ever even relevant?
-    my $displayMode      = $form_data->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
-    my $problem_seed     = $form_data->{problemSeed} || 1234;
-    my $permission_level = $form_data->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
-    my $num_correct      = $form_data->{numCorrect} || 0;             # consider replacing - this may never be relevant...
-    my $num_incorrect    = $form_data->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
-    my $processAnswers   = $form_data->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
-    my $psvn             = $form_data->{psvn} // 123;                 # by request from Tani
+    my $showHints        = $inputs_ref->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
+    my $showSolutions    = $inputs_ref->{showSolutions} // 0;
+    my $problemNumber    = $inputs_ref->{problemNumber} // 1;          # ever even relevant?
+    my $displayMode      = $inputs_ref->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
+    my $problem_seed     = $inputs_ref->{problemSeed} || 1234;
+    my $permission_level = $inputs_ref->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
+    my $num_correct      = $inputs_ref->{numCorrect} || 0;             # consider replacing - this may never be relevant...
+    my $num_incorrect    = $inputs_ref->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
+    my $processAnswers   = $inputs_ref->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
+    my $psvn             = $inputs_ref->{psvn} // 123;                 # by request from Tani
 
     print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
@@ -359,7 +359,7 @@ sub standaloneRenderer {
     $problem->{attempted}     = $num_correct + $num_incorrect;
 
     if ( ref $problemFile ) {
-        $problem->{source_file}         = $form_data->{sourceFilePath};
+        $problem->{source_file}         = $inputs_ref->{sourceFilePath};
         $translationOptions->{r_source} = $problemFile;
 
         # warn "standaloneProblemRenderer: setting source_file = $problemFile";
@@ -379,7 +379,7 @@ sub standaloneRenderer {
         $set,
         $problem,
         $psvn,    # by request from Tani
-        $form_data,
+        $inputs_ref,
         $translationOptions,
         $extras,
     );
@@ -397,7 +397,7 @@ sub standaloneRenderer {
           ['Problem failed during render - no PGcore received.'];
     }
 
-    insert_mathquill_responses( $form_data, $pg );
+    insert_mathquill_responses( $inputs_ref, $pg );
 
     my $out2 = {
         text                    => $pg->{body_text},
