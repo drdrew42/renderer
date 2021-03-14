@@ -13,5 +13,5 @@
   },
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "Testing endpoint for requests to/from the renderer"
 }
