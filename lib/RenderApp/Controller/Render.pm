@@ -104,12 +104,17 @@ async sub problem {
     # });
 
     # TODO: post answerJWT in request body
-    say $ua->post($inputs_ref{JWTanswerURL}, { # TODO: Handle if endpoint is offline
-      'Accept'    => 'application/json',
-      'answerJWT' => "$answerJWT",
-      'Host'      => $ENV{JWTanswerHost},
-    })->result->body;
-    # warn "$JWTanswerURL\n";
+    eval {
+      say $ua->post($inputs_ref{JWTanswerURL}, { # TODO: Handle better if endpoint is offline
+        'Accept'    => 'application/json',
+        'answerJWT' => "$answerJWT",
+        'Host'      => $ENV{JWTanswerHost},
+      })->result->body;
+    };
+    if ($@) {
+      # now $@ contains the exception object
+      print STDERR $@;
+    }
   }
 
   $c->respond_to(
