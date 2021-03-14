@@ -93,11 +93,11 @@ async sub problem {
 
     my $responseHash = {
       score      => $scoreHash,
-      problemJWT => $problemJWT,
+      problemJWT => $inputs_ref{problemJWT},
       sessionJWT => 'World',
     };
     # my $answerJWT = Mojo::JWT->new(claims=>$responseHash, secret=>$ENV{JWTsecret})->encode;
-    my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{JWTsecret}, auto_iat => 1,);
+    my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1,);
 
     my $ua = Mojo::UserAgent->new;
     # print Dumper({

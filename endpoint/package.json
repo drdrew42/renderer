@@ -1,5 +1,17 @@
 {
   "dependencies": {
-    "express": "^4.17.1"
-  }
+    "express": "^4.17.1",
+    "jose": "^3.8.0"
+  },
+  "name": "endpoint",
+  "version": "1.0.0",
+  "main": "listen.js",
+  "type": "module",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
 }
