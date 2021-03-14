@@ -8,9 +8,6 @@ use Data::Dumper;
 
 async sub problem {
   my $c = shift;
-  my $problemJWT;
-  my $sessionJWT;
-
 
   # set up inputs_ref
   my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
@@ -23,7 +20,7 @@ async sub problem {
     %inputs_ref = (%inputs_ref, %$claims)
   }
   elsif (defined($c->req->param('problemJWT'))) {
-    $problemJWT = $c->req->param('problemJWT');
+    my $problemJWT = $c->req->param('problemJWT');
     # my $claims = Mojo::JWT->new(secret => $ENV{JWTsecret})->decode($problemJWT);
     my $claims = decode_jwt(token => $problemJWT, key => $ENV{problemJWTsecret}, verify_aud => $ENV{JWTanswerHost}); # TODO Add error handling
 
@@ -40,7 +37,7 @@ async sub problem {
   $inputs_ref{JWTanswerURL} ||= $ENV{JWTanswerURL};
   $inputs_ref{formURL} ||= $c->app->config('form');
   $inputs_ref{baseURL} ||= $c->app->config('url');
-  print Dumper(%inputs_ref);
+  print Dumper(%inputs_ref); # TODO: comment out
 
   my $problem = $c->newProblem({ log => $c->log, read_path => $inputs_ref{sourceFilePath}, random_seed => $inputs_ref{problemSeed}, problem_contents => $inputs_ref{problemSource} });
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
@@ -97,7 +94,7 @@ async sub problem {
       sessionJWT => 'World',
     };
     # my $answerJWT = Mojo::JWT->new(claims=>$responseHash, secret=>$ENV{JWTsecret})->encode;
-    my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1,);
+    my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 
     my $ua = Mojo::UserAgent->new;
     # print Dumper({
@@ -106,6 +103,7 @@ async sub problem {
     #     'Host' => $ENV{JWTanswerHost},
     # });
 
+    # TODO: post answerJWT in request body
     say $ua->post($inputs_ref{JWTanswerURL}, { # TODO: Handle if endpoint is offline
       'Accept'    => 'application/json',
       'answerJWT' => "$answerJWT",

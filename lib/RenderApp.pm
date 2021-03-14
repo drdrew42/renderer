@@ -48,7 +48,7 @@ sub startup {
   $ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
   $ENV{webworkJWTsecret} //= $self->config('webworkJWTsecret');
   $ENV{JWTanswerHost} //= $self->config('JWTanswerHost');
-  $ENV{JWTanswerURL} //= $self->config('JWTanswerURL');
+  $ENV{JWTanswerURL} //= $self->config('JWTanswerURL'); # can be overwritten by a problemJWT
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });

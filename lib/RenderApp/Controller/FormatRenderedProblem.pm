@@ -203,7 +203,7 @@ sub formatRenderedProblem {
 		showSummary      => "$showSummary",
 		problemJWT       => "$problemJWT",
 		JWTanswerURL     => $self->{inputs_ref}->{JWTanswerURL},
-		outputformat     => $self->{inputs_ref}->{outputformat},
+		outputformat     => $self->{inputs_ref}->{outputformat}, # TODO outputformat to outputFormat
 	};
 	# $wwHash = ($self->{inputs_ref}, $wwHash);
 
