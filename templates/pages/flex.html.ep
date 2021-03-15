@@ -1,0 +1,19 @@
+%= stylesheet '/opl-flex.css'
+
+<div class='container'>
+    <div class='left'>
+        %= include 'columns/filebrowser'
+    </div>
+    <div class='middle'>
+        <div class='header'>
+        </div>
+        <div class='content'>
+        </div>
+    </div>
+    <div class='right'>
+        <div class='header'>
+        </div>
+        <div class='content'>
+        </div>
+    </div>
+</div>

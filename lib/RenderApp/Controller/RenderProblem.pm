@@ -129,6 +129,7 @@ sub process_pg_file {
         flags          => $pg_obj->{flags},
         form_data      => $inputHash,
         assets         => $pg_obj->{assets},
+        raw_metadata_text => $pg_obj->{raw_metadata_text},
     };
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
@@ -184,6 +185,7 @@ sub process_problem {
         #$inputs_ref->{sourceFilePath} = $adj_file_path;
         #$inputs_ref->{pathToProblemFile} = $adj_file_path;
     }
+    my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\);/s);
 
     my $assets = [];
     while ($source =~ m/includePG(?:problem|file)\(["'](.*)["']\);/g )
@@ -233,6 +235,9 @@ sub process_problem {
 
     # stash assets list in $return_object
     $return_object->{assets} = $assets;
+
+    # stash raw metadata text in $return_object
+    $return_object->{raw_metadata_text} = $raw_metadata_text;
 
     #######################################################################
     # Handle errors

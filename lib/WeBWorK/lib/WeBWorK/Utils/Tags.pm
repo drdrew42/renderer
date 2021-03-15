@@ -38,7 +38,7 @@ use constant NUMBERED => qw( TitleText AuthorText EditionText Section Problem );
 
 my $basics = join('|', BASIC);
 my $numbered = join('|', NUMBERED);
-my $re = qr/#\s*\b($basics)\s*\(\s*'?(.*?)'?\s*\)\s*$/;
+my $re = qr/#\s*\b($basics)\s*\(\s*['"]?(.*?)['"]?\s*\)\s*$/;
 
 sub istagline {
   my $line = shift;
@@ -47,6 +47,16 @@ sub istagline {
   return 1 if($line =~ /#\s*\bRESOURCES?\s*\(\s*'?(.*?)'?\s*\)/);
   return 1 if($line =~ /#\s*\b($numbered)\d+\s*\(\s*'?(.*?)'?\s*\)/);
   return 0;
+}
+
+sub isStartDescription {
+  my $line = shift;
+  return ($line =~ /DESCRIPTION/) ? 1 : 0;
+}
+
+sub isEndDescription {
+  my $line = shift;
+  return ($line =~ /ENDDESCRIPTION/) ? 1 : 0;
 }
 
 sub kwtidy {
@@ -60,6 +70,12 @@ sub kwtidy {
 sub keywordcleaner {
   my $string = shift;
   my @spl1 = split /,/, $string;
+  foreach my $keyword (@spl1) {
+    # strip quotes and trim, then lowercase
+    # $keyword =~ s/^\s*['"]\s*(.*?)\s*['"]\s*$/$1/;
+    # $keyword = lc $keyword;
+    $keyword = kwtidy($keyword);
+  }
 #  my @spl2 = map(kwtidy($_), @spl1);
   return(@spl1);
 }
@@ -219,7 +235,7 @@ sub new {
   }
   $self->{keywords} = [];
   $self->{resources} = [];
-  $self->{DESCRIPTION} = [];
+  $self->{description} = [];
   my $inDescription = 0;
   $self->{Language} = 'en'; # Default to English
 
@@ -233,12 +249,19 @@ sub new {
                 last SWITCH;
             }
             if ($inDescription) {
-                if (/^#+\s*\bENDDESCRIPTION/i) {
-                    $inDescription = 0;
-                } elsif (/^#+\s*(.*)/) {
-                    push @{ $self->{DESCRIPTION} }, $1;
+                # we cannot assume that all problems have ENDDESCRIPTION
+                # check if we have a valid tag-line and continue processing if so
+                if (istagline($_)) {
+                  $inDescription = 0;
+                } else {
+                  if (/^#+\s*\bENDDESCRIPTION/i) {
+                      $inDescription = 0;
+                  }
+                  elsif (/^#+\s*(.*)/) {
+                      push @{ $self->{description} }, $1;
+                  }
+                  last SWITCH;
                 }
-                last SWITCH;
             }
             if (/#\s*\bKEYWORDS\((.*)\)/i) {
                 my @keyword = keywordcleaner($1);
@@ -393,11 +416,24 @@ sub copyin {
 sub dumptags {
   my $self = shift;
   my $fh = shift;
-
   if ( $self->{description} ) {
-    unshift @{$self->{description}}, "## DESCRIPTION";
-    push @{$self->{description}}, "ENDDESCRIPTION";
-    print $fh join("\n## ", @{$self->{description}})."\n";
+    if (ref( $self->{description} ) !~ /ARRAY/) {
+      warn "TAGS.PM: dumping description, but it wasn't an array...";
+      $self->{description} = [$self->{description}];
+    }
+    my @descriptionArray = @{$self->{description}};
+    unshift @descriptionArray, "## DESCRIPTION";
+    push @descriptionArray, "ENDDESCRIPTION";
+    print $fh join("\n## ", @descriptionArray)."\n";
+  }
+
+  if ( $self->{keywords} ) {
+    if (ref( $self->{keywords} ) !~ /ARRAY/) {
+      warn "TAGS.PM: dumping keywords, but it wasn't an array...\n";
+      $self->{keywords} = [ keywordcleaner( $self->{keywords} ) ];
+    } else {
+      @{ $self->{keywords} } = map { kwtidy($_) } @{ $self->{keywords} };
+    }
   }
 
   for my $tagname ( BASIC ) {
@@ -426,9 +462,9 @@ sub dumptags {
   print $fh "## KEYWORDS(".join(',', @{$self->{keywords}}).")\n" if(scalar(@{$self->{keywords}}));
   my @resc;
   if(scalar(@{$self->{resources}})) {
-	@resc = @{$self->{resources}};
-	s/^/'/g for (@resc);
-	s/$/'/g for (@resc);
+    @resc = @{$self->{resources}};
+    s/^/'/g for (@resc);
+    s/$/'/g for (@resc);
     print $fh "## RESOURCES(".join(',', @resc).")\n";
   }
 }
@@ -441,10 +477,18 @@ sub write {
   my @lines = <IN>;
   close(IN);
   my $fh = IO::File->new(">".$self->{file}) or die "can not open $self->{file}: $!";
-  my ($line, $lineno)=('', 0); 
+  my ($line, $lineno, $inDescription)=('', 0, 0); 
   while($line = shift @lines) {
     $lineno++; 
     $self->dumptags($fh) if($lineno == $self->{lasttagline});
+    $inDescription = isStartDescription($line) unless $inDescription;
+    if ($inDescription) {
+      # do not assume every DESCRIPTION has an ENDDESCRIPTION
+      if (isEndDescription($line) || istagline($line)) {
+        $inDescription = 0;
+      } 
+      next;
+    }
     next if istagline($line);
     print $fh $line;
   }

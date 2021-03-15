@@ -17,16 +17,17 @@
 #use strict;
 use File::Find;
 use File::Find::Rule;
-use File::Basename;
-use Cwd;
+use File::Basename qw(basename dirname);
+use Cwd qw(abs_path);
 use DBI;
 
  #(maximum varchar length is 255 for mysql version < 5.0.3.  
  #You can increase path length to  4096 for mysql > 5.0.3)
 
 BEGIN {
-	$ENV{RENDER_ROOT} = '/Users/drdrew42/webwork/renderer';
-    $ENV{WEBWORK_ROOT} = '/Users/drdrew42/webwork/renderer/lib/WeBWorK';
+	my $dir = dirname(abs_path(__FILE__));
+	$ENV{RENDER_ROOT} = abs_path($dir.'/../../../');
+    $ENV{WEBWORK_ROOT} = abs_path($dir.'/../');
         die "WEBWORK_ROOT not found in environment.\n"
                 unless exists $ENV{WEBWORK_ROOT};
 	# Unused variable, but define it to avoid an error message.
@@ -421,8 +422,8 @@ my $clsep = '<<<';
 my $clinner = '__';
 my @cllist = ();
 # Record full taxonomy for tagging menus (does not include cross-lists)
-my $tagtaxo = [];
-my ($chaplist, $seclist) = ([],[]);
+my $tagtaxo = {};
+my ($chaplist, $seclist) = ({},[]);
 
 my $canopenfile = 0;
 if(open(IN, '<:encoding(UTF-8)', "$libraryRoot/Taxonomy2")) {
@@ -465,8 +466,9 @@ if($canopenfile) {
 			$cursub = $line;
 			if($oktag) {
 				$taxo->{$line} = {};
-				($chaplist, $seclist) = ([],[]);
-				push @{$tagtaxo}, {"$line"=>$chaplist};
+				($chaplist, $seclist) = ({},[]);
+				$tagtaxo->{$line} = $chaplist;
+				# push @{$tagtaxo}, {"$line"=>$chaplist};
 			}
 			$subj = safe_get_id($tables{dbsubject}, 'DBsubject_id',
 				qq(WHERE name = ?), [$line], 1, "", $line);
@@ -474,7 +476,8 @@ if($canopenfile) {
 			if($oktag) {
 				$taxo->{$cursub}->{$line} = {};
 				$seclist=[];
-				push @{$chaplist}, {"$line"=>$seclist};
+				$chaplist->{$line} = $seclist;
+				# push @{$chaplist}, {"$line"=>$seclist};
 			}
 			$curchap = $line;
 			$chap = safe_get_id($tables{dbchapter}, 'DBchapter_id',

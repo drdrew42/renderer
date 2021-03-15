@@ -1,0 +1,13 @@
+%= stylesheet '/opl-flex.css'
+
+<div class="container">
+  <div class="left">
+    %= include 'columns/filebrowser'
+  </div>
+  <div class="middle">
+    %= include 'columns/oplIframe'
+  </div>
+  <div class="right">
+    %= include 'columns/tags'
+  </div>
+</div>

@@ -1,7 +1,7 @@
 *.DS_Store
 render_app.conf
-lib/WeBWorK/htdocs/tmp/rederly/gif/*
-lib/WeBWorK/htdocs/tmp/rederly/images/*
+lib/WeBWorK/htdocs/tmp/renderer/gif/*
+lib/WeBWorK/htdocs/tmp/renderer/images/*
 webwork-open-problem-library/
 private/
 tmp/
@@ -44,3 +44,6 @@ inc/
 /MANIFEST.bak
 /pm_to_blib
 /*.zip
+lib/WeBWorK/lib/WebworkClient/nosubmit_format.pl
+lib/WeBWorK/lib/WebworkClient/single_format.pl
+lib/WeBWorK/lib/WebworkClient/static_format.pl

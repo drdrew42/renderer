@@ -1,0 +1,38 @@
+  .wrapper {
+    background-color: whitesmoke;
+    list-style-type: none;
+    padding: 0;
+  }
+
+  .form-row {
+    display: flex;
+    justify-content: flex-end;
+    padding: .5em;
+  }
+
+  .form-row > label {
+    padding: .5em 1em .5em 0;
+  }
+
+  .form-row > input, 
+  .form-row > textarea,
+  .form-row > select {
+    width: 100%;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .form-row > select > option {
+    overflow:hidden;
+  }
+
+  .form-row > input,
+  .form-row > button {
+    padding: .5em;
+  }
+  
+  .form-row > button {
+   background: gray;
+   color: white;
+   border: 0;
+  }

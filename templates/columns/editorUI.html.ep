@@ -1,5 +1,3 @@
-%= my $problem_source
-
 %= stylesheet 'http://codemirror.net/theme/monokai.css'
 %= stylesheet 'http://codemirror.net/theme/rubyblue.css'
 %= stylesheet 'http://codemirror.net/theme/material-palenight.css'

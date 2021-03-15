@@ -68,6 +68,7 @@ sub startup {
   my $r = $self->routes;
 
 	$r->any('/')->to('pages#twocolumn');
+	$r->any('/opl')->to('pages#oplUI');
 
 	$r->any('/health' => sub {shift->rendered(200)});
 
@@ -79,6 +80,7 @@ sub startup {
     $r->post('/render-api/upload')->to('IO#upload');
 	$r->post('/render-api/sma')->to('IO#findNewVersion');
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
+    $r->post('/render-api/tags')->to('IO#setTags');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/request' => sub {shift->requestData2JSON});

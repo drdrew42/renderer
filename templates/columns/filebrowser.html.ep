@@ -1,0 +1,16 @@
+%= stylesheet '/filebrowser.css'
+%= javascript '/filebrowser.js'
+
+<div class='header'>
+    Current directory path: </br>
+    %= form_for '/render-api/cat' => ( method => 'POST', id => 'BackNavigation') => begin
+    %= hidden_field maxDepth => 1
+    %= select_field basePath => ['/'], id => 'back-nav', class => 'back-nav dropdown', onchange => "updateBrowser('BackNavigation', backOut)"
+    %= end
+</div>
+<div class='content'>
+    %= form_for '/render-api/cat' => ( method => 'POST', id => 'FileBrowserForm', class => 'fill-height' ) => begin
+    %= hidden_field maxDepth => 1
+    %= select_field basePath => [[Contrib => 'Contrib/'], [Library => 'Library/'], [Pending => 'Pending/'], [private => 'private/']], id => 'file-list', multiple => undef, class => 'file-list', ondblclick => "updateBrowser('FileBrowserForm', diveIn)"
+    %= end
+</div>

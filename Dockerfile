@@ -1,5 +1,5 @@
 FROM ubuntu:20.04
-MAINTAINER Rederly
+MAINTAINER drdrew42
 
 WORKDIR /usr/app
 ARG DEBIAN_FRONTEND=noninteractive

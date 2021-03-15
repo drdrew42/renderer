@@ -1,0 +1,90 @@
+%= stylesheet '/tags.css'
+
+% my $taxo = '[]';
+% if (open(TAXONOMY, "<:encoding(utf8)", $ENV{WEBWORK_ROOT}.'/htdocs/DATA/tagging-taxonomy.json') ) {
+%     $taxo = join("", <TAXONOMY>);
+%     close TAXONOMY;
+% }
+
+<div class='content'>
+    %= form_for 'render-api/tags' => ( method => 'POST', id => 'problem-tags' ) => begin
+    %= hidden_field 'file' => '', id => 'tag-filename'
+    <div id='tag-wrapper' class='wrapper'>
+        <div class='form-row'>
+            %= label_for 'Status' => 'Review Status: '
+            %= select_field 'Status' => [['not reviewed' => ''], ['Accepted' => 'A'], ['Missing resource' => 'N'], ['Hold for further review' => 'F'], ['Rejected' => 'R']]
+        </div>
+        <div class='form-row'>
+            %= label_for 'Description' => 'Description: '
+            %= text_area 'Description'
+        </div>
+        <div class='form-row'>
+            %= label_for 'Author' => 'Author: '
+            %= text_field 'Author'
+        </div>
+        <div class='form-row'>
+            %= label_for 'Institution' => 'Institution: '
+            %= text_field 'Institution'
+        </div>
+        <div class='form-row'>
+            %= label_for 'Date' => 'Date: '
+            %= text_field 'Date'
+        </div>
+        <div class='form-row'>
+            %= label_for 'DBsubject' => 'DBsubject: '
+            %= select_field 'DBsubject' => [''], id => 'db-subject', onchange => 'updateDBchapter()'
+        </div>
+        <div class='form-row'>
+            %= label_for 'DBchapter' => 'DBchapter: '
+            %= select_field 'DBchapter' => [''], id => 'db-chapter', onchange => 'updateDBsection()'
+        </div>
+        <div class='form-row'>
+            %= label_for 'DBsection' => 'DBsection: '
+            %= select_field 'DBsection' => [''], id => 'db-section'
+        </div>
+        <div class='form-row'>
+            %= label_for 'Level' => 'Level: '
+            %= select_field 'Level' => [1,2,3,4,5,6]
+
+        </div>
+        <div class='form-row'>
+            %= label_for 'Language' => 'Language: '
+            %= text_field 'Language'
+        </div>
+        <div class='form-row'>
+            %= label_for 'Keywords' => 'Keywords: '
+            %= text_field 'Keywords'
+        </div>
+        <div class='form-row'>
+            %= label_for 'Resources' => 'Resources: '
+            %= text_field 'Resources'
+        </div>
+        <div class='form-row'>
+            %= label_for 'MO' => 'MathObjects: '
+            %= check_box 'MO', id => 'MO', value => 1
+        </div>
+        <div class='form-row'>
+            %= label_for 'Static' => 'Static: '
+            %= check_box 'Static', id => 'Static', value => 1
+        </div>
+    </div>
+    <div id='flags-wrapper' class='wrapper'>
+        <div class='form-row'>
+            %= label_for 'hintExists' => 'Hint provided: '
+            %= check_box 'hintExists', id => 'hintExists', value => 1
+        </div>
+        <div class='form-row'>
+            %= label_for 'solutionExists' => 'Solution provided: '
+            %= check_box 'solutionExists', id => 'solutionExists', value => 1
+        </div>
+    </div>
+    <div class = 'form-row'>
+        %= submit_button 'Save Tags' 
+    </div>
+    %= end
+</div>
+
+%= javascript begin
+taxo = <%== $taxo %>;
+%= end
+%= javascript '/tags.js'
