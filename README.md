@@ -1,7 +1,7 @@
-# Rederly Standalone Problem Renderer & Editor
+# WeBWorK Standalone Problem Renderer & Editor
 
-![Commit Activity](https://img.shields.io/github/commit-activity/m/rederly/renderer?style=plastic)
-![License](https://img.shields.io/github/license/rederly/renderer?style=plastic)
+![Commit Activity](https://img.shields.io/github/commit-activity/m/drdrew42/renderer?style=plastic)
+![License](https://img.shields.io/github/license/drdrew42/renderer?style=plastic)
 
 
 This is a PG Renderer derived from the WeBWorK2 codebase
