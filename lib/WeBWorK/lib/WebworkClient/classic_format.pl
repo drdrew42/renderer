@@ -18,19 +18,19 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 
 <!-- JS Loads -->
 <script>function submitAction() {}</script>
-<script type="text/javascript" src="/webwork2_files/js/jquery.min.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/jquery-ui.min.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/jquery.min.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/jquery-ui.min.js"></script>
 <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-MML-AM_CHTML"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/AddOnLoad/addOnLoadEvent.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/legacy/java_init.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/InputColor/color.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/Base64/Base64.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/legacy/vendor/knowl.js"></script>
-<script type="text/javascript" src="/webwork2_files/themes/math4/math4.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mathquill.min.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/MathQuill/mqeditor.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/submithelper.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/AddOnLoad/addOnLoadEvent.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/legacy/java_init.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/InputColor/color.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/Base64/Base64.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/legacy/vendor/knowl.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/themes/math4/math4.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/MathQuill/mathquill.min.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/MathQuill/mqeditor.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/submithelper.js"></script>
 
 $problemHeadText
 $problemPostHeaderText
