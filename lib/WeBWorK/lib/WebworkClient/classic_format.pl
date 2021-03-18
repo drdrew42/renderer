@@ -7,14 +7,14 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 <link rel="shortcut icon" href="/webwork2_files/images/favicon.ico"/>
 
 <!-- CSS Loads -->
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/jquery-ui.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap.min.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap-responsive.min.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/bootstrap.sub.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/themes/math4/math4.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/knowlstyle.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mathquill.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/jquery-ui.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/js/vendor/bootstrap/css/bootstrap.min.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/js/vendor/bootstrap/css/bootstrap-responsive.min.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/bootstrap.sub.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/themes/math4/math4.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/knowlstyle.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/js/apps/MathQuill/mathquill.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/js/apps/MathQuill/mqeditor.css"/>
 
 <!-- JS Loads -->
 <script>function submitAction() {}</script>
