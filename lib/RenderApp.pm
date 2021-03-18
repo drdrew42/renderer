@@ -1,6 +1,5 @@
 package RenderApp;
 use Mojo::Base 'Mojolicious';
-use Mojo::File;
 
 BEGIN {
     use Mojo::File;
@@ -33,9 +32,6 @@ use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
 use RenderApp::Controller::IO;
 
-use WeBWorK::Form;
-use WeBWorK::Constants;
-
 sub startup {
   my $self = shift;
   my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
@@ -44,7 +40,10 @@ sub startup {
   $self->plugin('Config');
   $self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
-#   $self->plugin('leak_tracker');
+  $ENV{problemJWTsecret} = $self->config('problemJWTsecret');
+  $ENV{webworkJWTsecret} = $self->config('webworkJWTsecret');
+  $ENV{JWTanswerHost} = $self->config('JWTanswerHost');
+  $ENV{JWTanswerURL} = $self->config('JWTanswerURL');
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
@@ -63,6 +62,7 @@ sub startup {
 
   # helper to validate incoming request parameters
   $self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
+  $self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
 
   # Routes to controller
   my $r = $self->routes;
@@ -73,14 +73,14 @@ sub startup {
 	$r->any('/health' => sub {shift->rendered(200)});
 
 	$r->post('/render-api/')->to('render#problem');
-	$r->post('/render-api/tap')->to('IO#raw');
+	$r->any('/render-api/tap')->to('IO#raw');
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
 	$r->any('/render-api/find')->to('IO#search');
-    $r->post('/render-api/upload')->to('IO#upload');
+  $r->post('/render-api/upload')->to('IO#upload');
 	$r->post('/render-api/sma')->to('IO#findNewVersion');
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
-    $r->post('/render-api/tags')->to('IO#setTags');
+  $r->post('/render-api/tags')->to('IO#setTags');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/request' => sub {shift->requestData2JSON});

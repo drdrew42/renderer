@@ -141,7 +141,7 @@ sub process_pg_file {
       if $json_rh->{flags}{compoundProblem}{grader};
 
 
-    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path);
+    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path, $inputHash->{problemSource});
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($json_rh);
     return $json;
@@ -174,7 +174,16 @@ sub process_problem {
     # if base64 source is provided, use that over fetching problem path
     if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/ )
     {
-        $source = Encode::decode("UTF-8",decode_base64( $inputs_ref->{problemSource} ) );
+        # such hackery - but Mojo::Promises are so well-built that they are invisible
+        # ... until you leave the Mojo space
+        $inputs_ref->{problemSource} = $inputs_ref->{problemSource}{results}[0] if $inputs_ref->{problemSource} =~ /Mojo::Promise/;
+        # sanitize the base64 encoded source
+        $inputs_ref->{problemSource} =~ s/\s//gm;
+        # while ($source =~ /([^A-Za-z0-9+])/gm) {
+        #     warn "invalid character found: ".sprintf( "\\u%04x", ord($1) )."\n";
+        # }
+        $source = decode_base64($inputs_ref->{problemSource});
+        $source = Encode::decode("UTF-8",$source);
     }
     else {
         ( $adj_file_path, $source ) = get_source($file_path);

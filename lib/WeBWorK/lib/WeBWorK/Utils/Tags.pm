@@ -209,6 +209,7 @@ sub tidytextinfo {
 sub new {
   my $class = shift;
   my $name = shift;
+  my $source = shift;
   my $self = {};
 
   $self->{isplaceholder} = 0;
@@ -218,14 +219,23 @@ sub new {
   my ($text, $edition, $textauthor, $textsection, $textproblem);
   my $textno;
   my $textinfo=[];
+  my @lines = ();
 
-  open(IN,'<:encoding(UTF-8)',"$name") or die "can not open $name: $!";
-  if ($name !~ /pg$/ && $name !~ /\.pg\.[-a-zA-Z0-9_.@]*\.tmp$/) {
-    warn "Not a pg file";  #print caused trouble with XMLRPC 
-    $self->{file}= undef;
-    bless($self, $class);
-    return $self;
+  if ($source) {
+    @lines = split "\n", $source;
+    $name = "";
+  } else {
+    if ( $name !~ /pg$/ && $name !~ /\.pg\.[-a-zA-Z0-9_.@]*\.tmp$/ ) {
+      warn "Not a pg file";    #print caused trouble with XMLRPC
+      $self->{file} = undef;
+      bless( $self, $class );
+      return $self;
+    }
+    open( IN, '<:encoding(UTF-8)', "$name" ) or die "can not open $name: $!";
+    @lines = <IN>;
+    close IN;
   }
+
   my $lineno = 0;
   $self->{file} = "$name";
 
@@ -240,7 +250,7 @@ sub new {
   $self->{Language} = 'en'; # Default to English
 
 
-  while (<IN>) {
+  foreach (@lines) {
     $lineno++;
     eval {
         SWITCH: {
