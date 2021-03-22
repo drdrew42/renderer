@@ -1,6 +1,5 @@
 package RenderApp::Controller::Render;
-use Mojo::Base -async_await;
-use Mojo::Base 'Mojolicious::Controller';
+use Mojo::Base 'Mojolicious::Controller', -async_await;
 use Mojo::JSON qw(encode_json decode_json);
 use Crypt::JWT qw(encode_jwt decode_jwt);
 use MIME::Base64 qw(encode_base64);
@@ -9,23 +8,10 @@ use WeBWorK::Form;
 sub parseRequest {
   my $c = shift;
   my %params = WeBWorK::Form->new_from_paramable($c->req)->Vars;
-  delete $params{JWTanswerURL}; # we are going to replace this?
-  # webworkJWT are the result of problems that have already been rendered
-  # keep the submitted params, but overwrite with JWT settings
-  if (defined $params{webworkJWT}) {
-    $c->log->info("Received JWT: using webworkJWT");
-    my $webworkJWT = $params{webworkJWT};
-    my $claims = decode_jwt(
-      token      => $webworkJWT,
-      key        => $ENV{webworkJWTsecret},
-      verify_iss => $ENV{JWTanswerHost},
-    );
-    # override key-values in params with those provided in the JWT
-    @params{keys %$claims} = values %$claims;
-  }
-  # if this is the initial render, there will be no webworkJWT
-  # in such case, there's no params we would want to keep
-  elsif (defined $params{problemJWT}) {
+  delete $params{JWTanswerURL}; # may ONLY be set by a JWT...
+
+  # problemJWT sets basic problem request configuration and rendering options
+  if (defined $params{problemJWT}) {
     $c->log->info("Received JWT: using problemJWT");
     my $problemJWT = $params{problemJWT};
     my $claims = decode_jwt(
@@ -34,9 +20,29 @@ sub parseRequest {
       verify_aud => $ENV{JWTanswerHost},
     );
     $claims = $claims->{webwork} if defined $claims->{webwork};
-    $claims->{problemJWT} = $problemJWT; # does this only need to happen when the previous line is executed?
-    %params = %$claims;
+    # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
+    # override key-values in params with those provided in the JWT
+    @params{ keys %$claims } = values %$claims;
   }
+
+  # set session-specific info (previous attempts, correct/incorrect count)
+  if (defined $params{webworkJWT}) {
+    $c->log->info("Received JWT: using webworkJWT");
+    my $webworkJWT = $params{webworkJWT};
+    my $claims = decode_jwt(
+      token      => $webworkJWT,
+      key        => $ENV{webworkJWTsecret},
+      verify_iss => $ENV{JWTanswerHost},
+    );
+
+    # only supply key-values that are not already provided
+    # e.g. numCorrect/numIncorrect or restarting an interrupted session
+    foreach my $key (keys %$claims) {
+      $params{$key} ||= $claims->{$key};
+    }
+    # @params{ keys %$claims } = values %$claims;
+  }
+
   return \%params;
 }
 
@@ -79,17 +85,13 @@ async sub problem {
 
   my $file_path = $inputs_ref->{sourceFilePath}; # || $c->session('filePath');
   my $random_seed = $inputs_ref->{problemSeed};
-  my $problem_contents = $inputs_ref->{problemSource};
-  if ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) {
-    $problem_contents = await $inputs_ref->{problemSource};
-    # $c->log->info("Finished encoding problem source: \n$problem_contents");
-  }
+  my $problem_contents = ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) ?
+    await $inputs_ref->{problemSource} :
+    $inputs_ref->{problemSource};
   
-  $c->log->warn(("problem_contents is still a Mojo::Promise")) if $problem_contents =~ /Mojo::Promise/;
   my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents});
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
-  # my %inputs_ref = WeBWorK::Form->new_from_paramable($c->req)->Vars;
   $inputs_ref->{formURL} ||= $c->app->config('form');
   $inputs_ref->{baseURL} ||= $c->app->config('url');
 
@@ -123,31 +125,11 @@ async sub problem {
 
   $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
 
-  if ( defined($inputs_ref->{problemJWT}) && $inputs_ref->{submitAnswers} ) {
-    my $scoreHash = {};
-    my $answerNum = 0;
-    foreach my $id (keys %{$ww_return_hash->{answers}}) {
-      $answerNum++;
-      $scoreHash->{$answerNum} = {
-        ans_id => $id,
-        answer => $ww_return_hash->{answers}{$id} // {},
-        score  => $ww_return_hash->{answers}{$id}{score} // 0,
-      };
-    }
-    my $responseHash = {
-      score => $scoreHash,
-      problemJWT => $inputs_ref->{problemJWT},
-      sessionJWT => 'placeholder',
-    };
-    my $answerJWT = encode_jwt(
-      payload => $responseHash,
-      alg => 'HS256',
-      key => $ENV{problemJWTsecret}, # no answerJWTsecret? problemJWTsecret?
-      auto_iat => 1,
-    );
+  # if answers are submitted and there is a provided answerURL...
+  if ( defined($inputs_ref->{JWTanswerURL}) && $inputs_ref->{submitAnswers} ) {
     my $reqBody = {
       Accept => 'application/json',
-      answerJWT => $answerJWT,
+      answerJWT => $ww_return_hash->{answerJWT},
       Host => $ENV{JWTanswerHost},
     };
     await $c->ua->post_p($ENV{JWTanswerURL}, $reqBody)->
@@ -156,7 +138,7 @@ async sub problem {
   }
 
   $c->respond_to(
-    html => { text => $ww_return_hash->{renderedHTML}},
+    html => { text => $ww_return_hash->{renderedHTML} },
     json => { json => $ww_return_hash }
   );
 }

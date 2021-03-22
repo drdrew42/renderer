@@ -83,15 +83,14 @@ sub formatRenderedProblem {
 	my $self 			  = shift;
 	my $problemText       ='';
 	my $rh_result         = $self->return_object() || {};  # wrap problem in formats
-	$problemText          = "No output from rendered Problem" unless $rh_result ;
+	$problemText          = "No output from rendered Problem" unless $rh_result;
 	print "\nformatRenderedProblem return_object $rh_result = ",join(" ", sort keys %$rh_result),"\n" if $UNIT_TESTS_ON;
 	if (ref($rh_result) and $rh_result->{text} ) {  ##text vs body_text
 		$problemText       =  $rh_result->{text};
 		$problemText      .= $rh_result->{flags}{comment} if $rh_result->{flags}{comment};
 	} else {
 		$problemText       .= "Unable to decode problem text<br/>\n".
-		$self->{error_string}."\n".
-		format_hash_ref($rh_result);
+		                      $self->{error_string}."\n".format_hash_ref($rh_result);
 	}
 	my $problemHeadText       = $rh_result->{header_text}//'';  ##head_text vs header_text
 	my $problemPostHeaderText = $rh_result->{post_header_text}//'';
@@ -145,38 +144,42 @@ sub formatRenderedProblem {
     #################################################
 
 	$self->{outputformats}={};
-	my $XML_URL      	 =  $self->url//'';
-	my $FORM_ACTION_URL  =  $self->{form_action_url}//'';
-	my $SITE_URL         =  $self->{url}//'';
-	my $courseID         =  $self->{courseID}//'';
-	my $userID           =  $self->{userID}//'';
-	my $course_password  =  $self->{course_password}//'';
-	my $problemSeed      =  $self->{inputs_ref}->{problemSeed}//6666;
-	my $session_key      =  $rh_result->{session_key}//'';
-	my $displayMode      =  $self->{inputs_ref}->{displayMode}//'MathJax';
+        my $XML_URL         = $self->url                         // '';
+        my $FORM_ACTION_URL = $self->{form_action_url}           // '';
+        my $SITE_URL        = $self->{url}                       // '';
+		my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
+        my $courseID        = $self->{courseID}                  // '';
+        my $userID          = $self->{userID}                    // '';
+        my $course_password = $self->{course_password}           // '';
+        my $session_key     = $rh_result->{session_key}          // '';
+        my $displayMode     = $self->{inputs_ref}{displayMode}   // 'MathJax';
+		my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
+		my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
 
-	my $previewMode      =  defined($self->{inputs_ref}->{previewAnswers})||0;
-	my $checkMode        =  defined($self->{inputs_ref}->{checkAnswers})||0;
-	my $submitMode       =  defined($self->{inputs_ref}->{submitAnswers})||0;
-	my $showCorrectMode  =  defined($self->{inputs_ref}->{showCorrectAnswers})||0;
+        my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
+        my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
+        my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
+        my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
+
         # problemIdentifierPrefix can be added to the request as a parameter.
         # It adds a prefix to the
         # identifier used by the  format so that several different problems
         # can appear on the same page.
-	my $problemIdentifierPrefix = $self->{inputs_ref}->{problemIdentifierPrefix} //'';
-  my $problemResult    =  $rh_result->{problem_result}//'';
-  my $problemState     =  $rh_result->{problem_state}//'';
-	my $showPartialCorrectAnswers = $self->{inputs_ref}->{showPartialCorrectAnswers}//$rh_result->{flags}{showPartialCorrectAnswers};
-  my $showSummary      = ($self->{inputs_ref}->{showSummary})//1; #default to show summary for the moment
-	my $formLanguage     = ($self->{inputs_ref}->{language})//'en';
-
-	my $scoreSummary     =  '';
+        my $problemIdentifierPrefix =
+          $self->{inputs_ref}->{problemIdentifierPrefix} // '';
+        my $problemResult = $rh_result->{problem_result} // '';
+        my $problemState  = $rh_result->{problem_state}  // '';
+        my $showPartialCorrectAnswers = $self->{inputs_ref}{showPartialCorrectAnswers}
+          // $rh_result->{flags}{showPartialCorrectAnswers};
+        my $showSummary   = $self->{inputs_ref}{showSummary} // 1;    #default to show summary for the moment
+        my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
+        my $scoreSummary  = '';
 
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$rh_answers,
-		answersSubmitted       => $self->{inputs_ref}->{answersSubmitted}//0,
+		answersSubmitted       => $self->{inputs_ref}{answersSubmitted}//0,
 		answerOrder            => $answerOrder//[],
-		displayMode            => $self->{inputs_ref}->{displayMode},
+		displayMode            => $self->{inputs_ref}{displayMode},
 		imgGen                 => $imgGen,
 		ce                     => '',	#used only to build the imgGen
 		showAnswerNumbers      => 0,

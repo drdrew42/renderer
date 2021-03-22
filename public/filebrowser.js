@@ -115,13 +115,18 @@ function updateIframe(html) {
     container.srcdoc = html;
 }
 
+function mergeArrays() {
+    var merged = [];
+    var args = Array.prototype.slice.call(arguments);
+    args.forEach( (arg) => merged = merged.concat(arg) );
+    merged.filter((el, ind, arr) => (el && arr.indexOf(el) === ind));
+    return merged;
+}
+
 function updateMetadata(data) {
-    // merge resources arrays:
-    console.log('assets: ', data.assets);
-    console.log('resources: ', data.tags.resources);
-    // obscene, but merges the two sources and eliminates duplicates
-    data.tags.resources = data.tags.resources.concat(data.assets).filter((s,i,a)=>a.indexOf(s)===i);
-    console.log(data.tags.resources);
+    // obscene, but merges the two sources and eliminates duplicates, ignores undef
+    data.tags.resources = mergeArrays(data.tags.resources, data.resources, data.pgResources);
+
     if (data.tags.isplaceholder === 1) {
         // reset all form-fields
         var tagContainer = window.document.getElementById('tag-wrapper');

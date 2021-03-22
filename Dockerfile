@@ -35,7 +35,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
-RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait \
+RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait Crypt::JWT \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 ENV MOJO_MODE=production

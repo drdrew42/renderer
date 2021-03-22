@@ -42,7 +42,7 @@ sub startup {
   $self->secrets($self->config('secrets'));
   $ENV{problemJWTsecret} = $self->config('problemJWTsecret');
   $ENV{webworkJWTsecret} = $self->config('webworkJWTsecret');
-  $ENV{JWTanswerHost} = $self->config('JWTanswerHost');
+  $ENV{SITE_HOST} = $self->config('SITE_HOST');
   $ENV{JWTanswerURL} = $self->config('JWTanswerURL');
 
   # Models

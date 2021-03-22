@@ -281,7 +281,7 @@ sub new {
                 last SWITCH;
             }
             if (/#\s*\bRESOURCES\((.*)\)/i) {
-                my @resc = keywordcleaner($1);    # splits on comma
+                my @resc = split ',', $1;
                 s/["'\s]*$//g for (@resc);
                 s/^["'\s]*//g for (@resc);
                 @resc              = grep { not /^\s*'?\s*'?\s*$/ } @resc;

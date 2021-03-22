@@ -8,7 +8,6 @@ package RenderApp::Controller::RenderProblem;
 use Time::HiRes qw/time/;
 use Date::Format;
 use MIME::Base64 qw(encode_base64 decode_base64);
-use Getopt::Long qw[:config no_ignore_case bundling];
 use File::Find;
 use FileHandle;
 use File::Path;
@@ -18,6 +17,7 @@ use File::Basename;
 use String::ShellQuote;
 use Cwd 'abs_path';
 use JSON::XS;
+use Crypt::JWT qw( encode_jwt );
 
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
@@ -116,20 +116,23 @@ sub process_pg_file {
     my $html    = $formatter->formatRenderedProblem;
     my $pg_obj  = $formatter->{return_object};
     my $json_rh = {
-        renderedHTML => $html,
-        answers      => $pg_obj->{answers},
-        debug        => {
-            perl_warn => Encode::decode("UTF-8", decode_base64( $pg_obj->{WARNINGS} ) ),
-            pg_warn   => $pg_obj->{warning_messages},
-            debug     => $pg_obj->{debug_messages},
-            internal  => $pg_obj->{internal_debug_messages}
+        renderedHTML      => $html,
+        answers           => $pg_obj->{answers},
+        debug             => {
+            perl_warn     => Encode::decode("UTF-8", decode_base64( $pg_obj->{WARNINGS} ) ),
+            pg_warn       => $pg_obj->{warning_messages},
+            debug         => $pg_obj->{debug_messages},
+            internal      => $pg_obj->{internal_debug_messages}
         },
-        problem_result => $pg_obj->{problem_result},
-        problem_state  => $pg_obj->{problem_state},
-        flags          => $pg_obj->{flags},
-        form_data      => $inputHash,
-        assets         => $pg_obj->{assets},
+        problem_result    => $pg_obj->{problem_result},
+        problem_state     => $pg_obj->{problem_state},
+        flags             => $pg_obj->{flags},
+        resources         => $pg_obj->{resources},
+        form_data         => $inputHash,
+        pgResources       => $pg_obj->{pgResources},
         raw_metadata_text => $pg_obj->{raw_metadata_text},
+        sessionJWT        => $pg_obj->{sessionJWT},
+        answerJWT         => $pg_obj->{answerJWT},
     };
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
@@ -182,8 +185,7 @@ sub process_problem {
         # while ($source =~ /([^A-Za-z0-9+])/gm) {
         #     warn "invalid character found: ".sprintf( "\\u%04x", ord($1) )."\n";
         # }
-        $source = decode_base64($inputs_ref->{problemSource});
-        $source = Encode::decode("UTF-8",$source);
+        $source = Encode::decode("UTF-8", decode_base64( $inputs_ref->{problemSource} ) );
     }
     else {
         ( $adj_file_path, $source ) = get_source($file_path);
@@ -196,28 +198,25 @@ sub process_problem {
     }
     my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\);/s);
 
-    my $assets = [];
+    # included (external) pg content is not recorded by PGalias
+    # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
+    my $pgResources = [];
     while ($source =~ m/includePG(?:problem|file)\(["'](.*)["']\);/g )
     {
-        warn "PG asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
-        my $pgAsset = $1;
-        $pgAsset = dirname($file_path) . "/" . $pgAsset if ($pgAsset =~ /^[^\/]*\.pg$/);
-        warn "Recording PG asset as: $pgAsset\n" if $UNIT_TESTS_ON;
-        # warn "REDIRECTING TO: " . $redirect . "\n" if $UNIT_TESTS_ON;
-        # ( $adj_file_path, $source ) = get_source($redirect);
-        push @$assets, $pgAsset;
+        warn "PG asset reference found: $1\n" if $UNIT_TESTS_ON;
+        push @$pgResources, $1;
     }
 
-    # this does not capture _all_ image asset references, unfortunately...
-    # asset filenames may be stored as variables before image() is called
-    while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
-        warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
-        my $image = $1;
-        $image =~ s/['"]//g;
-        $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
-        warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
-        push @$assets, $image;
-    }
+    # # this does not capture _all_ image asset references, unfortunately...
+    # # asset filenames may be stored as variables before image() is called
+    # while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
+    #     warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
+    #     my $image = $1;
+    #     $image =~ s/['"]//g;
+    #     $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
+    #     warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
+    #     push @$assets, $image;
+    # }
 
     # $inputs_ref->{pathToProblemFile} = $adj_file_path
     #   if ( defined $adj_file_path );
@@ -243,10 +242,15 @@ sub process_problem {
     $return_object = standaloneRenderer( $ce, \$source, $inputs_ref );
 
     # stash assets list in $return_object
-    $return_object->{assets} = $assets;
+    $return_object->{pgResources} = $pgResources;
 
     # stash raw metadata text in $return_object
     $return_object->{raw_metadata_text} = $raw_metadata_text;
+
+    # generate sessionJWT to store session data and answerJWT to update grade store
+    my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
+    $return_object->{sessionJWT} = $sessionJWT // '';
+    $return_object->{answerJWT}  = $answerJWT // '';
 
     #######################################################################
     # Handle errors
@@ -273,7 +277,7 @@ sub process_problem {
     ##################################################
 
     # PG/macros/PG.pl wipes out problemSeed -- put it back!
-    $inputs_ref->{problemSeed} = $problem_seed;
+    # $inputs_ref->{problemSeed} = $problem_seed; # NO DONT
     $inputs_ref->{displayMode} = $display_mode;
 
  	# my $encoded_source = encode_base64($source); # create encoding of source_file;
@@ -427,6 +431,7 @@ sub standaloneRenderer {
         problem_result          => $pg->{result},
         problem_state           => $pg->{state},
         flags                   => $pg->{flags},
+        resources               => [ keys %{$pg->{pgcore}{PG_alias}{resource_list}} ],
         warning_messages        => $pgwarning_messages,
         debug_messages          => $pgdebug_messages,
         internal_debug_messages => $internal_debug_messages,
@@ -450,6 +455,47 @@ sub get_current_process_memory {
     state $pt = Proc::ProcessTable->new;
     my %info = map { $_->pid => $_ } @{ $pt->table };
     return $info{$$}->rss;
+}
+
+# expects a pg/result_object and a ref to submitted formdata
+# generates a sessionJWT and an answerJWT
+sub generateJWTs {
+    my $pg = shift;
+    my $inputs_ref = shift;
+    my $sessionHash = {};
+    my $scoreHash = {};
+
+    # if no problemJWT exists, then why bother?
+    return unless $inputs_ref->{problemJWT};
+
+    # store the current answer/response state for each entry
+    foreach my $ans (keys %{$pg->{answers}}) {
+        $sessionHash->{$ans}                  = $inputs_ref->{$ans};
+        $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
+        $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
+        
+
+        $scoreHash->{ans_id} = $ans;
+        $scoreHash->{answer} = $pg->{answers}{$ans} // {},
+        $scoreHash->{score}  = $pg->{answers}{score} // 0,
+    }
+
+    # keep track of the number of correct/incorrect submissions
+    $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
+    $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
+
+    # create and return the session JWT
+    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
+
+    # form answerJWT
+    my $responseHash = {
+        score => $scoreHash,
+        problemJWT => $inputs_ref->{problemJWT},
+        sessionJWT => $sessionJWT,
+    };
+    my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
+
+    return ($sessionJWT, $answerJWT);
 }
 
 # insert_mathquill_responses subroutine

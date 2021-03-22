@@ -4,7 +4,7 @@
   form => '/render-api',
   problemJWTsecret => "shared",
   webworkJWTsecret => "private",
-  JWTanswerHost => "http://localhost:3000/",
+  SITE_HOST => "http://localhost:3000",
   JWTanswerURL => "http://localhost:3000/request",
   hypnotoad => {
     listen => ['http://*:3000'],

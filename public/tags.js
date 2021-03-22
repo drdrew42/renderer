@@ -43,24 +43,12 @@ function submitTags(e) {
 
     // disassemble the Description
     formData = parseStringAndAppend(formData, 'Description');
-    // var description = window.document.getElementsByName('Description')[0].value;
-    // var descriptionArray = description.split("\n");
-    // descriptionArray.forEach(line => formData.append('DESCRIPTION', line));
-    // formData.delete('Description');
 
     // disassemble the list of keywords
     formData = parseStringAndAppend(formData, 'Keywords');
-    // var keywords = window.document.getElementsByName('Keywords')[0].value;
-    // var keywordArray = keywords.split(',').map(word => word.trim());
-    // keywordArray.forEach(keyword => formData.append('keywords', keyword));
-    // formData.delete('Keywords');
 
     // disassemble any resources
     formData = parseStringAndAppend(formData, 'Resources');
-    // var resources = window.document.getElementsByName('Resources')[0].value;
-    // var resourceArray = resources.split(',').map(resource => resource.trim());
-    // resourceArray.forEach(resource => formData.append('resources', resource));
-    // formData.delete('Resources');
 
     var params = {
         body: formData,
