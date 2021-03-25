@@ -196,7 +196,7 @@ sub process_problem {
         #$inputs_ref->{sourceFilePath} = $adj_file_path;
         #$inputs_ref->{pathToProblemFile} = $adj_file_path;
     }
-    my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\);/s);
+    my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
 
     # included (external) pg content is not recorded by PGalias
     # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
