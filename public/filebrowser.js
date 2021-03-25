@@ -119,8 +119,7 @@ function mergeArrays() {
     var merged = [];
     var args = Array.prototype.slice.call(arguments);
     args.forEach( (arg) => merged = merged.concat(arg) );
-    merged.filter((el, ind, arr) => (el && arr.indexOf(el) === ind));
-    return merged;
+    return merged.filter((el, ind, arr) => (el && arr.indexOf(el) === ind));
 }
 
 function updateMetadata(data) {
