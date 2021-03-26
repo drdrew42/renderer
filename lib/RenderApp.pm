@@ -40,10 +40,10 @@ sub startup {
   $self->plugin('Config');
   $self->plugin('TagHelpers');
   $self->secrets($self->config('secrets'));
-  $ENV{problemJWTsecret} = $self->config('problemJWTsecret');
-  $ENV{webworkJWTsecret} = $self->config('webworkJWTsecret');
-  $ENV{SITE_HOST} = $self->config('SITE_HOST');
-  $ENV{JWTanswerURL} = $self->config('JWTanswerURL');
+  $ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
+  $ENV{webworkJWTsecret} //= $self->config('webworkJWTsecret');
+  $ENV{SITE_HOST} //= $self->config('SITE_HOST');
+  $ENV{JWTanswerURL} //= $self->config('JWTanswerURL');
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });

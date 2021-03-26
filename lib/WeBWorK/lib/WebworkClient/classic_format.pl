@@ -4,7 +4,7 @@ $simple_format = <<'ENDPROBLEMTEMPLATE';
 <head>
 <meta charset='utf-8'>
 <base href="$SITE_URL">
-<link rel="shortcut icon" href="/webwork2_files/images/favicon.ico"/>
+<link rel="shortcut icon" href="$SITE_HOST/webwork2_files/images/favicon.ico"/>
 
 <!-- CSS Loads -->
 <link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/jquery-ui.css"/>
