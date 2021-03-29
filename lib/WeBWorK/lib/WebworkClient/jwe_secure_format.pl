@@ -31,7 +31,7 @@ $jwe_format = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="$SITE_HOST/webwork2_files/js/submithelper.js"></script>
 $problemHeadText
 $problemPostHeaderText
-<title>WeBWorK using host: $SITE_HOST$SITE_URL, format: simple seed: $problemSeed</title>
+<title>WeBWorK using host: $SITE_HOST</title>
 </head>
 <body>
   <div class="container-fluid">

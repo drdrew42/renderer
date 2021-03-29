@@ -54,7 +54,7 @@ sub fetchRemoteSource_p {
   my $req_referrer = $c->req->headers->referrer || 'no referrer';
   my $header       = {
       Accept    => 'text/html;charset=utf-8',
-      Requestor => $req_origin,
+      Requester => $req_origin,
       Referrer  => $req_referrer,
   };
 
