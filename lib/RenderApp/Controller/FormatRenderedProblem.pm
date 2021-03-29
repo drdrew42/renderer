@@ -46,7 +46,7 @@ sub new {
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
-		url            => $ENV{baseURL},
+		baseURL        => $ENV{baseURL},
 		form_action_url =>$ENV{formURL},
 		maketext   	   => sub {return @_},
 		courseID       => 'foo',  # optional?
@@ -145,7 +145,7 @@ sub formatRenderedProblem {
 
 	$self->{outputformats}={};
         my $XML_URL         = $self->url                         // '';
-        my $FORM_ACTION_URL = $self->{form_action_url}           // '';
+        my $FORM_ACTION_URL = $self->{baseURL} + $self->{form_action_url}           // '';
         my $SITE_URL        = $self->{baseURL}                   // '';
 				my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
         my $courseID        = $self->{courseID}                  // '';
