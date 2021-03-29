@@ -58,7 +58,7 @@ sub fetchRemoteSource_p {
       Referrer  => $req_referrer,
   };
 
-  # don't worry about overriding problemSource - it *shouldn't exist* if libraryURL is present
+  # don't worry about overriding problemSource - it *shouldn't exist* if problemSourceURL is present
   return $c->ua->max_redirects(5)->get_p( $url => $header )->
     then(
       sub {
@@ -81,7 +81,7 @@ sub fetchRemoteSource_p {
 async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
-  $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{libraryURL}) if $inputs_ref->{libraryURL};
+  $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath}; # || $c->session('filePath');
   my $random_seed = $inputs_ref->{problemSeed};
