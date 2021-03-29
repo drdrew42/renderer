@@ -57,10 +57,9 @@ sub fetchRemoteSource_p {
       Requester => $req_origin,
       Referrer  => $req_referrer,
   };
-  say($url);
 
   # don't worry about overriding problemSource - it *shouldn't exist* if libraryURL is present
-  return $c->ua->get_p( $url => $header )->
+  return $c->ua->max_redirects(5)->get_p( $url => $header )->
     then(
       sub {
           my $tx = shift;
