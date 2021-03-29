@@ -16,38 +16,38 @@ $nextBlock = <<'ENDPROBLEMTEMPLATE';
 <head>
 <meta charset='utf-8'>
 <base href="TO_SET_LATER_SITE_URL">
-<link rel="shortcut icon" href="/webwork2_files/images/favicon.ico"/>
+<link rel="shortcut icon" href="$SITE_HOST/webwork2_files/images/favicon.ico"/>
 ENDPROBLEMTEMPLATE
 
 push( @pairs_for_json, "head_part010", $nextBlock );
 
 $nextBlock = <<'ENDPROBLEMTEMPLATE';
 <!-- CSS Loads -->
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/js/vendor/bootstrap/css/bootstrap-responsive.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/jquery-ui-1.8.18.custom.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/vendor/font-awesome/css/font-awesome.min.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/themes/math4/math4.css"/>
-<link rel="stylesheet" type="text/css" href="/webwork2_files/css/knowlstyle.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/js/vendor/bootstrap/css/bootstrap.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/js/vendor/bootstrap/css/bootstrap-responsive.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/jquery-ui-1.8.18.custom.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/vendor/font-awesome/css/font-awesome.min.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/themes/math4/math4.css"/>
+<link rel="stylesheet" type="text/css" href="$SITE_HOST/webwork2_files/css/knowlstyle.css"/>
 ENDPROBLEMTEMPLATE
 
 push( @pairs_for_json, "head_part100", $nextBlock );
 
 $nextBlock = <<'ENDPROBLEMTEMPLATE';
 <!-- JS Loads -->
-<script type="text/javascript" src="/webwork2_files/js/vendor/jquery/jquery.js"></script>
-<script type="text/javascript" src="/webwork2_files/mathjax/MathJax.js?config=TeX-MML-AM_HTMLorMML-full"></script>
-<script type="text/javascript" src="/webwork2_files/js/jquery-ui-1.9.0.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/vendor/bootstrap/js/bootstrap.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/AddOnLoad/addOnLoadEvent.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/legacy/java_init.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/InputColor/color.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/Base64/Base64.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/vendor/underscore/underscore.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/legacy/vendor/knowl.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/apps/Problem/problem.js"></script>
-<script type="text/javascript" src="/webwork2_files/themes/math4/math4.js"></script>
-<script type="text/javascript" src="/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/vendor/jquery/jquery.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/mathjax/MathJax.js?config=TeX-MML-AM_HTMLorMML-full"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/jquery-ui-1.9.0.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/vendor/bootstrap/js/bootstrap.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/AddOnLoad/addOnLoadEvent.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/legacy/java_init.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/InputColor/color.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/Base64/Base64.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/vendor/underscore/underscore.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/legacy/vendor/knowl.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/apps/Problem/problem.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/themes/math4/math4.js"></script>
+<script type="text/javascript" src="$SITE_HOST/webwork2_files/js/vendor/iframe-resizer/js/iframeResizer.contentWindow.min.js"></script>
 ENDPROBLEMTEMPLATE
 
 push( @pairs_for_json, "head_part200", $nextBlock );
