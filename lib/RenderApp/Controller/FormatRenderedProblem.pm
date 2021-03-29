@@ -46,8 +46,8 @@ sub new {
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
-		url            => '/',
-		form_action_url =>'/render-api',
+		url            => $ENV{baseURL},
+		form_action_url =>$ENV{formURL},
 		maketext   	   => sub {return @_},
 		courseID       => 'foo',  # optional?
 		userID         => 'bar',  # optional?
@@ -146,15 +146,15 @@ sub formatRenderedProblem {
 	$self->{outputformats}={};
         my $XML_URL         = $self->url                         // '';
         my $FORM_ACTION_URL = $self->{form_action_url}           // '';
-        my $SITE_URL        = $self->{url}                       // '';
-		my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
+        my $SITE_URL        = $self->{baseURL}                   // '';
+				my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
         my $courseID        = $self->{courseID}                  // '';
         my $userID          = $self->{userID}                    // '';
         my $course_password = $self->{course_password}           // '';
         my $session_key     = $rh_result->{session_key}          // '';
         my $displayMode     = $self->{inputs_ref}{displayMode}   // 'MathJax';
-		my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
-		my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
+				my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
+				my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
 
         my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
         my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;

@@ -88,12 +88,12 @@ async sub problem {
   my $problem_contents = ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) ?
     await $inputs_ref->{problemSource} :
     $inputs_ref->{problemSource};
-  
+
   my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents});
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
-  $inputs_ref->{formURL} ||= $c->app->config('form');
-  $inputs_ref->{baseURL} ||= $c->app->config('url');
+  $inputs_ref->{baseURL} ||= $ENV{baseURL};
+  $inputs_ref->{formURL} ||= $ENV{formURL};
 
   $inputs_ref->{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
