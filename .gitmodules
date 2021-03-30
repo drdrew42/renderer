@@ -1,6 +1,3 @@
 [submodule "lib/PG"]
 	path = lib/PG
 	url = https://github.com/openwebwork/pg.git
-[submodule "webwork-open-problem-library"]
-	path = webwork-open-problem-library
-	url = https://github.com/openwebwork/webwork-open-problem-library.git
