@@ -45,6 +45,7 @@ RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::Asyn
 
 ENV MOJO_MODE=production
 
+# Clones the OPL into the container. Should be the only difference from ../Dockerfile
 RUN git clone --single-branch --branch master --depth 1 https://github.com/openwebwork/webwork-open-problem-library.git webwork-open-problem-library
 
 COPY . .
