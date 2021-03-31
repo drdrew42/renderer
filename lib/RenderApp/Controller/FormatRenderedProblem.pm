@@ -42,7 +42,7 @@ sub format_hash_ref {
 sub new {
   my $invocant = shift;
   my $class = ref $invocant || $invocant;
-	$self = {
+	$self = { # Is this function redundant given the declarations within sub formatRenderedProblem?
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
@@ -145,7 +145,7 @@ sub formatRenderedProblem {
 
 	$self->{outputformats}={};
         my $XML_URL         = $self->url                         // '';
-        my $FORM_ACTION_URL = ($self->{baseURL} . $self->{form_action_url}) // '';
+        my $FORM_ACTION_URL = $self->{form_action_url}           // '';
         my $SITE_URL        = $self->{baseURL}                   // '';
 				my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
         my $courseID        = $self->{courseID}                  // '';
@@ -155,6 +155,7 @@ sub formatRenderedProblem {
         my $displayMode     = $self->{inputs_ref}{displayMode}   // 'MathJax';
 				my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
 				my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
+				my $webwork_htdocs_url  = $self->{ce}->{webworkURLs}->{htdocs};
 
         my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
         my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
