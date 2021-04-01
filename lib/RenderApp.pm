@@ -53,6 +53,9 @@ sub startup {
 	if($ENV{baseURL} eq '/'){
 		$ENV{baseURL} = '';
 	}
+	if ( $ENV{SITE_HOST} =~ m|/$| ) {  # remove trailing slash
+		chop($ENV{SITE_HOST})
+	}
 	if ( $ENV{baseURL} !~ m|^https?://| ) {
 		$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
 	}
