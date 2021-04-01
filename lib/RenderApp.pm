@@ -53,9 +53,12 @@ sub startup {
 	if($ENV{baseURL} eq '/'){
 		$ENV{baseURL} = '';
 	}
-	#TODO
-	$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
-	$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
+	if ( $ENV{baseURL} !~ m|^https?://| ) {
+		$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
+	}
+	if ( $ENV{formURL} !~ m|^https?://| ) {
+		$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
+	}
 
 
   # Models
