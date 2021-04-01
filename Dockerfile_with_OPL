@@ -45,10 +45,15 @@ RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::Asyn
 
 ENV MOJO_MODE=production
 
-# Clones the OPL into the container. Should be the only difference from ../Dockerfile
-RUN curl -sOL "https://github.com/openwebwork/webwork-open-problem-library/archive/refs/heads/master.tar.gz"\
-&& tar -zxf master.tar.gz \
-&& mv webwork-open-problem-library-master webwork-open-problem-library
+# Clones the OPL into the container. Should be the only difference from ./Dockerfile
+RUN curl -sOL "https://github.com/openwebwork/webwork-open-problem-library/archive/refs/heads/master.tar.gz"
+RUN tar -zxf master.tar.gz
+RUN mkdir webwork-open-problem-library
+RUN mv webwork-open-problem-library-master/Contrib/ webwork-open-problem-library/Contrib/
+RUN mv webwork-open-problem-library-master/OpenProblemLibrary/ webwork-open-problem-library/OpenProblemLibrary/
+RUN rm master.tar.gz
+RUN rm -r webwork-open-problem-library-master/
+
 
 COPY . .
 
