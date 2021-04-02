@@ -198,6 +198,8 @@ sub process_problem {
     }
     my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
 
+    # TODO verify line ending are LF instead of CRLF
+
     # included (external) pg content is not recorded by PGalias
     # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
     my $pgResources = [];
@@ -463,7 +465,7 @@ sub get_current_process_memory {
 sub generateJWTs {
     my $pg = shift;
     my $inputs_ref = shift;
-    my $sessionHash = {'answersSubmitted' => 1};
+    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}};
     my $scoreHash = {};
 
     # if no problemJWT exists, then why bother?
@@ -471,28 +473,29 @@ sub generateJWTs {
 
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
+        # TODO: Fix foreach. Currently only keeps last entry
         $sessionHash->{$ans}                  = $inputs_ref->{$ans};
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
 
-
-        $scoreHash->{ans_id} = $ans;
-        $scoreHash->{answer} = $pg->{answers}{$ans} // {},
-        $scoreHash->{score}  = $pg->{answers}{score} // 0,
+        $scoreHash->{$ans}   = unbless($pg->{answers}{$ans});
+        # $scoreHash->{ans_id} = $ans;
+        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
+        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
     }
+    # use Data::Dumper;
+    # print Dumper($scoreHash);
 
     # keep track of the number of correct/incorrect submissions
     $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
     $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
-    $sessionHash->{iss} = $ENV{SITE_HOST};
 
     # create and return the session JWT
     my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
 
     # form answerJWT
-    # TODO Fix answerHash error: encountered object 'AnswerHash=HASH(0x55d00bcb0520)', but neither allow_blessed, convert_blessed nor allow_tags settings are enabled (or TO_JSON\/FREEZE method missing)
     my $responseHash = {
-        # score => $scoreHash,
+        score => $scoreHash,
         problemJWT => $inputs_ref->{problemJWT},
         sessionJWT => $sessionJWT,
     };
