@@ -45,7 +45,7 @@ $problemPostHeaderText
           </div>
           $scoreSummary
           $LTIGradeMessage
-          <input type="hidden" name="webworkJWT" value="$webworkJWT">
+          <input type="hidden" name="sessionJWT" value="$sessionJWT">
           <input type="hidden" name="problemJWT" value="$problemJWT">
           <p>
             <input type="submit" name="previewAnswers"  value="$STRING_Preview" />

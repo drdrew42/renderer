@@ -43,7 +43,7 @@ sub startup {
 	$self->plugin('TagHelpers');
 	$self->secrets($self->config('secrets'));
 	$ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
-	$ENV{webworkJWTsecret} //= $self->config('webworkJWTsecret');
+	$ENV{sessionJWTsecret} //= $self->config('sessionJWTsecret');
 	$ENV{baseURL} //= $self->config('baseURL');
 	$ENV{formURL} //= $self->config('formURL');
 	$ENV{SITE_HOST} //= $self->config('SITE_HOST');

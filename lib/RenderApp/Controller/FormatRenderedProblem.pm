@@ -104,6 +104,7 @@ sub formatRenderedProblem {
 		join( " ", %{ $rh_result->{PG_ANSWERS_HASH} } )
 		if $UNIT_TESTS_ON;
 
+
 	#################################################
 	# regular Perl warning messages generated with warn
 	#################################################
@@ -158,10 +159,14 @@ sub formatRenderedProblem {
 				my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
 				my $webwork_htdocs_url  = $self->{ce}->{webworkURLs}->{htdocs};
 
+
         my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
         my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
         my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
         my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
+
+				# use Data::Dumper;
+				# print Dumper($self->{inputs_ref});
 
         # problemIdentifierPrefix can be added to the request as a parameter.
         # It adds a prefix to the
@@ -230,7 +235,8 @@ sub formatRenderedProblem {
 # Return interpolated problem template
 ######################################################
 
-	my $format_name = $self->{inputs_ref}->{outputformat}//'formatRenderedProblemFailure';
+	my $format_name = ($submitMode && $self->{inputs_ref}->{answerOutputFormat}) || $self->{inputs_ref}->{outputformat};
+	$format_name //= 'formatRenderedProblemFailure';
 	# find the appropriate template in WebworkClient folder
 	my $template = do("WebworkClient/${format_name}_format.pl")//'';
 	die "Unknown format name $format_name" unless $template;

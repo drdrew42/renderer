@@ -17,7 +17,7 @@ sub parseRequest {
     my $claims = decode_jwt(
       token => $problemJWT,
       key => $ENV{problemJWTsecret},
-      verify_aud => $ENV{JWTanswerHost},
+      verify_aud => $ENV{SITE_HOST},
     );
     $claims = $claims->{webwork} if defined $claims->{webwork};
     # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
@@ -26,13 +26,13 @@ sub parseRequest {
   }
 
   # set session-specific info (previous attempts, correct/incorrect count)
-  if (defined $params{webworkJWT}) {
-    $c->log->info("Received JWT: using webworkJWT");
-    my $webworkJWT = $params{webworkJWT};
+  if (defined $params{sessionJWT}) {
+    $c->log->info("Received JWT: using sessionJWT");
+    my $sessionJWT = $params{sessionJWT};
     my $claims = decode_jwt(
-      token      => $webworkJWT,
-      key        => $ENV{webworkJWTsecret},
-      verify_iss => $ENV{JWTanswerHost},
+      token      => $sessionJWT,
+      key        => $ENV{sessionJWTsecret},
+      verify_iss => $ENV{SITE_HOST},
     );
 
     # only supply key-values that are not already provided
@@ -130,7 +130,7 @@ async sub problem {
     my $reqBody = {
       Accept => 'application/json',
       answerJWT => $ww_return_hash->{answerJWT},
-      Host => $ENV{JWTanswerHost},
+      Host => $ENV{SITE_HOST},
     };
     await $c->ua->post_p($ENV{JWTanswerURL}, $reqBody)->
     then(sub {$c->log->info(shift)})->

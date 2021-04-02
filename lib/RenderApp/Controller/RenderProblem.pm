@@ -89,7 +89,7 @@ sub process_pg_file {
     $inputHash->{displayMode} =
       'MathJax';    #	is there any reason for this to be anything else?
     $inputHash->{sourceFilePath} ||= $file_path;
-    $inputHash->{outputformat}   ||= 'static';
+    $inputHash->{outputformat}   ||= $inputHash->{outputFormat} || 'static';
     $inputHash->{problemSeed}    ||= $problem_seed;
     $inputHash->{language}       ||= 'en';
 
@@ -463,7 +463,7 @@ sub get_current_process_memory {
 sub generateJWTs {
     my $pg = shift;
     my $inputs_ref = shift;
-    my $sessionHash = {};
+    my $sessionHash = {'answersSubmitted' => 1};
     my $scoreHash = {};
 
     # if no problemJWT exists, then why bother?
@@ -484,13 +484,15 @@ sub generateJWTs {
     # keep track of the number of correct/incorrect submissions
     $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
     $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
+    $sessionHash->{iss} = $ENV{SITE_HOST};
 
     # create and return the session JWT
-    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
+    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
 
     # form answerJWT
+    # TODO Fix answerHash error: encountered object 'AnswerHash=HASH(0x55d00bcb0520)', but neither allow_blessed, convert_blessed nor allow_tags settings are enabled (or TO_JSON\/FREEZE method missing)
     my $responseHash = {
-        score => $scoreHash,
+        # score => $scoreHash,
         problemJWT => $inputs_ref->{problemJWT},
         sessionJWT => $sessionJWT,
     };
