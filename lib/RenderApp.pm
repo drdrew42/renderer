@@ -32,18 +32,37 @@ use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
 use RenderApp::Controller::IO;
 
+
 sub startup {
   my $self = shift;
   my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
-  # config
-  $self->plugin('Config');
-  $self->plugin('TagHelpers');
-  $self->secrets($self->config('secrets'));
-  $ENV{problemJWTsecret} = $self->config('problemJWTsecret');
-  $ENV{webworkJWTsecret} = $self->config('webworkJWTsecret');
-  $ENV{SITE_HOST} = $self->config('SITE_HOST');
-  $ENV{JWTanswerURL} = $self->config('JWTanswerURL');
+
+	# Merge environment variables with config file
+	$self->plugin('Config');
+	$self->plugin('TagHelpers');
+	$self->secrets($self->config('secrets'));
+	$ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
+	$ENV{sessionJWTsecret} //= $self->config('sessionJWTsecret');
+	$ENV{baseURL} //= $self->config('baseURL');
+	$ENV{formURL} //= $self->config('formURL');
+	$ENV{SITE_HOST} //= $self->config('SITE_HOST');
+	$ENV{JWTanswerURL} //= $self->config('JWTanswerURL');
+
+	# validate configration urls
+	if($ENV{baseURL} eq '/'){
+		$ENV{baseURL} = '';
+	}
+	if ( $ENV{SITE_HOST} =~ m|/$| ) {  # remove trailing slash
+		chop($ENV{SITE_HOST})
+	}
+	if ( $ENV{baseURL} !~ m|^https?://| ) {
+		$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
+	}
+	if ( $ENV{formURL} !~ m|^https?://| ) {
+		$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
+	}
+
 
   # Models
   $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });

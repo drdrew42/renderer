@@ -42,12 +42,12 @@ sub format_hash_ref {
 sub new {
   my $invocant = shift;
   my $class = ref $invocant || $invocant;
-	$self = {
+	$self = { # Is this function redundant given the declarations within sub formatRenderedProblem?
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
-		url            => '/',
-		form_action_url =>'/render-api',
+		baseURL        => $ENV{baseURL},
+		form_action_url =>$ENV{formURL},
 		maketext   	   => sub {return @_},
 		courseID       => 'foo',  # optional?
 		userID         => 'bar',  # optional?
@@ -98,10 +98,12 @@ sub formatRenderedProblem {
 	my $answerOrder           = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}; #[sort keys %{ $rh_result->{answers} }];
 	my $encoded_source        = $self->encoded_source//'';
 	my $sourceFilePath        = $self->{sourceFilePath}//'';
+	my $problemSourceURL      = $self->{inputs_ref}->{problemSourceURL};
 	my $warnings              = '';
 	print "\n return_object answers ",
 		join( " ", %{ $rh_result->{PG_ANSWERS_HASH} } )
 		if $UNIT_TESTS_ON;
+
 
 	#################################################
 	# regular Perl warning messages generated with warn
@@ -146,20 +148,25 @@ sub formatRenderedProblem {
 	$self->{outputformats}={};
         my $XML_URL         = $self->url                         // '';
         my $FORM_ACTION_URL = $self->{form_action_url}           // '';
-        my $SITE_URL        = $self->{url}                       // '';
-		my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
+        my $SITE_URL        = $self->{baseURL}                   // '';
+				my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
         my $courseID        = $self->{courseID}                  // '';
         my $userID          = $self->{userID}                    // '';
         my $course_password = $self->{course_password}           // '';
         my $session_key     = $rh_result->{session_key}          // '';
         my $displayMode     = $self->{inputs_ref}{displayMode}   // 'MathJax';
-		my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
-		my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
+				my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
+				my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
+				my $webwork_htdocs_url  = $self->{ce}->{webworkURLs}->{htdocs};
+
 
         my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
         my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
         my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
         my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
+
+				# use Data::Dumper;
+				# print Dumper($self->{inputs_ref});
 
         # problemIdentifierPrefix can be added to the request as a parameter.
         # It adds a prefix to the
@@ -228,7 +235,8 @@ sub formatRenderedProblem {
 # Return interpolated problem template
 ######################################################
 
-	my $format_name = $self->{inputs_ref}->{outputformat}//'formatRenderedProblemFailure';
+	my $format_name = ($submitMode && $self->{inputs_ref}->{answerOutputFormat}) || $self->{inputs_ref}->{outputformat};
+	$format_name //= 'formatRenderedProblemFailure';
 	# find the appropriate template in WebworkClient folder
 	my $template = do("WebworkClient/${format_name}_format.pl")//'';
 	die "Unknown format name $format_name" unless $template;

@@ -47,3 +47,4 @@ inc/
 lib/WeBWorK/lib/WebworkClient/nosubmit_format.pl
 lib/WeBWorK/lib/WebworkClient/single_format.pl
 lib/WeBWorK/lib/WebworkClient/static_format.pl
+/.idea/

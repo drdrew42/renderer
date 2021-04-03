@@ -17,7 +17,7 @@ sub parseRequest {
     my $claims = decode_jwt(
       token => $problemJWT,
       key => $ENV{problemJWTsecret},
-      verify_aud => $ENV{JWTanswerHost},
+      verify_aud => $ENV{SITE_HOST},
     );
     $claims = $claims->{webwork} if defined $claims->{webwork};
     # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
@@ -26,13 +26,13 @@ sub parseRequest {
   }
 
   # set session-specific info (previous attempts, correct/incorrect count)
-  if (defined $params{webworkJWT}) {
-    $c->log->info("Received JWT: using webworkJWT");
-    my $webworkJWT = $params{webworkJWT};
+  if (defined $params{sessionJWT}) {
+    $c->log->info("Received JWT: using sessionJWT");
+    my $sessionJWT = $params{sessionJWT};
     my $claims = decode_jwt(
-      token      => $webworkJWT,
-      key        => $ENV{webworkJWTsecret},
-      verify_iss => $ENV{JWTanswerHost},
+      token      => $sessionJWT,
+      key        => $ENV{sessionJWTsecret},
+      verify_iss => $ENV{SITE_HOST},
     );
 
     # only supply key-values that are not already provided
@@ -54,12 +54,12 @@ sub fetchRemoteSource_p {
   my $req_referrer = $c->req->headers->referrer || 'no referrer';
   my $header       = {
       Accept    => 'text/html;charset=utf-8',
-      Requestor => $req_origin,
+      Requester => $req_origin,
       Referrer  => $req_referrer,
   };
 
-  # don't worry about overriding problemSource - it *shouldn't exist* if libraryURL is present
-  return $c->ua->get_p( $url => $header )->
+  # don't worry about overriding problemSource - it *shouldn't exist* if problemSourceURL is present
+  return $c->ua->max_redirects(5)->get_p( $url => $header )->
     then(
       sub {
           my $tx = shift;
@@ -81,19 +81,19 @@ sub fetchRemoteSource_p {
 async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
-  $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{libraryURL}) if $inputs_ref->{libraryURL};
+  $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath}; # || $c->session('filePath');
   my $random_seed = $inputs_ref->{problemSeed};
   my $problem_contents = ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) ?
     await $inputs_ref->{problemSource} :
     $inputs_ref->{problemSource};
-  
+
   my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents});
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
-  $inputs_ref->{formURL} ||= $c->app->config('form');
-  $inputs_ref->{baseURL} ||= $c->app->config('url');
+  $inputs_ref->{baseURL} ||= $ENV{baseURL};
+  $inputs_ref->{formURL} ||= $ENV{formURL};
 
   $inputs_ref->{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
@@ -130,7 +130,7 @@ async sub problem {
     my $reqBody = {
       Accept => 'application/json',
       answerJWT => $ww_return_hash->{answerJWT},
-      Host => $ENV{JWTanswerHost},
+      Host => $ENV{SITE_HOST},
     };
     await $c->ua->post_p($ENV{JWTanswerURL}, $reqBody)->
     then(sub {$c->log->info(shift)})->

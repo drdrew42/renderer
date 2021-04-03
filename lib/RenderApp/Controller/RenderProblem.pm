@@ -89,7 +89,7 @@ sub process_pg_file {
     $inputHash->{displayMode} =
       'MathJax';    #	is there any reason for this to be anything else?
     $inputHash->{sourceFilePath} ||= $file_path;
-    $inputHash->{outputformat}   ||= 'static';
+    $inputHash->{outputformat}   ||= $inputHash->{outputFormat} || 'static';
     $inputHash->{problemSeed}    ||= $problem_seed;
     $inputHash->{language}       ||= 'en';
 
@@ -198,6 +198,8 @@ sub process_problem {
     }
     my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
 
+    # TODO verify line ending are LF instead of CRLF
+
     # included (external) pg content is not recorded by PGalias
     # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
     my $pgResources = [];
@@ -282,18 +284,19 @@ sub process_problem {
 
  	# my $encoded_source = encode_base64($source); # create encoding of source_file;
     my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
-        return_object  => $return_object,
-        encoded_source => '',                       #encode_base64($source),
-        sourceFilePath => $file_path,
-        url            => $inputs_ref->{base_url}
-          || $inputs_ref->{baseURL},                # use default hosted2
-        form_action_url => $inputs_ref->{form_action_url}
-          || $inputs_ref->{formURL},
-        maketext        => sub { return @_ },
-        courseID        => 'blackbox',
-        userID          => 'Motoko_Kusanagi',
-        course_password => 'daemon',
-        inputs_ref      => $inputs_ref,
+      return_object   => $return_object,
+      encoded_source  => '', #encode_base64($source),
+      sourceFilePath  => $file_path,
+      url             => $inputs_ref->{base_url}
+        || $inputs_ref->{baseURL}, # use default hosted2
+      form_action_url => $inputs_ref->{form_action_url}
+        || $inputs_ref->{formURL},
+      maketext        => sub {return @_},
+      courseID        => 'blackbox',
+      userID          => 'Motoko_Kusanagi',
+      course_password => 'daemon',
+      inputs_ref      => $inputs_ref,
+      ce              => $ce,
     );
 
     ##################################################
@@ -329,7 +332,7 @@ sub standaloneRenderer {
     #print "entering standaloneRenderer\n\n";
     my $ce          = shift;
     my $problemFile = shift // '';
-    my $form_data   = shift // '';
+    my $inputs_ref   = shift // '';
     my %args        = @_;
 
     # my $key = $r->param('key');
@@ -338,16 +341,16 @@ sub standaloneRenderer {
 
     my $user             = fake_user();
     my $set              = fake_set();
-    my $showHints        = $form_data->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
-    my $showSolutions    = $form_data->{showSolutions} // 0;
-    my $problemNumber    = $form_data->{problemNumber} // 1;          # ever even relevant?
-    my $displayMode      = $form_data->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
-    my $problem_seed     = $form_data->{problemSeed} || 1234;
-    my $permission_level = $form_data->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
-    my $num_correct      = $form_data->{numCorrect} || 0;             # consider replacing - this may never be relevant...
-    my $num_incorrect    = $form_data->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
-    my $processAnswers   = $form_data->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
-    my $psvn             = $form_data->{psvn} // 123;                 # by request from Tani
+    my $showHints        = $inputs_ref->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
+    my $showSolutions    = $inputs_ref->{showSolutions} // 0;
+    my $problemNumber    = $inputs_ref->{problemNumber} // 1;          # ever even relevant?
+    my $displayMode      = $inputs_ref->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
+    my $problem_seed     = $inputs_ref->{problemSeed} || 1234;
+    my $permission_level = $inputs_ref->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
+    my $num_correct      = $inputs_ref->{numCorrect} || 0;             # consider replacing - this may never be relevant...
+    my $num_incorrect    = $inputs_ref->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
+    my $processAnswers   = $inputs_ref->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
+    my $psvn             = $inputs_ref->{psvn} // 123;                 # by request from Tani
 
     print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
@@ -380,7 +383,7 @@ sub standaloneRenderer {
     $problem->{attempted}     = $num_correct + $num_incorrect;
 
     if ( ref $problemFile ) {
-        $problem->{source_file}         = $form_data->{sourceFilePath};
+        $problem->{source_file}         = $inputs_ref->{sourceFilePath};
         $translationOptions->{r_source} = $problemFile;
 
         # warn "standaloneProblemRenderer: setting source_file = $problemFile";
@@ -400,7 +403,7 @@ sub standaloneRenderer {
         $set,
         $problem,
         $psvn,    # by request from Tani
-        $form_data,
+        $inputs_ref,
         $translationOptions,
         $extras,
     );
@@ -418,7 +421,7 @@ sub standaloneRenderer {
           ['Problem failed during render - no PGcore received.'];
     }
 
-    insert_mathquill_responses( $form_data, $pg );
+    insert_mathquill_responses( $inputs_ref, $pg );
 
     my $out2 = {
         text                    => $pg->{body_text},
@@ -462,7 +465,7 @@ sub get_current_process_memory {
 sub generateJWTs {
     my $pg = shift;
     my $inputs_ref = shift;
-    my $sessionHash = {};
+    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}};
     my $scoreHash = {};
 
     # if no problemJWT exists, then why bother?
@@ -470,22 +473,25 @@ sub generateJWTs {
 
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
+        # TODO: Fix foreach. Currently only keeps last entry
         $sessionHash->{$ans}                  = $inputs_ref->{$ans};
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
-        
 
-        $scoreHash->{ans_id} = $ans;
-        $scoreHash->{answer} = $pg->{answers}{$ans} // {},
-        $scoreHash->{score}  = $pg->{answers}{score} // 0,
+        $scoreHash->{$ans}   = unbless($pg->{answers}{$ans});
+        # $scoreHash->{ans_id} = $ans;
+        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
+        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
     }
+    # use Data::Dumper;
+    # print Dumper($scoreHash);
 
     # keep track of the number of correct/incorrect submissions
     $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
     $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
 
     # create and return the session JWT
-    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
+    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
 
     # form answerJWT
     my $responseHash = {
