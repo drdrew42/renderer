@@ -491,6 +491,7 @@ sub generateJWTs {
     $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
 
     # create and return the session JWT
+    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
     my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
 
     # form answerJWT
@@ -499,6 +500,8 @@ sub generateJWTs {
         problemJWT => $inputs_ref->{problemJWT},
         sessionJWT => $sessionJWT,
     };
+
+    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
     my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 
     return ($sessionJWT, $answerJWT);

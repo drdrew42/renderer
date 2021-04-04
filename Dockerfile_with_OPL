@@ -49,9 +49,9 @@ ENV MOJO_MODE=production
 RUN curl -sOL "https://github.com/openwebwork/webwork-open-problem-library/archive/refs/heads/master.tar.gz"
 RUN tar -zxf master.tar.gz
 RUN mkdir webwork-open-problem-library
-RUN mv webwork-open-problem-library-master/Contrib/ webwork-open-problem-library/Contrib/
-RUN mv webwork-open-problem-library-master/OpenProblemLibrary/ webwork-open-problem-library/OpenProblemLibrary/
 RUN rm master.tar.gz
+RUN mv webwork-open-problem-library-master/OpenProblemLibrary/ webwork-open-problem-library/OpenProblemLibrary/
+RUN mv webwork-open-problem-library-master/Contrib/ webwork-open-problem-library/Contrib/
 RUN rm -r webwork-open-problem-library-master/
 
 
