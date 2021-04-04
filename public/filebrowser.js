@@ -21,7 +21,7 @@ function updateBrowser(formId, updateBackNav) {
         target = '/render-api/';
         formData.set('sourceFilePath', value);
         formData.set('randomSeed', value);
-        formData.set('outputformat', 'static');
+        formData.set('outputFormat', 'static');
         formData.set('format', 'json');
         formData.set('showHints', 1);
         formData.set('showSolutions', 1);

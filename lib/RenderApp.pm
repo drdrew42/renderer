@@ -32,10 +32,9 @@ use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
 use RenderApp::Controller::IO;
 
-
 sub startup {
-  my $self = shift;
-  my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
+	my $self = shift;
+	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
 
 	# Merge environment variables with config file
@@ -53,9 +52,8 @@ sub startup {
 	if($ENV{baseURL} eq '/'){
 		$ENV{baseURL} = '';
 	}
-	if ( $ENV{SITE_HOST} =~ m|/$| ) {  # remove trailing slash
-		chop($ENV{SITE_HOST})
-	}
+	$ENV{SITE_HOST} =~ s|/$||;  # remove trailing slash
+
 	if ( $ENV{baseURL} !~ m|^https?://| ) {
 		$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
 	}
@@ -63,12 +61,11 @@ sub startup {
 		$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
 	}
 
+	# Models
+	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
-  # Models
-  $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
-
-  # helper to expose request data
-  $self->helper(requestData2JSON => sub {
+	# helper to expose request data
+	$self->helper(requestData2JSON => sub {
 		my $c = shift;
 		my $hash = {};
 		my @all_param_names = @{$c->req->params->names};
@@ -79,12 +76,12 @@ sub startup {
 		return $c->render(json => $hash);
 	});
 
-  # helper to validate incoming request parameters
-  $self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
-  $self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
+	# helper to validate incoming request parameters
+	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
+	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
 
-  # Routes to controller
-  my $r = $self->routes;
+	# Routes to controller
+	my $r = $self->routes;
 
 	$r->any('/')->to('pages#twocolumn');
 	$r->any('/opl')->to('pages#oplUI');
@@ -96,10 +93,10 @@ sub startup {
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
 	$r->any('/render-api/find')->to('IO#search');
-  $r->post('/render-api/upload')->to('IO#upload');
+	$r->post('/render-api/upload')->to('IO#upload');
 	$r->post('/render-api/sma')->to('IO#findNewVersion');
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
-  $r->post('/render-api/tags')->to('IO#setTags');
+	$r->post('/render-api/tags')->to('IO#setTags');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/request' => sub {shift->requestData2JSON});

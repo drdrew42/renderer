@@ -128,8 +128,8 @@ sub formatRenderedProblem {
 	# PG warning messages generated with WARN_message();
 	#################################################
 
-  my $PG_warning_messages = $rh_result->{warning_messages} || [];
-  $PG_warning_messages = join("<br/>\n", @{ $PG_warning_messages } );
+	my $PG_warning_messages = $rh_result->{warning_messages} || [];
+	$PG_warning_messages = join("<br/>\n", @{ $PG_warning_messages } );
 
 	#################################################
 	# internal debug messages generated within PG_core
@@ -138,49 +138,48 @@ sub formatRenderedProblem {
 	# In general don't use these unless necessary.
 	#################################################
 
-  my $internal_debug_messages = $rh_result->{internal_debug_messages} || [];
-  $internal_debug_messages = join("<br/>\n", @{ $internal_debug_messages  } );
+	my $internal_debug_messages = $rh_result->{internal_debug_messages} || [];
+	$internal_debug_messages = join("<br/>\n", @{ $internal_debug_messages  } );
 
-  my $fileName = $self->{input}->{envir}->{fileName} || "";
+	my $fileName = $self->{input}->{envir}->{fileName} || "";
 
     #################################################
 
-	$self->{outputformats}={};
-        my $XML_URL         = $self->url                         // '';
-        my $FORM_ACTION_URL = $self->{form_action_url}           // '';
-        my $SITE_URL        = $self->{baseURL}                   // '';
-				my $SITE_HOST       = $ENV{SITE_HOST}                    // '';
-        my $courseID        = $self->{courseID}                  // '';
-        my $userID          = $self->{userID}                    // '';
-        my $course_password = $self->{course_password}           // '';
-        my $session_key     = $rh_result->{session_key}          // '';
-        my $displayMode     = $self->{inputs_ref}{displayMode}   // 'MathJax';
-				my $problemJWT      = $self->{inputs_ref}{problemJWT}    // '';
-				my $sessionJWT      = $self->{return_object}{sessionJWT} // '';
-				my $webwork_htdocs_url  = $self->{ce}->{webworkURLs}->{htdocs};
+	my $XML_URL            = $self->url                         // '';
+	my $FORM_ACTION_URL    = $self->{form_action_url}           // '';
+	my $SITE_URL           = $self->{baseURL}                   // '';
+	my $SITE_HOST          = $ENV{SITE_HOST}                    // '';
+	my $courseID           = $self->{courseID}                  // '';
+	my $userID             = $self->{userID}                    // '';
+	my $course_password    = $self->{course_password}           // '';
+	my $session_key        = $rh_result->{session_key}          // '';
+	my $displayMode        = $self->{inputs_ref}{displayMode}   // 'MathJax';
+	my $problemJWT         = $self->{inputs_ref}{problemJWT}    // '';
+	my $sessionJWT         = $self->{return_object}{sessionJWT} // '';
+	my $webwork_htdocs_url = $self->{ce}->{webworkURLs}->{htdocs};
 
 
-        my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
-        my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
-        my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
-        my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
+	my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
+	my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
+	my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
+	my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
 
-				# use Data::Dumper;
-				# print Dumper($self->{inputs_ref});
+			# use Data::Dumper;
+			# print Dumper($self->{inputs_ref});
 
-        # problemIdentifierPrefix can be added to the request as a parameter.
-        # It adds a prefix to the
-        # identifier used by the  format so that several different problems
-        # can appear on the same page.
-        my $problemIdentifierPrefix =
-          $self->{inputs_ref}->{problemIdentifierPrefix} // '';
-        my $problemResult = $rh_result->{problem_result} // '';
-        my $problemState  = $rh_result->{problem_state}  // '';
-        my $showPartialCorrectAnswers = $self->{inputs_ref}{showPartialCorrectAnswers}
-          // $rh_result->{flags}{showPartialCorrectAnswers};
-        my $showSummary   = $self->{inputs_ref}{showSummary} // 1;    #default to show summary for the moment
-        my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
-        my $scoreSummary  = '';
+	# problemIdentifierPrefix can be added to the request as a parameter.
+	# It adds a prefix to the
+	# identifier used by the  format so that several different problems
+	# can appear on the same page.
+	my $problemIdentifierPrefix =
+		$self->{inputs_ref}->{problemIdentifierPrefix} // '';
+	my $problemResult = $rh_result->{problem_result} // '';
+	my $problemState  = $rh_result->{problem_state}  // '';
+	my $showPartialCorrectAnswers = $self->{inputs_ref}{showPartialCorrectAnswers}
+		// $rh_result->{flags}{showPartialCorrectAnswers};
+	my $showSummary   = $self->{inputs_ref}{showSummary} // 1;    #default to show summary for the moment
+	my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
+	my $scoreSummary  = '';
 
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$rh_answers,
@@ -235,7 +234,7 @@ sub formatRenderedProblem {
 # Return interpolated problem template
 ######################################################
 
-	my $format_name = ($submitMode && $self->{inputs_ref}->{answerOutputFormat}) || $self->{inputs_ref}->{outputformat};
+	my $format_name = $self->{inputs_ref}->{outputFormat};
 	$format_name //= 'formatRenderedProblemFailure';
 	# find the appropriate template in WebworkClient folder
 	my $template = do("WebworkClient/${format_name}_format.pl")//'';

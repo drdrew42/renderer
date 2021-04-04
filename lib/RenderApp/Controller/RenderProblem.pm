@@ -89,7 +89,7 @@ sub process_pg_file {
     $inputHash->{displayMode} =
       'MathJax';    #	is there any reason for this to be anything else?
     $inputHash->{sourceFilePath} ||= $file_path;
-    $inputHash->{outputformat}   ||= $inputHash->{outputFormat} || 'static';
+    $inputHash->{outputFormat}   ||= 'static';
     $inputHash->{problemSeed}    ||= $problem_seed;
     $inputHash->{language}       ||= 'en';
 
@@ -479,16 +479,14 @@ sub generateJWTs {
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
 
         $scoreHash->{$ans}   = unbless($pg->{answers}{$ans});
-        # $scoreHash->{ans_id} = $ans;
-        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
-        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
     }
-    # use Data::Dumper;
-    # print Dumper($scoreHash);
 
     # keep track of the number of correct/incorrect submissions
     $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
     $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
+
+    # include the final result of the combined scores
+    $scoreHash->{result} = $pg->{problem_result}{score};
 
     # create and return the session JWT
     my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
