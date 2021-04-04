@@ -128,16 +128,19 @@ async sub problem {
   # if answers are submitted and there is a provided answerURL...
 
   $inputs_ref->{JWTanswerURL} //=$ENV{JWTanswerURL};
-  print $inputs_ref->{JWTanswerURL}."\n";
-  if ( defined($inputs_ref->{JWTanswerURL}) && $inputs_ref->{submitAnswers} ) {
+  if ( $inputs_ref->{JWTanswerURL} && $inputs_ref->{answerJWT} && $inputs_ref->{submitAnswers} ) {
     my $reqBody = {
       Accept => 'application/json',
-      answerJWT => $ww_return_hash->{answerJWT},
+      Authorization => $ww_return_hash->{answerJWT},
       Host => $ENV{SITE_HOST},
     };
+    print "sending answerJWT to".$inputs_ref->{JWTanswerURL}."\n";
+
+    use Data::Dumper;
     await $c->ua->post_p($inputs_ref->{JWTanswerURL}, $reqBody)->
-    then(sub {$c->log->info(shift)})->
+    then(sub {$c->log->info(Dumper(shift))})->
     catch(sub {$c->log->error(shift)});
+    print "received answerJWT\n";
   }
 
   $c->respond_to(

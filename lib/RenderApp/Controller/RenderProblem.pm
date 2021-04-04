@@ -250,6 +250,7 @@ sub process_problem {
     $return_object->{raw_metadata_text} = $raw_metadata_text;
 
     # generate sessionJWT to store session data and answerJWT to update grade store
+    # only occurs if problemJWT exists!
     my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
     $return_object->{sessionJWT} = $sessionJWT // '';
     $return_object->{answerJWT}  = $answerJWT // '';
