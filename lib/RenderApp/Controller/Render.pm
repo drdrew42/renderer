@@ -126,15 +126,16 @@ async sub problem {
   $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
 
   # if answers are submitted and there is a provided answerURL...
-  print $inputs_ref->{JWTanswerURL}.'\n';
-  print $ENV{JWTanswerURL}.'\n';
+
+  $inputs_ref->{JWTanswerURL} //=$ENV{JWTanswerURL};
+  print $inputs_ref->{JWTanswerURL}."\n";
   if ( defined($inputs_ref->{JWTanswerURL}) && $inputs_ref->{submitAnswers} ) {
     my $reqBody = {
       Accept => 'application/json',
       answerJWT => $ww_return_hash->{answerJWT},
       Host => $ENV{SITE_HOST},
     };
-    await $c->ua->post_p($inputs_ref->{JWTanswerURL} || $ENV{JWTanswerURL}, $reqBody)->
+    await $c->ua->post_p($inputs_ref->{JWTanswerURL}, $reqBody)->
     then(sub {$c->log->info(shift)})->
     catch(sub {$c->log->error(shift)});
   }

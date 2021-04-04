@@ -5,7 +5,7 @@
   problemJWTsecret => "shared",
   webworkJWTsecret => "private",
   SITE_HOST => "http://localhost:3000",
-  JWTanswerURL => "http://localhost:3000/request",
+  JWTanswerURL => "",
   hypnotoad => {
     listen => ['http://*:3000'],
     accepts => 400,
