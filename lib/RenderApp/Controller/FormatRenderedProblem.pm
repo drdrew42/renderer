@@ -45,7 +45,6 @@ sub new {
 	$self = { # Is this function redundant given the declarations within sub formatRenderedProblem?
 		return_object => {},
 		encoded_source => {},
-		sourceFilePath => '',
 		baseURL        => $ENV{baseURL},
 		form_action_url =>$ENV{formURL},
 		maketext   	   => sub {return @_},
@@ -97,7 +96,6 @@ sub formatRenderedProblem {
 	my $rh_answers            = $rh_result->{answers}//{};
 	my $answerOrder           = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}; #[sort keys %{ $rh_result->{answers} }];
 	my $encoded_source        = $self->encoded_source//'';
-	my $sourceFilePath        = $self->{sourceFilePath}//'';
 	my $problemSourceURL      = $self->{inputs_ref}->{problemSourceURL};
 	my $warnings              = '';
 	print "\n return_object answers ",
