@@ -55,6 +55,12 @@ $problemPostHeaderText
       </div>
     </div>
   </div>
+  <script type="text/javascript">
+    if ('JWTanswerURLstatus') {
+      console.log("response message ", JSON.parse('JWTanswerURLstatus'));
+      window.parent.postMessage('JWTanswerURLstatus', '*');
+    }
+  </script>
 </body>
 </html>
 ENDPROBLEMTEMPLATE
