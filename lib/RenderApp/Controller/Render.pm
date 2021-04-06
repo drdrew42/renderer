@@ -140,30 +140,32 @@ async sub problem {
       Origin         => $ENV{SITE_HOST},
       "Content-Type" => 'text/plain',
     };
-    print "sending answerJWT to " . $inputs_ref->{JWTanswerURL} . "\n";
 
-    use Data::Dumper;
+    $c->log->info("sending answerJWT to " . $inputs_ref->{JWTanswerURL});
     await $c->ua->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
       then(sub {
         my $response = shift->result;
+        # use Data::Dumper;
         # $c->log->info(Dumper($response));
 
         $answerJWTresponse->{status} = int($response->code);
-        if ($response->is_success) {$answerJWTresponse->{message} = $response->body}
+        if ($response->is_success) {
+          $answerJWTresponse->{message} = $response->body;
+        }
         elsif ($response->is_error) {$answerJWTresponse->{message} = $response->message}
+
+        $answerJWTresponse->{message} =~ s/"/\\"/g;
 
       })->
       catch(sub {
         my $response = shift;
-        $c->log->error(Dumper($response));
+        $c->log->error($response);
 
         $answerJWTresponse->{status} = 500;
         $answerJWTresponse->{message} = $response;
       });
-    print "received answerJWT\n";
-    print Dumper($answerJWTresponse);
     $answerJWTresponse = encode_json($answerJWTresponse);
-    $answerJWTresponse =~ s/\"/\\"/g;
+    $c->log->info("answerJWT response ".$answerJWTresponse);
 
     $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus/$answerJWTresponse/g;
   }else{
