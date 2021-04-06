@@ -497,13 +497,15 @@ sub generateJWTs {
 
     # form answerJWT
     my $responseHash = {
+        iss =>$ENV{SITE_HOST},
+        aud =>$inputs_ref->{JWTanswerURL},
         score => $scoreHash,
         problemJWT => $inputs_ref->{problemJWT},
         sessionJWT => $sessionJWT,
     };
 
-    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
-    my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
+    # Can instead use alg => 'HS256' for JWS
+    my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'PBES2-HS512+A256KW', enc => 'A256GCM', key => $ENV{problemJWTsecret}, auto_iat => 1);
 
     return ($sessionJWT, $answerJWT);
 }
