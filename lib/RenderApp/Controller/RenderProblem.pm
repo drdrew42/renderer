@@ -479,11 +479,12 @@ sub generateJWTs {
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
 
-        $scoreHash->{$ans}   = unbless($pg->{answers}{$ans});
         # $scoreHash->{ans_id} = $ans;
         # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
         # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
     }
+    $scoreHash->{answers}   = unbless($pg->{answers});
+    $scoreHash->{proportionScore} = $pg->{problem_result}{score};
     # use Data::Dumper;
     # print Dumper($scoreHash);
 
