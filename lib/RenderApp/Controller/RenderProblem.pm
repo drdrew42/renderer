@@ -498,11 +498,12 @@ sub generateJWTs {
 
     # form answerJWT
     my $responseHash = {
-        iss =>$ENV{SITE_HOST},
-        aud =>$inputs_ref->{JWTanswerURL},
-        score => $scoreHash,
-        problemJWT => $inputs_ref->{problemJWT},
-        sessionJWT => $sessionJWT,
+      iss        => $ENV{SITE_HOST},
+      aud        => $inputs_ref->{JWTanswerURL},
+      score      => $scoreHash,
+      problemJWT => $inputs_ref->{problemJWT},
+      sessionJWT => $sessionJWT,
+      platform   => 'standaloneRenderer'
     };
 
     # Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
