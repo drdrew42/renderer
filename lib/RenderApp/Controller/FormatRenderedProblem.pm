@@ -154,7 +154,7 @@ sub formatRenderedProblem {
 	my $displayMode        = $self->{inputs_ref}{displayMode}   // 'MathJax';
 	my $problemJWT         = $self->{inputs_ref}{problemJWT}    // '';
 	my $sessionJWT         = $self->{return_object}{sessionJWT} // '';
-	my $webwork_htdocs_url = $self->{ce}->{webworkURLs}->{htdocs};
+	my $webwork_htdocs_url = $self->{ce}{webworkURLs}{htdocs};
 
 
 	my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
@@ -223,15 +223,57 @@ sub formatRenderedProblem {
 	$localStorageMessages.= CGI::p('Your overall score for this problem is'.'&nbsp;'.CGI::span({id=>'problem-overall-score'},''));
 	$localStorageMessages .= CGI::end_div();
 
-  my $STRING_Preview = "Preview My Answers";
-  my $STRING_ShowCorrect = "Show correct answers";
-  my $STRING_Submit = "Submit Answers";
+	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
+	my $extra_js_files = '';
+	if (ref($rh_result->{flags}{extra_js_files}) eq "ARRAY") {
+		my %jsFiles;
+		# Avoid duplicates
+		$jsFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_js_files}};
+		for (keys(%jsFiles)) {
+			if ($jsFiles{$_}) {
+				$extra_js_files .= 
+					CGI::start_script({type => "text/javascript", src => $_}) 
+					. CGI::end_script() 
+					. "\n";
+			} elsif (!$jsFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
+				$extra_js_files .= 
+					CGI::start_script({type => "text/javascript", src => "$webwork_htdocs_url/$_"})
+					. CGI::end_script()
+					. "\n";
+			} else {
+				$extra_js_files .= "<!-- $_ is not available in htdocs/ on this server -->\n";
+			}
+		}
+	}
+
+	my $extra_css_files = '';
+	my %cssFiles;
+	# Avoid duplicates
+	if (ref($self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}) eq "ARRAY") {
+		$cssFiles{$_} = 0 for @{$self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}};
+	}
+	if (ref($rh_result->{flags}{extra_css_files}) eq "ARRAY") {
+		$cssFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_css_files}};
+	}
+	for (keys(%cssFiles)) {
+		if ($cssFiles{$_}) {
+			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$_\" />\n";
+		} elsif (!$cssFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
+			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$webwork_htdocs_url/$_\" />\n";
+		} else {
+			$extra_css_files .= "<!-- $_ is not available in htdocs/ on this server -->\n";
+		}
+	}
+
+	my $STRING_Preview = "Preview My Answers";
+	my $STRING_ShowCorrect = "Show correct answers";
+	my $STRING_Submit = "Submit Answers";
 
 	#my $pretty_print_self  = pretty_print($self);
-######################################################
-# Return interpolated problem template
-######################################################
 
+	######################################################
+	# Return interpolated problem template
+	######################################################
 	my $format_name = $self->{inputs_ref}->{outputFormat};
 	$format_name //= 'formatRenderedProblemFailure';
 	# find the appropriate template in WebworkClient folder
