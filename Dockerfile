@@ -10,6 +10,7 @@ RUN apt-get update \
     apt-utils \
     git \
     gcc \
+    npm \
     make \
     curl \
     nodejs \
