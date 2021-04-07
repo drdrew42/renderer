@@ -484,13 +484,15 @@ sub generateJWTs {
         # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
     }
     $scoreHash->{answers}   = unbless($pg->{answers});
-    $scoreHash->{proportionScore} = $pg->{problem_result}{score};
-    # use Data::Dumper;
-    # print Dumper($scoreHash);
 
     # keep track of the number of correct/incorrect submissions
     $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
     $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
+
+    # include the final result of the combined scores
+    $scoreHash->{result} = $pg->{problem_result}{score};
+    # use Data::Dumper;
+    # print Dumper($scoreHash);
 
     # create and return the session JWT
     # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
