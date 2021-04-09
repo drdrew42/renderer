@@ -62,13 +62,15 @@ Can be interfaced through `/render-api`
 | baseURL | string | / | false | the URL for relative paths | |
 | outputFormat | string (enum) | static | false | Determines how the problem should render, see below descriptions below | |
 | language | string | en | false | Language to render the problem in (if supported) | |
-| showHints | number (boolean) | 1 | false | Whether or not to show hints (restrictions apply) | Hint logic has some hooks into the problem source, if permission level is high enough or `n` number of attempts has been reached they will render if this is true (1), however if false (0) you will never see the hints)
+| showHints | number (boolean) | 1 | false | Whether or not to show hints (restrictions apply) | Hint logic only applies so long as showHints is 'true' (1), if false (0) hints will not be shown, no exceptions)
 | showSolutions | number (boolean) | 0 | false | Whether or not to show the solutions | |
 | permissionLevel | number | 0 | false | Aids in the conrol of show hints, also controls display of scaffold problems (possibly more) | See the levels we use below |
 | problemNumber | number | 1 | false | We don't use this | |
 | numCorrect | number | 0 | false | The number of correct attempts on a problem | |
 | numIncorrect | number | 1000 | false | the number of incorrect attempts on this problem | Relevant for triggering hints that are not immediately available |
 | processAnswers | number (boolean) | 1 | false | Determines whether or not answer json is populated, and whether or not problem_result and problem_state are non-empty | |
+| answersSubmitted | number (boolean) | ? | false? | Determines whether to process form-data associated to the available input fields | |
+| showSummary | number (boolean) | ? | false? | Determines whether or not to show the summary result of processing the form-data associated with `answersSubmitted` above ||
 
 ## Output Format
 | Key | Description |
@@ -88,6 +90,8 @@ Can be interfaced through `/render-api`
 | admin | 20 |
 
 ## Permission logic summary for hints and solutions
-* If professor or above (permission value >= 10) you will always get hints and solutions
-* If student you will get solutions if and only if we set the showSolutions flag to true
-* If student you will get hints after you have exceeded the attempt threshold (if the flag is set to true)
+* If showHints (or showSolutions) is false, no hint (or solution) will be rendered - no exceptions.
+* If showSolutions is true, then solutions will be rendered (presuming they are provided in the pg source code)
+* If showHints is true (and the pg source code provides hints), then hints will render
+    - if `permissionLevel >= 10`, or
+    - if `numCorrect + numIncorrect > n`, where `n` is set by the pg source code being rendered

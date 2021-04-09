@@ -89,7 +89,7 @@ sub process_pg_file {
     $inputHash->{displayMode} =
       'MathJax';    #	is there any reason for this to be anything else?
     $inputHash->{sourceFilePath} ||= $file_path;
-    $inputHash->{outputformat}   ||= $inputHash->{outputFormat} || 'static';
+    $inputHash->{outputFormat}   ||= 'static';
     $inputHash->{problemSeed}    ||= $problem_seed;
     $inputHash->{language}       ||= 'en';
 
@@ -287,11 +287,8 @@ sub process_problem {
     my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
       return_object   => $return_object,
       encoded_source  => '', #encode_base64($source),
-      sourceFilePath  => $file_path,
-      url             => $inputs_ref->{base_url}
-        || $inputs_ref->{baseURL}, # use default hosted2
-      form_action_url => $inputs_ref->{form_action_url}
-        || $inputs_ref->{formURL},
+      url             => $inputs_ref->{baseURL}, 
+      form_action_url => $inputs_ref->{formURL},
       maketext        => sub {return @_},
       courseID        => 'blackbox',
       userID          => 'Motoko_Kusanagi',
@@ -494,8 +491,6 @@ sub generateJWTs {
 
     # include the final result of the combined scores
     $scoreHash->{result} = $pg->{problem_result}{score};
-    # use Data::Dumper;
-    # print Dumper($scoreHash);
 
     # create and return the session JWT
     # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'

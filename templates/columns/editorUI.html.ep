@@ -15,7 +15,7 @@
     %= text_area problemContentsEditor => q(Load a problem, then click on "render contents."), id => 'problemContentsEditor'
   </div>
 
-%= javascript '/webwork2_files/js/jquery.min.js'
+%= javascript '/webwork2_files/node_modules/jquery/dist/jquery.min.js'
 %= javascript 'https://codemirror.net/addon/selection/active-line.js'
 %= javascript 'https://codemirror.net/addon/edit/matchbrackets.js'
 %= javascript 'https://codemirror.net/addon/edit/closebrackets.js'

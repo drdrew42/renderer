@@ -94,19 +94,19 @@ renderbutton.addEventListener("click", event => {
   const renderurl = '/render-api';
 
   const selectedformat = document.querySelector(".dropdown-item.selected");
-  let outputformat;
+  let outputFormat;
   if ( selectedformat === null) {
     console.log(typeof selectedformat);
     alert("No output format selected. Defaulting to 'classic' format.");
-    outputformat = 'classic';
+    outputFormat = 'classic';
   } else {
-    outputformat = selectedformat.id;
+    outputFormat = selectedformat.id;
   }
   let formData = new FormData();
   formData.set("permissionLevel", 20);
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   formData.set("problemSeed", document.getElementById('problemSeed').value);
-  formData.set("outputformat", outputformat);
+  formData.set("outputFormat", outputFormat);
 
 //  // Version tracking steps to replace window.btoa with code supporting Unicode text
 //  encoder = new TextEncoder();
@@ -169,17 +169,17 @@ function insertListener() {
     let clickedButton = problemForm.querySelector('.btn-clicked')
     formData.set("format", "json");
     const selectedformat = document.querySelector(".dropdown-item.selected");
-    let outputformat;
+    let outputFormat;
     if ( selectedformat === null ) {
       alert("No output format selected. Defaulting to 'classic' format.");
-      outputformat = 'classic';
+      outputFormat = 'classic';
     } else {
-      outputformat = selectedformat.id;
+      outputFormat = selectedformat.id;
     }
     formData.set("permissionLevel", 20);
     formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
     formData.set("problemSeed", document.getElementById('problemSeed').value);
-    formData.set("outputformat", outputformat);
+    formData.set("outputFormat", outputFormat);
     formData.set(clickedButton.name, clickedButton.value);
 
 //  // Version tracking steps to replace window.btoa with code supporting Unicode text
