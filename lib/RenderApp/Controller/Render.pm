@@ -91,7 +91,6 @@ async sub problem {
 
   $inputs_ref->{baseURL} ||= $ENV{baseURL};
   $inputs_ref->{formURL} ||= $ENV{formURL};
-  $inputs_ref->{JWTanswerURL} //= $ENV{JWTanswerURL};
 
   my $problem = $c->newProblem({ log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents });
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
