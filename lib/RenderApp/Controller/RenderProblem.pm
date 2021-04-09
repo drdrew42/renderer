@@ -474,7 +474,7 @@ sub generateJWTs {
 
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
-        # TODO: Fix foreach. Currently only keeps last entry
+        # TODO: Anything else we want to add to sessionHash?
         $sessionHash->{$ans}                  = $inputs_ref->{$ans};
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
@@ -482,6 +482,9 @@ sub generateJWTs {
         # $scoreHash->{ans_id} = $ans;
         # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
         # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
+
+        # TODO see why this key is causing JWT corruption in PHP
+        delete( $pg->{answers}{$ans}{student_ans});
     }
     $scoreHash->{answers}   = unbless($pg->{answers});
 
