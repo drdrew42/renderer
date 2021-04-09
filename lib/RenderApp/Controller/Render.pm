@@ -144,8 +144,6 @@ async sub problem {
     await $c->ua->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
       then(sub {
         my $response = shift->result;
-        # use Data::Dumper;
-        # $c->log->info(Dumper($response));
 
         $answerJWTresponse->{status} = int($response->code);
         if ($response->is_success) {
@@ -154,6 +152,7 @@ async sub problem {
         elsif ($response->is_error) {$answerJWTresponse->{message} = $response->message}
 
         $answerJWTresponse->{message} =~ s/"/\\"/g;
+        $answerJWTresponse->{message} =~ s/'/\\'/g;
 
       })->
       catch(sub {
