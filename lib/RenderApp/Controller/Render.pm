@@ -152,7 +152,7 @@ async sub problem {
         elsif ($response->is_error) {$answerJWTresponse->{message} = $response->message}
 
         $answerJWTresponse->{message} =~ s/"/\\"/g;
-        $answerJWTresponse->{message} =~ s/'/\\'/g;
+        $answerJWTresponse->{message} =~ s/'/\'/g;
 
       })->
       catch(sub {
