@@ -2,6 +2,8 @@
 render_app.conf
 lib/WeBWorK/htdocs/tmp/renderer/gif/*
 lib/WeBWorK/htdocs/tmp/renderer/images/*
+lib/WeBWorK/htdocs/DATA/*.json
+lib/WeBWorK/bin/*
 webwork-open-problem-library/
 private/
 tmp/
