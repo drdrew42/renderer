@@ -144,7 +144,7 @@ sub process_pg_file {
       if $json_rh->{flags}{compoundProblem}{grader};
 
 
-    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path, $inputHash->{problemSource});
+    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path, $inputHash->{problemSource}) if ( $inputHash->{includeTags} );
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($json_rh);
     return $json;

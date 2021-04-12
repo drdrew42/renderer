@@ -23,8 +23,9 @@ function updateBrowser(formId, updateBackNav) {
         formData.set('randomSeed', value);
         formData.set('outputFormat', 'static');
         formData.set('format', 'json');
-        formData.set('showHints', 1);
-        formData.set('showSolutions', 1);
+        formData.set('permissionLevel', 20);
+        formData.set('includeTags', 1);
+        formData.set('showComments', 1);
         processData = function (data) {
             updateIframe(data.renderedHTML);
             updateMetadata(data);

@@ -104,6 +104,8 @@ renderbutton.addEventListener("click", event => {
   }
   let formData = new FormData();
   formData.set("permissionLevel", 20);
+  formData.set("includeTags", 1);
+  formData.set("showComments", 1);
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   formData.set("problemSeed", document.getElementById('problemSeed').value);
   formData.set("outputFormat", outputFormat);
@@ -177,6 +179,8 @@ function insertListener() {
       outputFormat = selectedformat.id;
     }
     formData.set("permissionLevel", 20);
+    formData.set("includeTags", 1);
+    formData.set("showComments", 1);
     formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
     formData.set("problemSeed", document.getElementById('problemSeed').value);
     formData.set("outputFormat", outputFormat);
