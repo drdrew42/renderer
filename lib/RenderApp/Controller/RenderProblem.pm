@@ -250,6 +250,7 @@ sub process_problem {
     $return_object->{raw_metadata_text} = $raw_metadata_text;
 
     # generate sessionJWT to store session data and answerJWT to update grade store
+    # only occurs if problemJWT exists!
     my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
     $return_object->{sessionJWT} = $sessionJWT // '';
     $return_object->{answerJWT}  = $answerJWT // '';
@@ -470,13 +471,19 @@ sub generateJWTs {
 
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
-        # TODO: Fix foreach. Currently only keeps last entry
+        # TODO: Anything else we want to add to sessionHash?
         $sessionHash->{$ans}                  = $inputs_ref->{$ans};
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
 
-        $scoreHash->{$ans}   = unbless($pg->{answers}{$ans});
+        # $scoreHash->{ans_id} = $ans;
+        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
+        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
+
+        # TODO see why this key is causing JWT corruption in PHP
+        delete( $pg->{answers}{$ans}{student_ans});
     }
+    $scoreHash->{answers}   = unbless($pg->{answers});
 
     # keep track of the number of correct/incorrect submissions
     $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
@@ -486,14 +493,20 @@ sub generateJWTs {
     $scoreHash->{result} = $pg->{problem_result}{score};
 
     # create and return the session JWT
+    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
     my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
 
     # form answerJWT
     my $responseHash = {
-        score => $scoreHash,
-        problemJWT => $inputs_ref->{problemJWT},
-        sessionJWT => $sessionJWT,
+      iss        => $ENV{SITE_HOST},
+      aud        => $inputs_ref->{JWTanswerURL},
+      score      => $scoreHash,
+      problemJWT => $inputs_ref->{problemJWT},
+      sessionJWT => $sessionJWT,
+      platform   => 'standaloneRenderer'
     };
+
+    # Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
     my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 
     return ($sessionJWT, $answerJWT);

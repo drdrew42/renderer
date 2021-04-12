@@ -46,7 +46,6 @@ sub startup {
 	$ENV{baseURL} //= $self->config('baseURL');
 	$ENV{formURL} //= $self->config('formURL');
 	$ENV{SITE_HOST} //= $self->config('SITE_HOST');
-	$ENV{JWTanswerURL} //= $self->config('JWTanswerURL');
 
 	# validate configration urls
 	if($ENV{baseURL} eq '/'){

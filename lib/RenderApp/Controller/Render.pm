@@ -89,11 +89,11 @@ async sub problem {
     await $inputs_ref->{problemSource} :
     $inputs_ref->{problemSource};
 
-  my $problem = $c->newProblem({log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents});
-  return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
-
   $inputs_ref->{baseURL} ||= $ENV{baseURL};
   $inputs_ref->{formURL} ||= $ENV{formURL};
+
+  my $problem = $c->newProblem({ log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents });
+  return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
 
   $inputs_ref->{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
@@ -126,15 +126,48 @@ async sub problem {
   $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
 
   # if answers are submitted and there is a provided answerURL...
-  if ( defined($inputs_ref->{JWTanswerURL}) && $inputs_ref->{submitAnswers} ) {
-    my $reqBody = {
-      Accept => 'application/json',
-      answerJWT => $ww_return_hash->{answerJWT},
-      Host => $ENV{SITE_HOST},
+
+
+  if ($inputs_ref->{JWTanswerURL} && $ww_return_hash->{answerJWT} && $inputs_ref->{submitAnswers}) {
+    my $answerJWTresponse = {
+      iss    => $ENV{SITE_HOST},
+      subject => "webwork.result",
+      status    => 502,
+      message => "initial message"
     };
-    await $c->ua->post_p($ENV{JWTanswerURL}, $reqBody)->
-    then(sub {$c->log->info(shift)})->
-    catch(sub {$c->log->error(shift)});
+    my $reqBody = {
+      Origin         => $ENV{SITE_HOST},
+      "Content-Type" => 'text/plain',
+    };
+
+    $c->log->info("sending answerJWT to " . $inputs_ref->{JWTanswerURL});
+    await $c->ua->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
+      then(sub {
+        my $response = shift->result;
+
+        $answerJWTresponse->{status} = int($response->code);
+        if ($response->is_success) {
+          $answerJWTresponse->{message} = $response->body;
+        }
+        elsif ($response->is_error) {$answerJWTresponse->{message} = $response->message}
+
+        $answerJWTresponse->{message} =~ s/"/\\"/g;
+        $answerJWTresponse->{message} =~ s/'/\'/g;
+
+      })->
+      catch(sub {
+        my $response = shift;
+        $c->log->error($response);
+
+        $answerJWTresponse->{status} = 500;
+        $answerJWTresponse->{message} = $response;
+      });
+    $answerJWTresponse = encode_json($answerJWTresponse);
+    $c->log->info("answerJWT response ".$answerJWTresponse);
+
+    $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus/$answerJWTresponse/g;
+  }else{
+    $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus//;
   }
 
   $c->respond_to(

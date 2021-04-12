@@ -10,12 +10,18 @@ RUN apt-get update \
     apt-utils \
     git \
     gcc \
+    npm \
     make \
     curl \
+    nodejs \
     dvipng \
+    openssl \
     libc-dev \
     cpanminus \
+    libssl-dev \
     libgd-perl \
+    zlib1g-dev \
+    imagemagick \
     libdbi-perl \
     libjson-perl \
     libcgi-pm-perl \
@@ -25,6 +31,10 @@ RUN apt-get update \
     libdatetime-perl \
     libuuid-tiny-perl \
     libtie-ixhash-perl \
+    libhttp-async-perl \
+    libnet-ssleay-perl \
+    libarchive-zip-perl \
+    libcrypt-ssleay-perl \
     libclass-accessor-perl \
     libstring-shellquote-perl \
     libextutils-cbuilder-perl \
@@ -32,15 +42,10 @@ RUN apt-get update \
     libmath-random-secure-perl \
     libdata-structure-util-perl \
     liblocale-maketext-lexicon-perl \
-    openssl \
-    libssl-dev \
-    libnet-ssleay-perl \
-    libcrypt-ssleay-perl \
-    zlib1g-dev \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
-RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait Crypt::JWT IO::Socket::SSL \
+RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait Crypt::JWT IO::Socket::SSL CGI::Cookie \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 ENV MOJO_MODE=production
@@ -49,15 +54,16 @@ ENV MOJO_MODE=production
 RUN curl -sOL "https://github.com/openwebwork/webwork-open-problem-library/archive/refs/heads/master.tar.gz"
 RUN tar -zxf master.tar.gz
 RUN mkdir webwork-open-problem-library
-RUN mv webwork-open-problem-library-master/Contrib/ webwork-open-problem-library/Contrib/
-RUN mv webwork-open-problem-library-master/OpenProblemLibrary/ webwork-open-problem-library/OpenProblemLibrary/
 RUN rm master.tar.gz
+RUN mv webwork-open-problem-library-master/OpenProblemLibrary/ webwork-open-problem-library/OpenProblemLibrary/
+RUN mv webwork-open-problem-library-master/Contrib/ webwork-open-problem-library/Contrib/
 RUN rm -r webwork-open-problem-library-master/
-
 
 COPY . .
 
 RUN cp render_app.conf.dist render_app.conf
+
+RUN cd lib/WeBWorK/htdocs && npm install && cd ../../..
 
 EXPOSE 3000
 
