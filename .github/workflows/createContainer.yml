@@ -2,12 +2,11 @@ name: Github Packages Release
 
 on:
   push:
-    branches: [ releases ]
-  pull_request:
-    branches: [ releases ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+    branches:
+    - master
+    - development
+    tags:
+    - v*
 
 jobs:
   build:
@@ -25,4 +24,4 @@ jobs:
           # Read note below to see how to generate the PAT
           personal-access-token: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: ww-renderer
-          docker-image-tag: latest
+          docker-image-tag: ${GITHUB_REF}
