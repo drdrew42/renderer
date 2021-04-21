@@ -287,7 +287,8 @@ sub process_problem {
     my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
       return_object   => $return_object,
       encoded_source  => '', #encode_base64($source),
-      url             => $inputs_ref->{baseURL}, 
+      sourceFilePath  => $file_path,
+      url             => $inputs_ref->{baseURL},
       form_action_url => $inputs_ref->{formURL},
       maketext        => sub {return @_},
       courseID        => 'blackbox',
