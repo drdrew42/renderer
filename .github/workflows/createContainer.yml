@@ -14,9 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it        
+        
       # make sure you have "Improved Container Support" enabled for both your personal and/or Organization accounts!
       # TODO shift repo target to https://github.com/pmorelli92/github-container-registry-build-push/pull/1
       - uses: LibreTexts/github-container-registry-build-push@main
@@ -25,4 +24,4 @@ jobs:
           # Read note below to see how to generate the PAT
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: ww-renderer
-          docker-image-tag: ${{github.ref}}
+          docker-image-tag: ${GITHUB_REF##*/}
