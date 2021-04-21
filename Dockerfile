@@ -1,4 +1,5 @@
 FROM ubuntu:20.04
+LABEL org.opencontainers.image.source=https://github.com/drdrew42/renderer
 MAINTAINER drdrew42
 
 WORKDIR /usr/app

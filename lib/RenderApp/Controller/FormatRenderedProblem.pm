@@ -45,6 +45,7 @@ sub new {
 	$self = { # Is this function redundant given the declarations within sub formatRenderedProblem?
 		return_object => {},
 		encoded_source => {},
+		sourceFilePath => '',
 		baseURL        => $ENV{baseURL},
 		form_action_url =>$ENV{formURL},
 		maketext   	   => sub {return @_},
@@ -96,6 +97,7 @@ sub formatRenderedProblem {
 	my $rh_answers            = $rh_result->{answers}//{};
 	my $answerOrder           = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}; #[sort keys %{ $rh_result->{answers} }];
 	my $encoded_source        = $self->encoded_source//'';
+	my $sourceFilePath        = $self->{sourceFilePath}//'';
 	my $problemSourceURL      = $self->{inputs_ref}->{problemSourceURL};
 	my $warnings              = '';
 	print "\n return_object answers ",
@@ -231,12 +233,12 @@ sub formatRenderedProblem {
 		$jsFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_js_files}};
 		for (keys(%jsFiles)) {
 			if ($jsFiles{$_}) {
-				$extra_js_files .= 
-					CGI::start_script({type => "text/javascript", src => $_}) 
-					. CGI::end_script() 
+				$extra_js_files .=
+					CGI::start_script({type => "text/javascript", src => $_})
+					. CGI::end_script()
 					. "\n";
 			} elsif (!$jsFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
-				$extra_js_files .= 
+				$extra_js_files .=
 					CGI::start_script({type => "text/javascript", src => "$webwork_htdocs_url/$_"})
 					. CGI::end_script()
 					. "\n";
