@@ -23,8 +23,7 @@ jobs:
         id: extract_branch
       
       # make sure you have "Improved Container Support" enabled for both your personal and/or Organization accounts!
-      # TODO shift repo target to https://github.com/pmorelli92/github-container-registry-build-push/pull/1
-      - uses: LibreTexts/github-container-registry-build-push@main
+      - uses: pmorelli92/github-container-registry-build-push@2.0.0
         name: Build and Publish latest service image
         with:
           # Read note below to see how to generate the PAT
