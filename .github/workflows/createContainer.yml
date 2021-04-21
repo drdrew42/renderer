@@ -25,4 +25,4 @@ jobs:
           # Read note below to see how to generate the PAT
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: ww-renderer
-          docker-image-tag: $GITHUB_REF
+          docker-image-tag: "$GITHUB_REF"
