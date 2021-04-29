@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: wwrenderer
-        image: ghcr.io/drdrew42/ww-renderer
+        image: ghcr.io/drdrew42/ww-renderer:master
         resources:
           requests:
             cpu: "0.5"
