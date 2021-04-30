@@ -8,7 +8,6 @@ package RenderApp::Controller::RenderProblem;
 use Time::HiRes qw/time/;
 use Date::Format;
 use MIME::Base64 qw(encode_base64 decode_base64);
-use Getopt::Long qw[:config no_ignore_case bundling];
 use File::Find;
 use FileHandle;
 use File::Path;
@@ -18,6 +17,7 @@ use File::Basename;
 use String::ShellQuote;
 use Cwd 'abs_path';
 use JSON::XS;
+use Crypt::JWT qw( encode_jwt );
 
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
@@ -25,6 +25,7 @@ use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
 use Proc::ProcessTable;    # use for log memory use
 use WeBWorK::PG;           #webwork2 (use to set up environment)
 use WeBWorK::CourseEnvironment;
+use WeBWorK::Utils::Tags;
 use RenderApp::Controller::FormatRenderedProblem;
 
 use 5.10.0;
@@ -88,7 +89,7 @@ sub process_pg_file {
     $inputHash->{displayMode} =
       'MathJax';    #	is there any reason for this to be anything else?
     $inputHash->{sourceFilePath} ||= $file_path;
-    $inputHash->{outputformat}   ||= 'static';
+    $inputHash->{outputFormat}   ||= 'static';
     $inputHash->{problemSeed}    ||= $problem_seed;
     $inputHash->{language}       ||= 'en';
 
@@ -115,19 +116,23 @@ sub process_pg_file {
     my $html    = $formatter->formatRenderedProblem;
     my $pg_obj  = $formatter->{return_object};
     my $json_rh = {
-        renderedHTML => $html,
-        answers      => $pg_obj->{answers},
-        debug        => {
-            perl_warn => Encode::decode("UTF-8", decode_base64( $pg_obj->{WARNINGS} ) ),
-            pg_warn   => $pg_obj->{warning_messages},
-            debug     => $pg_obj->{debug_messages},
-            internal  => $pg_obj->{internal_debug_messages}
+        renderedHTML      => $html,
+        answers           => $pg_obj->{answers},
+        debug             => {
+            perl_warn     => Encode::decode("UTF-8", decode_base64( $pg_obj->{WARNINGS} ) ),
+            pg_warn       => $pg_obj->{warning_messages},
+            debug         => $pg_obj->{debug_messages},
+            internal      => $pg_obj->{internal_debug_messages}
         },
-        problem_result => $pg_obj->{problem_result},
-        problem_state  => $pg_obj->{problem_state},
-        flags          => $pg_obj->{flags},
-        form_data      => $inputHash,
-        assets         => $pg_obj->{assets},
+        problem_result    => $pg_obj->{problem_result},
+        problem_state     => $pg_obj->{problem_state},
+        flags             => $pg_obj->{flags},
+        resources         => $pg_obj->{resources},
+        form_data         => $inputHash,
+        pgResources       => $pg_obj->{pgResources},
+        raw_metadata_text => $pg_obj->{raw_metadata_text},
+        sessionJWT        => $pg_obj->{sessionJWT},
+        answerJWT         => $pg_obj->{answerJWT},
     };
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
@@ -138,6 +143,8 @@ sub process_pg_file {
     delete $json_rh->{flags}{compoundProblem}{grader}
       if $json_rh->{flags}{compoundProblem}{grader};
 
+
+    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path, $inputHash->{problemSource}) if ( $inputHash->{includeTags} );
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($json_rh);
     return $json;
@@ -170,7 +177,15 @@ sub process_problem {
     # if base64 source is provided, use that over fetching problem path
     if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/ )
     {
-        $source = Encode::decode("UTF-8",decode_base64( $inputs_ref->{problemSource} ) );
+        # such hackery - but Mojo::Promises are so well-built that they are invisible
+        # ... until you leave the Mojo space
+        $inputs_ref->{problemSource} = $inputs_ref->{problemSource}{results}[0] if $inputs_ref->{problemSource} =~ /Mojo::Promise/;
+        # sanitize the base64 encoded source
+        $inputs_ref->{problemSource} =~ s/\s//gm;
+        # while ($source =~ /([^A-Za-z0-9+])/gm) {
+        #     warn "invalid character found: ".sprintf( "\\u%04x", ord($1) )."\n";
+        # }
+        $source = Encode::decode("UTF-8", decode_base64( $inputs_ref->{problemSource} ) );
     }
     else {
         ( $adj_file_path, $source ) = get_source($file_path);
@@ -181,29 +196,29 @@ sub process_problem {
         #$inputs_ref->{sourceFilePath} = $adj_file_path;
         #$inputs_ref->{pathToProblemFile} = $adj_file_path;
     }
+    my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
 
-    my $assets = [];
+    # TODO verify line ending are LF instead of CRLF
+
+    # included (external) pg content is not recorded by PGalias
+    # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
+    my $pgResources = [];
     while ($source =~ m/includePG(?:problem|file)\(["'](.*)["']\);/g )
     {
-        warn "PG asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
-        my $pgAsset = $1;
-        $pgAsset = dirname($file_path) . "/" . $pgAsset if ($pgAsset =~ /^[^\/]*\.pg$/);
-        warn "Recording PG asset as: $pgAsset\n" if $UNIT_TESTS_ON;
-        # warn "REDIRECTING TO: " . $redirect . "\n" if $UNIT_TESTS_ON;
-        # ( $adj_file_path, $source ) = get_source($redirect);
-        push @$assets, $pgAsset;
+        warn "PG asset reference found: $1\n" if $UNIT_TESTS_ON;
+        push @$pgResources, $1;
     }
 
-    # this does not capture _all_ image asset references, unfortunately...
-    # asset filenames may be stored as variables before image() is called
-    while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
-        warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
-        my $image = $1;
-        $image =~ s/['"]//g;
-        $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
-        warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
-        push @$assets, $image;
-    }
+    # # this does not capture _all_ image asset references, unfortunately...
+    # # asset filenames may be stored as variables before image() is called
+    # while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
+    #     warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
+    #     my $image = $1;
+    #     $image =~ s/['"]//g;
+    #     $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
+    #     warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
+    #     push @$assets, $image;
+    # }
 
     # $inputs_ref->{pathToProblemFile} = $adj_file_path
     #   if ( defined $adj_file_path );
@@ -229,7 +244,16 @@ sub process_problem {
     $return_object = standaloneRenderer( $ce, \$source, $inputs_ref );
 
     # stash assets list in $return_object
-    $return_object->{assets} = $assets;
+    $return_object->{pgResources} = $pgResources;
+
+    # stash raw metadata text in $return_object
+    $return_object->{raw_metadata_text} = $raw_metadata_text;
+
+    # generate sessionJWT to store session data and answerJWT to update grade store
+    # only occurs if problemJWT exists!
+    my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
+    $return_object->{sessionJWT} = $sessionJWT // '';
+    $return_object->{answerJWT}  = $answerJWT // '';
 
     #######################################################################
     # Handle errors
@@ -256,29 +280,27 @@ sub process_problem {
     ##################################################
 
     # PG/macros/PG.pl wipes out problemSeed -- put it back!
-    $inputs_ref->{problemSeed} = $problem_seed;
+    # $inputs_ref->{problemSeed} = $problem_seed; # NO DONT
     $inputs_ref->{displayMode} = $display_mode;
 
  	# my $encoded_source = encode_base64($source); # create encoding of source_file;
     my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
-        return_object  => $return_object,
-        encoded_source => '',                       #encode_base64($source),
-        sourceFilePath => $file_path,
-        url            => $inputs_ref->{base_url}
-          || $inputs_ref->{baseURL},                # use default hosted2
-        form_action_url => $inputs_ref->{form_action_url}
-          || $inputs_ref->{formURL},
-        maketext        => sub { return @_ },
-        courseID        => 'blackbox',
-        userID          => 'Motoko_Kusanagi',
-        course_password => 'daemon',
-        inputs_ref      => $inputs_ref,
+      return_object   => $return_object,
+      encoded_source  => '', #encode_base64($source),
+      url             => $inputs_ref->{baseURL}, 
+      form_action_url => $inputs_ref->{formURL},
+      maketext        => sub {return @_},
+      courseID        => 'blackbox',
+      userID          => 'Motoko_Kusanagi',
+      course_password => 'daemon',
+      inputs_ref      => $inputs_ref,
+      ce              => $ce,
     );
 
     ##################################################
     # log elapsed time
     ##################################################
-    my $scriptName     = 'rederlyPGproblemRenderer';
+    my $scriptName     = 'standalonePGproblemRenderer';
     my $log_file_path  = $file_path // 'source provided without path';
     my $cg_end         = time;
     my $cg_duration    = $cg_end - $cg_start;
@@ -308,7 +330,7 @@ sub standaloneRenderer {
     #print "entering standaloneRenderer\n\n";
     my $ce          = shift;
     my $problemFile = shift // '';
-    my $form_data   = shift // '';
+    my $inputs_ref   = shift // '';
     my %args        = @_;
 
     # my $key = $r->param('key');
@@ -317,16 +339,16 @@ sub standaloneRenderer {
 
     my $user             = fake_user();
     my $set              = fake_set();
-    my $showHints        = $form_data->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
-    my $showSolutions    = $form_data->{showSolutions} // 0;
-    my $problemNumber    = $form_data->{problemNumber} // 1;          # ever even relevant?
-    my $displayMode      = $form_data->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
-    my $problem_seed     = $form_data->{problemSeed} || 1234;
-    my $permission_level = $form_data->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
-    my $num_correct      = $form_data->{numCorrect} || 0;             # consider replacing - this may never be relevant...
-    my $num_incorrect    = $form_data->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
-    my $processAnswers   = $form_data->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
-    my $psvn             = $form_data->{psvn} // 123;                 # by request from Tani
+    my $showHints        = $inputs_ref->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
+    my $showSolutions    = $inputs_ref->{showSolutions} // 0;
+    my $problemNumber    = $inputs_ref->{problemNumber} // 1;          # ever even relevant?
+    my $displayMode      = $inputs_ref->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
+    my $problem_seed     = $inputs_ref->{problemSeed} || 1234;
+    my $permission_level = $inputs_ref->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
+    my $num_correct      = $inputs_ref->{numCorrect} || 0;             # consider replacing - this may never be relevant...
+    my $num_incorrect    = $inputs_ref->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
+    my $processAnswers   = $inputs_ref->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
+    my $psvn             = $inputs_ref->{psvn} // 123;                 # by request from Tani
 
     print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
@@ -359,7 +381,7 @@ sub standaloneRenderer {
     $problem->{attempted}     = $num_correct + $num_incorrect;
 
     if ( ref $problemFile ) {
-        $problem->{source_file}         = $form_data->{sourceFilePath};
+        $problem->{source_file}         = $inputs_ref->{sourceFilePath};
         $translationOptions->{r_source} = $problemFile;
 
         # warn "standaloneProblemRenderer: setting source_file = $problemFile";
@@ -379,7 +401,7 @@ sub standaloneRenderer {
         $set,
         $problem,
         $psvn,    # by request from Tani
-        $form_data,
+        $inputs_ref,
         $translationOptions,
         $extras,
     );
@@ -397,7 +419,7 @@ sub standaloneRenderer {
           ['Problem failed during render - no PGcore received.'];
     }
 
-    insert_mathquill_responses( $form_data, $pg );
+    insert_mathquill_responses( $inputs_ref, $pg );
 
     my $out2 = {
         text                    => $pg->{body_text},
@@ -410,6 +432,7 @@ sub standaloneRenderer {
         problem_result          => $pg->{result},
         problem_state           => $pg->{state},
         flags                   => $pg->{flags},
+        resources               => [ keys %{$pg->{pgcore}{PG_alias}{resource_list}} ],
         warning_messages        => $pgwarning_messages,
         debug_messages          => $pgdebug_messages,
         internal_debug_messages => $internal_debug_messages,
@@ -433,6 +456,60 @@ sub get_current_process_memory {
     state $pt = Proc::ProcessTable->new;
     my %info = map { $_->pid => $_ } @{ $pt->table };
     return $info{$$}->rss;
+}
+
+# expects a pg/result_object and a ref to submitted formdata
+# generates a sessionJWT and an answerJWT
+sub generateJWTs {
+    my $pg = shift;
+    my $inputs_ref = shift;
+    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}};
+    my $scoreHash = {};
+
+    # if no problemJWT exists, then why bother?
+    return unless $inputs_ref->{problemJWT};
+
+    # store the current answer/response state for each entry
+    foreach my $ans (keys %{$pg->{answers}}) {
+        # TODO: Anything else we want to add to sessionHash?
+        $sessionHash->{$ans}                  = $inputs_ref->{$ans};
+        $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
+        $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
+
+        # $scoreHash->{ans_id} = $ans;
+        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
+        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
+
+        # TODO see why this key is causing JWT corruption in PHP
+        delete( $pg->{answers}{$ans}{student_ans});
+    }
+    $scoreHash->{answers}   = unbless($pg->{answers});
+
+    # keep track of the number of correct/incorrect submissions
+    $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
+    $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
+
+    # include the final result of the combined scores
+    $scoreHash->{result} = $pg->{problem_result}{score};
+
+    # create and return the session JWT
+    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
+    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
+
+    # form answerJWT
+    my $responseHash = {
+      iss        => $ENV{SITE_HOST},
+      aud        => $inputs_ref->{JWTanswerURL},
+      score      => $scoreHash,
+      problemJWT => $inputs_ref->{problemJWT},
+      sessionJWT => $sessionJWT,
+      platform   => 'standaloneRenderer'
+    };
+
+    # Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
+    my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
+
+    return ($sessionJWT, $answerJWT);
 }
 
 # insert_mathquill_responses subroutine
@@ -594,7 +671,7 @@ sub pretty_print_rh {
 
 sub create_course_environment {
     my $self       = shift;
-    my $courseName = $self->{courseName} || 'rederly';
+    my $courseName = $self->{courseName} || 'renderer';
     my $ce         = WeBWorK::CourseEnvironment->new(
         {
             webwork_dir => $ENV{WEBWORK_ROOT},

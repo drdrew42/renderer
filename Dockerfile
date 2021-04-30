@@ -1,5 +1,5 @@
 FROM ubuntu:20.04
-MAINTAINER Rederly
+MAINTAINER drdrew42
 
 WORKDIR /usr/app
 ARG DEBIAN_FRONTEND=noninteractive
@@ -10,12 +10,18 @@ RUN apt-get update \
     apt-utils \
     git \
     gcc \
+    npm \
     make \
     curl \
+    nodejs \
     dvipng \
+    openssl \
     libc-dev \
     cpanminus \
+    libssl-dev \
     libgd-perl \
+    zlib1g-dev \
+    imagemagick \
     libdbi-perl \
     libjson-perl \
     libcgi-pm-perl \
@@ -25,6 +31,10 @@ RUN apt-get update \
     libdatetime-perl \
     libuuid-tiny-perl \
     libtie-ixhash-perl \
+    libhttp-async-perl \
+    libnet-ssleay-perl \
+    libarchive-zip-perl \
+    libcrypt-ssleay-perl \
     libclass-accessor-perl \
     libstring-shellquote-perl \
     libextutils-cbuilder-perl \
@@ -35,7 +45,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
-RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait \
+RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait Crypt::JWT IO::Socket::SSL CGI::Cookie \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 ENV MOJO_MODE=production
@@ -43,6 +53,8 @@ ENV MOJO_MODE=production
 COPY . .
 
 RUN cp render_app.conf.dist render_app.conf
+
+RUN cd lib/WeBWorK/htdocs && npm install && cd ../../..
 
 EXPOSE 3000
 

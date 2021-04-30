@@ -1,0 +1,18 @@
+%= javascript '/iframeResizer.min.js'
+
+<div id="iframe-header" class='header iframe-header'>
+    <button type="button" id="render-button">Render contents of editor</button>
+    <div class="render-option"><input type="checkbox" class="checkbox-input" id="show-hint" name="showHints" value="1"><label for="showHints">Show hints</label></div>
+    <div class="render-option"><input type="checkbox" class="checkbox-input" id="show-solution" name="showSolutions" value="1"><label for="showSolutions">Show solutions</label></div>
+    <div class="collab" style="float:right;">
+    <img src="webwork-logo-65.png" height="35px">
+    </div>
+</div>
+<div id='render-contents' class='content'>
+    <iframe class="iframe-responsive" id="rendered-problem">
+    Load a problem, then click on "render contents."
+    </iframe>
+    %= javascript begin
+    iFrameResize({ checkOrigin: false, scrolling: true }, "#rendered-problem")
+    % end
+</div>

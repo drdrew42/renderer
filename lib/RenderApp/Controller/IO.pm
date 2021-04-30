@@ -8,6 +8,7 @@ use Mojo::JSON qw(decode_json);
 use Mojolicious::Validator;
 use Math::Random::Secure qw( rand );
 use Mojo::IOLoop;
+use WeBWorK::Utils::Tags;
 
 our $regex = {
   anyPg => qr/.+\.pg$/,
@@ -143,14 +144,17 @@ async sub catalog {
     $root_path =~ s!\s+|\.\./!!g;
     $root_path =~ s!^Library/!webwork-open-problem-library/OpenProblemLibrary/!;
     $root_path =~ s!^Contrib/!webwork-open-problem-library/Contrib/!;
+    $root_path =~ s!^Pending/!webwork-open-problem-library/Pending/!;
+    
+    $root_path =~ s!/$!!; # strip trailing slashes so that Library/ and Contrib/ act like other directories
 
     if ( $depth == 0 || !-d $root_path ) {
         # warn($root_path) if !(-e $root_path);
         return ( -e $root_path ) ? $c->rendered(200) : $c->rendered(404);
     }
 
-    if ( !($root_path =~ /^(:?webwork-open-problem-library\/|private\/)/) ) {
-        $c->log->warn("Someone is cataloguing a path outside of OPL and private!");
+    if ( !($root_path =~ /^(:?webwork-open-problem-library\/.*|private\/.*|private)$/) ) {
+        $c->log->warn("Someone is cataloguing a path outside of OPL and private! $root_path");
         return $c->rendered(403);
     }
     $c->render_later;
@@ -174,8 +178,8 @@ sub depthSearch_p {
                   if File::Spec::Functions::splitdir($rel) >= $depth;
                 $path = $path . '/' if -d $File::Find::name;
                 # only report .pg files and directories
-                $all{$path}++
-                  if ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! );
+                $all{$rel} = $path
+                  if ( $rel =~ /\S/ && ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ) );
             };
             File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
             return \%all, 200;
@@ -446,6 +450,36 @@ sub _isNewVersion {
 	}
 
 	return $isNew;
+}
+
+async sub setTags {
+  my $c = shift;
+  my $incomingTags = $c->req->params->to_hash;
+  
+  # if DESCRIPTION is only one line, params will not instantiate DESCRIPTION as an array...
+  $incomingTags->{DESCRIPTION} = [$incomingTags->{DESCRIPTION}] unless (ref($incomingTags->{DESCRIPTION}) =~ /ARRAY/);
+  # the same holds for keywords
+  $incomingTags->{keywords} = [$incomingTags->{keywords}] unless (ref($incomingTags->{keywords}) =~ /ARRAY/);
+
+  my $problem = $c->newProblem( { log => $c->log, read_path => $incomingTags->{file} } );
+
+  # wrap the get/update/write tags in a promise
+  my $tags = WeBWorK::Utils::Tags->new($incomingTags->{file});
+  foreach my $key (keys %$incomingTags) {
+    # printf "SETTING: [%15s] => %s\n", $key, $incomingTags->{$key};
+    $tags->{$key} = $incomingTags->{$key};
+  }
+  $tags->write();
+
+  # return tags + pre-DOCUMENT() header
+  $problem->load;
+  my $header = $1 if ($problem->{problem_contents} =~ /(.*?)DOCUMENT\(\);/s);
+  $header ||= $problem->{problem_contents}; # pointer files have no DOCUMENT calls -- others?
+  my $return_object = { 
+    tags => $tags,
+    raw_metadata_text => $header 
+  };
+  return $c->render(json => $return_object, status => 200);
 }
 
 sub validate {

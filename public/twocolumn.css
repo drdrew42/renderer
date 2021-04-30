@@ -4,9 +4,24 @@
 
 /* Create two equal columns that floats next to each other */
 .column {
-  float: left;
   width: 50%;
+  height: auto;
   padding: 10px;
+  position: absolute;
+  z-index: 1;
+  display: block;
+  bottom: 0;
+  top: 47px;
+}
+
+.left {
+  left: 0;
+  background-color:#aaa;
+}
+
+.right {
+  right: 0;
+  background-color:#bbb;
 }
 
 /* Clear floats after the columns */
@@ -16,7 +31,16 @@
   clear: both;
 }
 
-.iframe-container {
+.content {
+  position: absolute;
+  top: 50px;
+  bottom: 0px;
+  left: 0px;
+  right: 0px;
+  padding: 10px;
+}
+
+.iframe-header {
     position: relative;
     overflow: hidden;
 }
@@ -25,7 +49,8 @@
     top: 0;
     left: 0;
     width: 100%;
-    max-height: 100vh;
+    max-height: 100%;
+    min-width: 100%;
     border: 0;
 }
 
@@ -42,7 +67,7 @@
   padding-bottom: 13px;
 }
 
-.iframe-container button {
+.iframe-header button {
   float: left;
   padding-top: 6px;
   padding-right: 10px;
@@ -56,7 +81,7 @@
   cursor: pointer;
 }
 
-.iframe-container .render-option {
+.iframe-header .render-option {
   padding-top: 6px;
   padding-right: 10px;
   padding-bottom: 6px;
@@ -67,6 +92,6 @@
   float: left;
 }
 
-.iframe-container button:hover {
+.iframe-header button:hover {
   background: #ccc;
 }

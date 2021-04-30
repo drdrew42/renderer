@@ -1,7 +1,7 @@
-# Rederly Standalone Problem Renderer & Editor
+# WeBWorK Standalone Problem Renderer & Editor
 
-![Commit Activity](https://img.shields.io/github/commit-activity/m/rederly/renderer?style=plastic)
-![License](https://img.shields.io/github/license/rederly/renderer?style=plastic)
+![Commit Activity](https://img.shields.io/github/commit-activity/m/drdrew42/renderer?style=plastic)
+![License](https://img.shields.io/github/license/drdrew42/renderer?style=plastic)
 
 
 This is a PG Renderer derived from the WeBWorK2 codebase
@@ -54,21 +54,27 @@ Can be interfaced through `/render-api`
 ## Parameters
 | Key | Type | Default Value | Required | Description | Notes |
 | --- | ---- | ------------- | -------- | ----------- | ----- |
-| sourceFilePath | string | null | true if problemSource is null | The path to the file to be rendered | Can begin with Library or Contrib, in which case the renderer will automatically adjust the path from the webwork-open-problem-library root |
-| problemSource | string | null | true if sourceFilePath is null | The source of a problem to render | base64 encoded raw pg content - can be used instead of sourceFilePath |
+| problemSourceURL | string | null | true if `sourceFilePath` and `problemSource` are null | The URL from which to fetch the problem source code | Takes precedence over `problemSource` and `sourceFilePath`. A request to this URL is expected to return valid pg source code in base64 encoding. |
+| problemSource | string (base64 encoded) | null | true if `problemSourceURL` and `sourceFilePath` are null | The source code of a problem to be rendered | Takes precedence over `sourceFilePath`. |
+| sourceFilePath | string | null | true if `problemSource` and `problemSourceURL` are null | The path to the file that contains the problem source code | Can begin with Library/ or Contrib/, in which case the renderer will automatically adjust the path relative to the webwork-open-problem-library root. Path may also begin with `private/` for local, non-OPL content. |
 | problemSeed | number | NA | true | The seed to determine the randomization of a problem | |
 | psvn | number | 123 | false | used for consistent randomization between problems | |
 | formURL | string | /render-api | false | the URL for form submission | |
 | baseURL | string | / | false | the URL for relative paths | |
+| format | string | '' | false | Determine how the response is formatted ('html' or 'json') ||
 | outputFormat | string (enum) | static | false | Determines how the problem should render, see below descriptions below | |
 | language | string | en | false | Language to render the problem in (if supported) | |
-| showHints | number (boolean) | 1 | false | Whether or not to show hints (restrictions apply) | Hint logic has some hooks into the problem source, if permission level is high enough or `n` number of attempts has been reached they will render if this is true (1), however if false (0) you will never see the hints)
-| showSolutions | number (boolean) | 0 | false | Whether or not to show the solutions | |
-| permissionLevel | number | 0 | false | Aids in the conrol of show hints, also controls display of scaffold problems (possibly more) | See the levels we use below |
+| showHints | number (boolean) | 1 | false | Whether or not to show hints (restrictions apply) | Irrelevant if `permissionLevel >= 10`, in which case `showHints` is regarded as automatically 'true' |
+| showSolutions | number (boolean) | 0 | false | Whether or not to show the solutions (restrictions apply) | Irrelevant if `permissionLevel >= 10`, in which case `showSolutions` is regarded as automatically 'true' |
+| permissionLevel | number | 0 | false | Affects the rendering of hints and solutions. Also controls display of scaffold problems (possibly more) | See the levels we use below |
 | problemNumber | number | 1 | false | We don't use this | |
 | numCorrect | number | 0 | false | The number of correct attempts on a problem | |
 | numIncorrect | number | 1000 | false | the number of incorrect attempts on this problem | Relevant for triggering hints that are not immediately available |
 | processAnswers | number (boolean) | 1 | false | Determines whether or not answer json is populated, and whether or not problem_result and problem_state are non-empty | |
+| answersSubmitted | number (boolean) | ? | false? | Determines whether to process form-data associated to the available input fields | |
+| showSummary | number (boolean) | ? | false? | Determines whether or not to show the summary result of processing the form-data associated with `answersSubmitted` above ||
+| showComments | number (boolean) | 0 | false | Renders author comment field at the end of the problem ||
+| includeTags | number (boolean) | 0 | false | Includes problem tags in the returned JSON | Only relevant when requesting `format: 'json'` |
 
 ## Output Format
 | Key | Description |
@@ -88,6 +94,9 @@ Can be interfaced through `/render-api`
 | admin | 20 |
 
 ## Permission logic summary for hints and solutions
-* If professor or above (permission value >= 10) you will always get hints and solutions
-* If student you will get solutions if and only if we set the showSolutions flag to true
-* If student you will get hints after you have exceeded the attempt threshold (if the flag is set to true)
+* If `permissionLevel >= 10`, then hints and solutions will be rendered - no exceptions.
+* If `permissionLevel < 10`, then:
+    - solutions (if they are provided in the pg source code) will be rendered if and only if `showSolutions` is true.
+    - hints (if they are provided in the pg source code) will be rendered if and only if:
+        + `showHints` is true, and
+        + `numCorrect + numIncorrect > n` where `n` is set by the pg sourcce code being rendered

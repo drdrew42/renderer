@@ -1,5 +1,5 @@
 <!DOCTYPE html>
 <html>
-  <head><title>Rederly WeBWorK Renderer</title></head>
+  <head><title>WeBWorK Standalone Renderer</title></head>
   <body><%= content %></body>
 </html>

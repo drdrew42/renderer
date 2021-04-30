@@ -1,3 +1,0 @@
-<%== renderedProblem() %>
-
-%= link_to Edit => 'editor' if (session 'showEdit')

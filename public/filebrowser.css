@@ -1,0 +1,21 @@
+form {
+  width: 100%;
+}
+
+.fill-height {
+  height: 100%;
+}
+
+select {
+  height: inherit;
+  width: inherit;
+}
+
+.pg-file {
+  color: rgb(0, 80, 0);
+  font-weight: bold;
+}
+
+.other-file {
+  color: rgb(126, 0, 0);
+}

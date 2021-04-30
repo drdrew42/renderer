@@ -1,6 +1,5 @@
 package RenderApp;
 use Mojo::Base 'Mojolicious';
-use Mojo::File;
 
 BEGIN {
     use Mojo::File;
@@ -33,24 +32,39 @@ use RenderApp::Model::Problem;
 use RenderApp::Controller::RenderProblem;
 use RenderApp::Controller::IO;
 
-use WeBWorK::Form;
-use WeBWorK::Constants;
-
 sub startup {
-  my $self = shift;
-  my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
+	my $self = shift;
+	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
-  # config
-  $self->plugin('Config');
-  $self->plugin('TagHelpers');
-  $self->secrets($self->config('secrets'));
-#   $self->plugin('leak_tracker');
 
-  # Models
-  $self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
+	# Merge environment variables with config file
+	$self->plugin('Config');
+	$self->plugin('TagHelpers');
+	$self->secrets($self->config('secrets'));
+	$ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
+	$ENV{sessionJWTsecret} //= $self->config('sessionJWTsecret');
+	$ENV{baseURL} //= $self->config('baseURL');
+	$ENV{formURL} //= $self->config('formURL');
+	$ENV{SITE_HOST} //= $self->config('SITE_HOST');
 
-  # helper to expose request data
-  $self->helper(requestData2JSON => sub {
+	# validate configration urls
+	if($ENV{baseURL} eq '/'){
+		$ENV{baseURL} = '';
+	}
+	$ENV{SITE_HOST} =~ s|/$||;  # remove trailing slash
+
+	if ( $ENV{baseURL} !~ m|^https?://| ) {
+		$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
+	}
+	if ( $ENV{formURL} !~ m|^https?://| ) {
+		$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
+	}
+
+	# Models
+	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
+
+	# helper to expose request data
+	$self->helper(requestData2JSON => sub {
 		my $c = shift;
 		my $hash = {};
 		my @all_param_names = @{$c->req->params->names};
@@ -61,24 +75,27 @@ sub startup {
 		return $c->render(json => $hash);
 	});
 
-  # helper to validate incoming request parameters
-  $self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
+	# helper to validate incoming request parameters
+	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
+	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
 
-  # Routes to controller
-  my $r = $self->routes;
+	# Routes to controller
+	my $r = $self->routes;
 
-	$r->any('/')->to('login#ui');
+	$r->any('/')->to('pages#twocolumn');
+	$r->any('/opl')->to('pages#oplUI');
 
 	$r->any('/health' => sub {shift->rendered(200)});
 
 	$r->post('/render-api/')->to('render#problem');
-	$r->post('/render-api/tap')->to('IO#raw');
+	$r->any('/render-api/tap')->to('IO#raw');
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
 	$r->any('/render-api/find')->to('IO#search');
-    $r->post('/render-api/upload')->to('IO#upload');
+	$r->post('/render-api/upload')->to('IO#upload');
 	$r->post('/render-api/sma')->to('IO#findNewVersion');
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
+	$r->post('/render-api/tags')->to('IO#setTags');
 
 	$r->any('/rendered')->to('render#problem');
 	$r->any('/request' => sub {shift->requestData2JSON});
