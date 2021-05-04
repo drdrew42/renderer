@@ -1,2 +1,2 @@
-lib/WeBWorK/htdocs/* linguist-vendored
-public/* linguist-vendored
+lib/WeBWorK/htdocs/** linguist-vendored
+public/** linguist-vendored
