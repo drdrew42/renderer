@@ -151,7 +151,7 @@ async sub problem {
     };
 
     $c->log->info("sending answerJWT to " . $inputs_ref->{JWTanswerURL});
-    await $c->ua->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
+    await $c->ua->max_redirects(5)->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
       then(sub {
         my $response = shift->result;
 
