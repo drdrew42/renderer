@@ -59,7 +59,7 @@ sub fetchRemoteSource_p {
   };
 
   # don't worry about overriding problemSource - it *shouldn't exist* if problemSourceURL is present
-  return $c->ua->max_redirects(5)->get_p( $url => $header )->
+  return $c->ua->max_redirects(5)->request_timeout(10)->get_p( $url => $header )->
     then(
       sub {
           my $tx = shift;
@@ -69,11 +69,7 @@ sub fetchRemoteSource_p {
       sub {
           my $err = shift;
           $c->log->error("Problem source: Request to $url failed with error - $err");
-          return $c->render( json => {
-              status => 500,
-              message => "Failed to retrieve problem source. Error: $err.",
-            }, status => 500
-          );
+          return;
       }
   );
 }
@@ -83,14 +79,28 @@ async sub problem {
   my $inputs_ref = $c->parseRequest;
   $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
-  my $file_path = $inputs_ref->{sourceFilePath}; # || $c->session('filePath');
+  my $file_path = $inputs_ref->{sourceFilePath};
   my $random_seed = $inputs_ref->{problemSeed};
-  my $problem_contents = ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) ?
-    await $inputs_ref->{problemSource} :
-    $inputs_ref->{problemSource};
-
   $inputs_ref->{baseURL} ||= $ENV{baseURL};
   $inputs_ref->{formURL} ||= $ENV{formURL};
+
+  my $problem_contents;
+  if ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) {
+    $problem_contents = await $inputs_ref->{problemSource};
+    if ( $problem_contents ) {
+      $c->log->info("Problem source fetched from $inputs_ref->{problemSourceURL}");
+    } else {
+      return $c->render(
+          json => {
+              status  => 500,
+              message => "Failed to retrieve problem source.",
+          },
+          status => 500
+      );
+    }
+  } else {
+    $problem_contents = $inputs_ref->{problemSource};
+  }
 
   my $problem = $c->newProblem({ log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents });
   return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
@@ -141,7 +151,7 @@ async sub problem {
     };
 
     $c->log->info("sending answerJWT to " . $inputs_ref->{JWTanswerURL});
-    await $c->ua->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
+    await $c->ua->max_redirects(5)->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
       then(sub {
         my $response = shift->result;
 

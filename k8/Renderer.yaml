@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wwrenderer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wwrenderer
+  template:
+    metadata:
+      labels:
+        app: wwrenderer
+    spec:
+      containers:
+      - name: wwrenderer
+        image: ghcr.io/drdrew42/ww-renderer:master
+        resources:
+          requests:
+            cpu: "0.5"
+            memory: "0.5G"
+          limits:
+            cpu: "1"
+            memory: "1.5G"
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        env:
+        - name: SITE_HOST
+          value: https://example.org/
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: wwrenderer
+spec:
+  # type: LoadBalancer
+  type: ClusterIP
+  selector:
+    app: wwrenderer
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3000
+---
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: wwrenderer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: wwrenderer
+  minReplicas: 1
+  maxReplicas: 30
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 50

@@ -55,7 +55,7 @@ BEGIN {
     # PG.pl, PGbasicmacros.pl and PGanswermacros and cache the results so that
     # future calls have preloaded versions of these large files. This saves a
     # significant amount of time.
-    $WeBWorK::PG::Local::safeCache = new WWSafe;
+    # $WeBWorK::PG::Local::safeCache = new WWSafe;
 }
 
 sub alarm_handler {
@@ -93,93 +93,23 @@ sub new_helper {
                                 # hints and the display mode to use
     ) = @_;
 
-# write timing log entry
-# 	writeTimingLogEntry($ce, "WeBWorK::PG::new",
-# 		"user=".$user->user_id.",problem=".$ce->{courseName}."/".$set->set_id."/".$problem->problem_id.",mode=".$translationOptions->{displayMode},
-# 		"begin");
-
 # install a local warn handler to collect warnings  FIXME -- figure out what I meant to do here.
     my $warnings = "";
 
-    #local $SIG{__WARN__} = sub { $warnings .= shift()."<br/>\n"};
-    #if $ce->{pg}->{options}->{catchWarnings};
+    local $SIG{__WARN__} = sub { $warnings .= shift()."<br/>\n"}
+        if $ce->{pg}->{options}->{catchWarnings};
 
     # create a Translator
     #warn "PG: creating a Translator\n";
     my $translator = WeBWorK::PG::Translator->new;
-
-    # set the directory hash
-    #warn "PG: setting the directory hash\n";
-    # FIXME rh_directories does not appear to be used. ever.
-    #	$translator->rh_directories({
-    #		macrosPath             => $ce->{courseDirs}->{macrosPath},
-    #		templateDirectory      => $ce->{courseDirs}->{templates},
-    #		tempDirectory          => $ce->{courseDirs}->{html_temp},
-    #	});
 
     ############################################################################
     # evaluate modules and "extra packages"
     ############################################################################
 
     #warn "PG: evaluating modules and \"extra packages\"\n";
-    my @modules = (
-        [qw(Encode)],
-        [qw(Encode::Encoding)],
-        [qw(HTML::Parser)],
-        [qw(HTML::Entities)],
-        [qw(DynaLoader)],
-        [qw(Encode)],
-        [qw(Exporter )],
-        [qw(GD)],
-        [
-            qw(AlgParser AlgParserWithImplicitExpand Expr ExprWithImplicitExpand utf8)
-        ],
-        [qw(AnswerHash AnswerEvaluator)],
-        [qw(WWPlot)],    # required by Circle (and others)
-        [qw(Circle)],
-        [qw(Class::Accessor)],
-        [qw(Complex)],
-        [qw(Complex1)],
-        [qw(Distributions)],
-        [qw(Fraction)],
-        [qw(Fun)],
-        [qw(Hermite)],
-        [qw(Label)],
-        [qw(ChoiceList)],
-        [qw(Match)],
-        [qw(MatrixReal1)],    # required by Matrix
-        [qw(Matrix)],
-        [qw(Multiple)],
-        [qw(PGrandom)],
-        [qw(Regression)],
-        [qw(Select)],
-        [qw(Units)],
-        [qw(VectorField)],
-        [qw(Parser Value)],
-        [qw(Parser::Legacy)],
-        [qw(Statistics)],
+    my @modules = @{ $ce->{pg}->{modules} };
 
-#	[qw(SaveFile)],
-#  [qw(Chromatic)], # for Northern Arizona graph problems
-#                    #  -- follow instructions at libraries/nau_problib/lib/README to install
-        [qw(Applet FlashApplet JavaApplet CanvasApplet GeogebraWebApplet)],
-        [
-            qw(PGcore PGalias PGresource PGloadfiles PGanswergroup PGresponsegroup  Tie::IxHash)
-        ],
-        [qw(Locale::Maketext)],
-        [qw(WeBWorK::Localize)],
-        [qw(JSON)],
-        [qw(Rserve Class::Tiny IO::Handle)],
-        [qw(Mojo::Base Mojo::Exception)],
-        [qw(Data::Dumper)],
-    );
-
-    #	# HACK for apache2
-    #	if (MP2) {
-    #		push @modules, ["Apache2::Log"], ["APR::Table"];
-    #	} else {
-    #		push @modules, ["Apache::Log"];
-    #	}
     foreach my $module_packages_ref (@modules) {
         my ( $module, @extra_packages ) = @$module_packages_ref;
 
@@ -321,12 +251,12 @@ sub new_helper {
     # and IO.pl
     # did before.  Mostly it just defines access to the PGcore object
 
-# 2010 the loop is overkill since there is just one file, we'll leave it for now in case there are more.
-    foreach (qw(PG.pl )) {    # dangerousMacros.pl IO.pl
-        my $macroPath = $WeBWorK::Constants::PG_DIRECTORY . "/macros/$_";
-        my $err       = $translator->unrestricted_load($macroPath);
-        warn "Error while loading $macroPath: $err" if $err;
-    }
+# 2021 -- for the standaloneRenderer, PG.pl is pre-cached in Translator.pm
+    # foreach (qw(PG.pl )) {    # dangerousMacros.pl IO.pl
+    #     my $macroPath = $WeBWorK::Constants::PG_DIRECTORY . "/macros/$_";
+    #     my $err       = $translator->unrestricted_load($macroPath);
+    #     warn "Error while loading $macroPath: $err" if $err;
+    # }
 
     ############################################################################
     # set the opcode mask (using default values)
