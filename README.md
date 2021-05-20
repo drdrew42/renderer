@@ -22,14 +22,16 @@ docker run -d \
   renderer:1.0
 ```
 
-If you have non-OPL content, it should be mounted as a volume at `/usr/app/private`.
+If you have non-OPL content, it can be mounted as a volume at `/usr/app/private` by adding the following line to the `docker run` command:
 
 ```
-docker run -d \
-  --publish 3000:3000 \
-  --mount type=bind,source="$(pwd)"/volumes/webwork-open-problem-library/,target=/usr/app/webwork-open-problem-library \
   --mount type=bind,source=/pathToYourLocalContentRoot,target=/usr/app/private \
-  renderer:1.0
+```
+
+A default configuration file is included in the container, but it can be overridden by mounting a replacement at the application root.
+
+```
+  --mount type=bind,source=/pathToYour/configuration_file.conf,target=/usr/app/render_app.conf \
 ```
 
 ## LOCAL INSTALL ###

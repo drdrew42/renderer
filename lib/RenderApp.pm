@@ -23,6 +23,8 @@ BEGIN {
     unless ( -r $WeBWorK::Constants::PG_DIRECTORY ) {
         die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
     }
+
+	$ENV{MOJO_CONFIG} = (-r "$ENV{RENDER_ROOT}/render_app.conf") ? "$ENV{RENDER_ROOT}/render_app.conf" : "$ENV{RENDER_ROOT}/render_app.conf.dist";
 }
 
 use lib "$main::dirname";
@@ -36,7 +38,6 @@ sub startup {
 	my $self = shift;
 	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
-
 	# Merge environment variables with config file
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
@@ -47,7 +48,7 @@ sub startup {
 	$ENV{formURL} //= $self->config('formURL');
 	$ENV{SITE_HOST} //= $self->config('SITE_HOST');
 
-	# validate configration urls
+	# validate configuration urls
 	if($ENV{baseURL} eq '/'){
 		$ENV{baseURL} = '';
 	}
@@ -60,6 +61,14 @@ sub startup {
 		$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
 	}
 
+	# Handle optional CORS settings
+	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
+		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL" unless ($CORS_ORIGIN eq '*' || $CORS_ORIGIN =~ /^https?:\/\//);
+		$self->hook(before_dispatch => sub {
+			my $c = shift;
+            $c->res->headers->header( 'Access-Control-Allow-Origin' => $CORS_ORIGIN );
+		});
+	}
 	# Models
 	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
