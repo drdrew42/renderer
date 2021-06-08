@@ -90,7 +90,6 @@ sub process_pg_file {
       'MathJax';    #	is there any reason for this to be anything else?
     $inputHash->{sourceFilePath} ||= $file_path;
     $inputHash->{outputFormat}   ||= 'static';
-    $inputHash->{problemSeed}    ||= $problem_seed;
     $inputHash->{language}       ||= 'en';
 
     # HACK: required for problemRandomize.pl
@@ -197,6 +196,7 @@ sub process_problem {
         #$inputs_ref->{pathToProblemFile} = $adj_file_path;
     }
     my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
+    $inputs_ref->{problemUUID} = md5_hex($source);
 
     # TODO verify line ending are LF instead of CRLF
 
