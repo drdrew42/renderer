@@ -18,6 +18,7 @@ use String::ShellQuote;
 use Cwd 'abs_path';
 use JSON::XS;
 use Crypt::JWT qw( encode_jwt );
+use Digest::MD5 qw( md5_hex );
 
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
