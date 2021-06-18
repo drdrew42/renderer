@@ -85,7 +85,7 @@ async sub problem {
   $inputs_ref->{formURL} ||= $ENV{formURL};
 
   my $problem_contents;
-  if ( $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) {
+  if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) {
     $problem_contents = await $inputs_ref->{problemSource};
     if ( $problem_contents ) {
       $c->log->info("Problem source fetched from $inputs_ref->{problemSourceURL}");

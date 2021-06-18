@@ -1,10 +1,11 @@
 {
-  secrets => ['reveal_your_secrets','revelio','alohamora'],
+  secrets => ['abracadabra'],
   baseURL => '',
   formURL => '/render-api',
-  problemJWTsecret => "shared",
-  webworkJWTsecret => "private",
-  SITE_HOST => "http://localhost:3000",
+  problemJWTsecret => 'shared',
+  webworkJWTsecret => 'private',
+  SITE_HOST => 'http://localhost:3000',
+  CORS_ORIGIN => '*',
   hypnotoad => {
     listen => ['http://*:3000'],
     accepts => 400,
