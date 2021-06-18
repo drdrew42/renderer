@@ -14,11 +14,18 @@ sub parseRequest {
   if (defined $params{problemJWT}) {
     $c->log->info("Received JWT: using problemJWT");
     my $problemJWT = $params{problemJWT};
-    my $claims = decode_jwt(
-      token => $problemJWT,
-      key => $ENV{problemJWTsecret},
-      verify_aud => $ENV{SITE_HOST},
-    );
+    my $claims;
+    eval {
+      $claims = decode_jwt(
+          token      => $problemJWT,
+          key        => $ENV{problemJWTsecret},
+          verify_aud => $ENV{SITE_HOST},
+      );
+      1;
+    } or do {
+      $c->stash( error => $@->message );
+      return undef;
+    };
     $claims = $claims->{webwork} if defined $claims->{webwork};
     # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
     # override key-values in params with those provided in the JWT
@@ -29,11 +36,18 @@ sub parseRequest {
   if (defined $params{sessionJWT}) {
     $c->log->info("Received JWT: using sessionJWT");
     my $sessionJWT = $params{sessionJWT};
-    my $claims = decode_jwt(
-      token      => $sessionJWT,
-      key        => $ENV{sessionJWTsecret},
-      verify_iss => $ENV{SITE_HOST},
-    );
+    my $claims;
+    eval {
+      $claims = decode_jwt(
+        token      => $sessionJWT,
+        key        => $ENV{sessionJWTsecret},
+        verify_iss => $ENV{SITE_HOST},
+      );
+      1;
+    } or do {
+      $c->stash( error => $@->message );
+      return undef;
+    };
 
     # only supply key-values that are not already provided
     # e.g. numCorrect/numIncorrect or restarting an interrupted session
@@ -77,6 +91,7 @@ sub fetchRemoteSource_p {
 async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
+  return $c->render(json => { status => 403, message => $c->stash('error')}, status => 403) unless $inputs_ref;
   $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath};
