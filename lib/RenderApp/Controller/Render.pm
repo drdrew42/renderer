@@ -23,7 +23,7 @@ sub parseRequest {
       );
       1;
     } or do {
-      $c->stash( error => $@->message );
+      $c->croak($@->message, 3);
       return undef;
     };
     $claims = $claims->{webwork} if defined $claims->{webwork};
@@ -45,7 +45,7 @@ sub parseRequest {
       );
       1;
     } or do {
-      $c->stash( error => $@->message );
+      $c->croak($@->message, 3);
       return undef;
     };
 
@@ -250,4 +250,19 @@ sub checkOutputs {
   return @errs;
 }
 
+sub croak {
+  my $c = shift;
+  my $err_stack = shift;
+  my $depth = shift;
+
+  my @err = split("\n", $err_stack);
+  splice(@err, $depth, $#err) if ($depth <= scalar @err);
+  $c->log->error( join "\n", @err );
+
+  my $id = $c->req->request_id;
+  my $pretty_error = $err[0] =~ s/^(.*?) at .*$/$1/r;
+
+  $c->stash( error => "$pretty_error [$id]" );
+  return;
+}
 1;
