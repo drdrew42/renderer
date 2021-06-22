@@ -87,6 +87,7 @@ sub startup {
 	# helper to validate incoming request parameters
 	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
 	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
+	$self->helper(croak => sub { RenderApp::Controller::Render::croak(@_)});
 
 	# Routes to controller
 	my $r = $self->routes;
