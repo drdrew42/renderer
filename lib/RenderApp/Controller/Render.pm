@@ -14,11 +14,18 @@ sub parseRequest {
   if (defined $params{problemJWT}) {
     $c->log->info("Received JWT: using problemJWT");
     my $problemJWT = $params{problemJWT};
-    my $claims = decode_jwt(
-      token => $problemJWT,
-      key => $ENV{problemJWTsecret},
-      verify_aud => $ENV{SITE_HOST},
-    );
+    my $claims;
+    eval {
+      $claims = decode_jwt(
+          token      => $problemJWT,
+          key        => $ENV{problemJWTsecret},
+          verify_aud => $ENV{SITE_HOST},
+      );
+      1;
+    } or do {
+      $c->croak($@->message, 3);
+      return undef;
+    };
     $claims = $claims->{webwork} if defined $claims->{webwork};
     # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
     # override key-values in params with those provided in the JWT
@@ -29,11 +36,18 @@ sub parseRequest {
   if (defined $params{sessionJWT}) {
     $c->log->info("Received JWT: using sessionJWT");
     my $sessionJWT = $params{sessionJWT};
-    my $claims = decode_jwt(
-      token      => $sessionJWT,
-      key        => $ENV{sessionJWTsecret},
-      verify_iss => $ENV{SITE_HOST},
-    );
+    my $claims;
+    eval {
+      $claims = decode_jwt(
+        token      => $sessionJWT,
+        key        => $ENV{sessionJWTsecret},
+        verify_iss => $ENV{SITE_HOST},
+      );
+      1;
+    } or do {
+      $c->croak($@->message, 3);
+      return undef;
+    };
 
     # only supply key-values that are not already provided
     # e.g. numCorrect/numIncorrect or restarting an interrupted session
@@ -77,6 +91,7 @@ sub fetchRemoteSource_p {
 async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
+  return $c->render(json => { status => 403, message => $c->stash('error')}, status => 403) unless $inputs_ref;
   $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath};
@@ -235,4 +250,19 @@ sub checkOutputs {
   return @errs;
 }
 
+sub croak {
+  my $c = shift;
+  my $err_stack = shift;
+  my $depth = shift;
+
+  my @err = split("\n", $err_stack);
+  splice(@err, $depth, $#err) if ($depth <= scalar @err);
+  $c->log->error( join "\n", @err );
+
+  my $id = $c->req->request_id;
+  my $pretty_error = $err[0] =~ s/^(.*?) at .*$/$1/r;
+
+  $c->stash( error => "$pretty_error [$id]" );
+  return;
+}
 1;
