@@ -38,11 +38,12 @@ A default configuration file is included in the container, but it can be overrid
 
 If using a local install instead of docker:
 
-* Dockerfile lists perl dependencies
-* clone PG and webwork-open-problem-library into the provided stubs ./lib/PG and ./webwork-open-problem-library
-  - `git clone https://github.com/openwebwork/pg ./lib/PG`
+* Clone the renderer and its submodules: `git clone --recursive https://github.com/drdrew42/renderer`
+* Enter the project directory: `cd renderer`
+* Install perl dependencies listed in Dockerfile (CPANMinus recommended)
+* clone webwork-open-problem-library into the provided stub ./webwork-open-problem-library
   - `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
-* copy `render_app.conf.dist` to `render_app.conf`
+* copy `render_app.conf.dist` to `render_app.conf` and make any desired modifications
 * install other dependencies
   - `cd lib/WeBWorK/htdocs`
   - `npm install`
