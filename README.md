@@ -43,6 +43,9 @@ If using a local install instead of docker:
   - `git clone https://github.com/openwebwork/pg ./lib/PG`
   - `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
 * copy `render_app.conf.dist` to `render_app.conf`
+* install other dependencies
+  - `cd lib/WeBWorK/htdocs`
+  - `npm install`
 * start the app with `morbo ./script/render_app` or `morbo -l http://localhost:3000 ./script/render_app` if changing root url
 * access on `localhost:3000` by default or otherwise specified root url
 
