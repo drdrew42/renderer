@@ -1,0 +1,47 @@
+/* modified from https://codepen.io/Asadabbas/pen/joVKGE */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;700&family=VT323&display=swap');
+
+* {
+    margin: 0;
+}
+
+body {
+    background: rgb(49, 49, 49);
+    color: lime;
+    box-shadow: inset -53px -41px 198px black, inset 95px -2px 200px black;
+    display:flex;
+    align-items:center;
+    height:100vh;
+    justify-content: center;
+}
+
+.typewriter {
+    font-family: 'VT323', monospace;
+    /* font-weight: 700; */
+    width: 70%;  
+}
+
+h1 {
+    overflow: hidden;
+    margin: 0 auto;
+    display: inline-block;
+    font-weight: normal;
+}
+
+h1:after {
+    content: '';
+    display: inline-block;
+    background-color: lime;
+    margin-left: 2px;
+    height: 25px;
+    width: 13px;
+    animation: cursor 0.4s infinite;
+}
+
+/* The typewriter cursor effect */
+@keyframes cursor {
+    0% { opacity: 1; }
+    49% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 0; }
+}

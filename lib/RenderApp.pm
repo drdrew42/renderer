@@ -42,52 +42,35 @@ sub startup {
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
 	$self->secrets($self->config('secrets'));
-	$ENV{problemJWTsecret} //= $self->config('problemJWTsecret');
-	$ENV{sessionJWTsecret} //= $self->config('sessionJWTsecret');
-	$ENV{baseURL} //= $self->config('baseURL');
-	$ENV{formURL} //= $self->config('formURL');
-	$ENV{SITE_HOST} //= $self->config('SITE_HOST');
+	for ('problemJWTsecret', 'webworkJWTsecret', 'baseURL', 'formURL', 'SITE_HOST') {
+		$ENV{$_} //= $self->config($_);
+	};
 
-	# validate configuration urls
-	if($ENV{baseURL} eq '/'){
-		$ENV{baseURL} = '';
-	}
+	# convert to absolute URLs
+	$ENV{baseURL} = ''if ( $ENV{baseURL} eq '/' );
 	$ENV{SITE_HOST} =~ s|/$||;  # remove trailing slash
-
-	if ( $ENV{baseURL} !~ m|^https?://| ) {
-		$ENV{baseURL} = $ENV{SITE_HOST}.$ENV{baseURL};
-	}
-	if ( $ENV{formURL} !~ m|^https?://| ) {
-		$ENV{formURL} = $ENV{baseURL}.$ENV{formURL};
-	}
+	$ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} if ( $ENV{baseURL} !~ m|^https?://| );
+	$ENV{formURL} = $ENV{baseURL} . $ENV{formURL} if ( $ENV{formURL} !~ m|^https?://| );
 
 	# Handle optional CORS settings
 	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
-		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL" unless ($CORS_ORIGIN eq '*' || $CORS_ORIGIN =~ /^https?:\/\//);
+		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'" 
+			unless ($CORS_ORIGIN eq '*' || $CORS_ORIGIN =~ /^https?:\/\//);
+
 		$self->hook(before_dispatch => sub {
 			my $c = shift;
             $c->res->headers->header( 'Access-Control-Allow-Origin' => $CORS_ORIGIN );
 		});
 	}
+
 	# Models
 	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
-
-	# helper to expose request data
-	$self->helper(requestData2JSON => sub {
-		my $c = shift;
-		my $hash = {};
-		my @all_param_names = @{$c->req->params->names};
-		foreach my $key (@all_param_names) {
-			my $val = join ',', @{$c->req->params->every_param($key)};
-			$hash->{$key} = $val;
-		}
-		return $c->render(json => $hash);
-	});
 
 	# helper to validate incoming request parameters
 	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
 	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
 	$self->helper(croak => sub { RenderApp::Controller::Render::croak(@_)});
+	$self->helper(logID => sub { shift->req->request_id });
 
 	# Routes to controller
 	my $r = $self->routes;
@@ -97,7 +80,7 @@ sub startup {
 
 	$r->any('/health' => sub {shift->rendered(200)});
 
-	$r->post('/render-api/')->to('render#problem');
+	$r->post('/render-api')->to('render#problem');
 	$r->any('/render-api/tap')->to('IO#raw');
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');
@@ -107,10 +90,8 @@ sub startup {
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
 	$r->post('/render-api/tags')->to('IO#setTags');
 
-	$r->any('/rendered')->to('render#problem');
-	$r->any('/request' => sub {shift->requestData2JSON});
-
 	# pass all requests via ww2_files through to lib/WeBWorK/htdocs
+	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/";
 	$r->any('/webwork2_files/*static' => sub {
 		my $c = shift;
 		$c->reply->file($staticPath.$c->stash('static'));
