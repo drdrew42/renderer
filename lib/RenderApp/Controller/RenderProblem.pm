@@ -476,7 +476,7 @@ sub generateJWTs {
         # TODO: Anything else we want to add to sessionHash?
         $sessionHash->{$ans}                  = $inputs_ref->{$ans};
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
-        $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans };
+        $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans } if ($inputs_ref->{ 'MaThQuIlL_' . $ans});
 
         # $scoreHash->{ans_id} = $ans;
         # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
@@ -487,16 +487,18 @@ sub generateJWTs {
     }
     $scoreHash->{answers}   = unbless($pg->{answers});
 
-    # keep track of the number of correct/incorrect submissions
-    $sessionHash->{numCorrect} = $pg->{problem_state}{num_of_correct_ans};
-    $sessionHash->{numIncorrect} = $pg->{problem_state}{num_of_incorrect_ans};
+    # update the number of correct/incorrect submissions if answers were 'submitted'
+    $sessionHash->{numCorrect} = (defined $inputs_ref->{submitAnswers}) ?
+        $pg->{problem_state}{num_of_correct_ans} : ($inputs_ref->{numCorrect} // 0);
+    $sessionHash->{numIncorrect} = (defined $inputs_ref->{submitAnswers}) ?
+        $pg->{problem_state}{num_of_incorrect_ans} : ($inputs_ref->{numIncorrect} // 0);
 
     # include the final result of the combined scores
     $scoreHash->{result} = $pg->{problem_result}{score};
 
     # create and return the session JWT
     # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
-    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{sessionJWTsecret});
+    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
 
     # form answerJWT
     my $responseHash = {
@@ -566,10 +568,10 @@ sub fake_problem {
         problem_seed       => 666,
         status             => 0,
         sub_status         => 0,
-        attempted          => 1000,
+        attempted          => 0,
         last_answer        => '',
         num_correct        => 0,
-        num_incorrect      => 1000,
+        num_incorrect      => 0,
         prCount            => -10
     };
 
