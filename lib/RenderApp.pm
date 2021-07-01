@@ -36,7 +36,6 @@ use RenderApp::Controller::IO;
 
 sub startup {
 	my $self = shift;
-	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/"; #curfile->dirname->sibling('public')->to_string.'/';
 
 	# Merge environment variables with config file
 	$self->plugin('Config');
@@ -81,6 +80,8 @@ sub startup {
 	$r->any('/health' => sub {shift->rendered(200)});
 
 	$r->post('/render-api')->to('render#problem');
+	$r->any('/render-api/jwt')->to('render#jwtFromRequest');
+	$r->any('/render-api/jwe')->to('render#jweFromRequest');
 	$r->any('/render-api/tap')->to('IO#raw');
 	$r->post('/render-api/can')->to('IO#writer');
 	$r->any('/render-api/cat')->to('IO#catalog');

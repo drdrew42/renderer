@@ -94,7 +94,6 @@ async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
   return unless $inputs_ref;
-  # return $c->render(json => { status => 403, message => $c->stash('error')}, status => 403) unless $inputs_ref;
   $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath};
@@ -275,4 +274,36 @@ sub croak {
   );
   return;
 }
+
+sub jweFromRequest {
+  my $c          = shift;
+  my $inputs_ref = $c->parseRequest;
+  return unless $inputs_ref;
+  $inputs_ref->{aud} = $ENV{SITE_HOST};
+  $inputs_ref->{key} = $ENV{problemJWTsecret};
+  my $req_jwt = encode_jwt(
+      payload => $inputs_ref,
+      key     => $ENV{problemJWTsecret},
+      alg      => 'PBES2-HS512+A256KW',
+      enc      => 'A256GCM',
+      auto_iat => 1
+  );
+  return $c->render( text => $req_jwt );
+}
+
+sub jwtFromRequest {
+    my $c          = shift;
+    my $inputs_ref = $c->parseRequest;
+    return unless $inputs_ref;
+    $inputs_ref->{aud} = $ENV{SITE_HOST};
+    $inputs_ref->{key} = $ENV{problemJWTsecret};
+    my $req_jwt = encode_jwt(
+        payload => $inputs_ref,
+        key     => $ENV{problemJWTsecret},
+        alg      => 'HS256',
+        auto_iat => 1
+    );
+    return $c->render( text => $req_jwt );
+}
+
 1;
