@@ -23,7 +23,7 @@ sub parseRequest {
       );
       1;
     } or do {
-      $c->croak($@->message, 3);
+      $c->croak($@, 3);
       return undef;
     };
     $claims = $claims->{webwork} if defined $claims->{webwork};
@@ -45,7 +45,7 @@ sub parseRequest {
       );
       1;
     } or do {
-      $c->croak($@->message, 3);
+      $c->croak($@, 3);
       return undef;
     };
 
@@ -63,6 +63,7 @@ sub parseRequest {
 sub fetchRemoteSource_p {
   my $c = shift;
   my $url = shift;
+  $c->log->info("Problem requested from $url");
   # tell the library who originated the request for pg source
   my $req_origin   = $c->req->headers->origin   || 'no origin';
   my $req_referrer = $c->req->headers->referrer || 'no referrer';
@@ -82,6 +83,7 @@ sub fetchRemoteSource_p {
     catch(
       sub {
           my $err = shift;
+          $c->stash( message => $err );
           $c->log->error("Problem source: Request to $url failed with error - $err");
           return;
       }
@@ -91,7 +93,7 @@ sub fetchRemoteSource_p {
 async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
-  return $c->render(json => { status => 403, message => $c->stash('error')}, status => 403) unless $inputs_ref;
+  return unless $inputs_ref;
   $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath};
@@ -105,12 +107,13 @@ async sub problem {
     if ( $problem_contents ) {
       $c->log->info("Problem source fetched from $inputs_ref->{problemSourceURL}");
     } else {
-      return $c->render(
-          json => {
+      return $c->respond_to(
+          json => { json => {
               status  => 500,
               message => "Failed to retrieve problem source.",
           },
-          status => 500
+          status => 500},
+          html => { template => 'exception' }
       );
     }
   } else {
@@ -174,24 +177,25 @@ async sub problem {
         if ($response->is_success) {
           $answerJWTresponse->{message} = $response->body;
         }
-        elsif ($response->is_error) {$answerJWTresponse->{message} = $response->message}
+        elsif ($response->is_error) {
+          $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $response->message;
+        }
 
         $answerJWTresponse->{message} =~ s/"/\\"/g;
         $answerJWTresponse->{message} =~ s/'/\'/g;
-
       })->
       catch(sub {
         my $response = shift;
         $c->log->error($response);
 
         $answerJWTresponse->{status} = 500;
-        $answerJWTresponse->{message} = $response;
+        $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $response;
       });
     $answerJWTresponse = encode_json($answerJWTresponse);
     $c->log->info("answerJWT response ".$answerJWTresponse);
 
     $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus/$answerJWTresponse/g;
-  }else{
+  } else {
     $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus//;
   }
 
@@ -252,7 +256,8 @@ sub checkOutputs {
 
 sub croak {
   my $c = shift;
-  my $err_stack = shift;
+  my $exception = shift;
+  my $err_stack = $exception->message;
   my $depth = shift;
 
   my @err = split("\n", $err_stack);
@@ -262,7 +267,43 @@ sub croak {
   my $id = $c->req->request_id;
   my $pretty_error = $err[0] =~ s/^(.*?) at .*$/$1/r;
 
-  $c->stash( error => "$pretty_error [$id]" );
+  $c->stash( error => "$pretty_error [$id]", exception => $exception );
+  $c->respond_to(
+    html => {template=>'exception', message=>"$pretty_error [$id]", status => 403},
+    json => {json => {message=>$c->stash('error')}, status => 403},
+  );
   return;
 }
+
+sub jweFromRequest {
+  my $c          = shift;
+  my $inputs_ref = $c->parseRequest;
+  return unless $inputs_ref;
+  $inputs_ref->{aud} = $ENV{SITE_HOST};
+  $inputs_ref->{key} = $ENV{problemJWTsecret};
+  my $req_jwt = encode_jwt(
+      payload => $inputs_ref,
+      key     => $ENV{problemJWTsecret},
+      alg      => 'PBES2-HS512+A256KW',
+      enc      => 'A256GCM',
+      auto_iat => 1
+  );
+  return $c->render( text => $req_jwt );
+}
+
+sub jwtFromRequest {
+    my $c          = shift;
+    my $inputs_ref = $c->parseRequest;
+    return unless $inputs_ref;
+    $inputs_ref->{aud} = $ENV{SITE_HOST};
+    $inputs_ref->{key} = $ENV{problemJWTsecret};
+    my $req_jwt = encode_jwt(
+        payload => $inputs_ref,
+        key     => $ENV{problemJWTsecret},
+        alg      => 'HS256',
+        auto_iat => 1
+    );
+    return $c->render( text => $req_jwt );
+}
+
 1;
