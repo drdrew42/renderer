@@ -1,0 +1,27 @@
+%= stylesheet $ENV{SITE_HOST} . '/typing-sim.css'
+%= stylesheet $ENV{SITE_HOST} . '/crt-display.css'
+%= javascript begin
+window.onload = function() {
+    var i = 0;
+    var tag = document.getElementById('error-block');
+    var text = tag.getAttribute('text');
+    var speed = 150;
+
+    function typeWriter() {
+        if (i <= text.length) {
+            i++;
+            tag.innerHTML = text.slice(0 ,i);
+            setTimeout(typeWriter, speed);
+        }
+    }
+
+    typeWriter();
+}
+% end
+
+% my $message = $c->stash('message') // $c->stash('exception')->message;
+<body class='crt'>
+    <div class='typewriter'>
+        <h1 id='error-block' text="<%=$message%>">></h1>
+    </div>
+</body>
