@@ -253,7 +253,8 @@ sub checkOutputs {
 
 sub exception {
   my $c = shift;
-  my $message = shift;
+  my $id = $c->logID;
+  my $message = "[$id] " . shift;
   my $status = shift;
   return $c->respond_to(
     json => { json => {
@@ -274,10 +275,9 @@ sub croak {
   splice(@err, $depth, $#err) if ($depth <= scalar @err);
   $c->log->error( join "\n", @err );
 
-  my $id = $c->req->request_id;
   my $pretty_error = $err[0] =~ s/^(.*?) at .*$/$1/r;
 
-  $c->exception("[$id] $pretty_error", 403);
+  $c->exception($pretty_error, 403);
   return;
 }
 

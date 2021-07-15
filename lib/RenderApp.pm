@@ -26,6 +26,7 @@ BEGIN {
 
 	$ENV{MOJO_CONFIG} = (-r "$ENV{RENDER_ROOT}/render_app.conf") ? "$ENV{RENDER_ROOT}/render_app.conf" : "$ENV{RENDER_ROOT}/render_app.conf.dist";
 	# $ENV{MOJO_MODE} = 'production';
+	# $ENV{MOJO_LOG_LEVEL} = 'debug';
 }
 
 use lib "$main::dirname";
@@ -77,11 +78,11 @@ sub startup {
 	my $r = $self->routes;
 
 	$r->post('/render-api')->to('render#problem');
+	$r->any('/health' => sub {shift->rendered(200)});
 	if ($self->mode eq 'development') {
 		$r->any('/')->to('pages#twocolumn');
 		$r->any('/opl')->to('pages#oplUI');
 		$r->any('/die' => sub {die "what did you expect, flowers?"});
-		$r->any('/health' => sub {shift->rendered(200)});
 		$r->any('/timeout' => sub {
 			my $c = shift;
 			my $tx = $c->render_later->tx;
