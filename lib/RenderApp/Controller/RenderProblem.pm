@@ -197,7 +197,7 @@ sub process_problem {
         #$inputs_ref->{pathToProblemFile} = $adj_file_path;
     }
     my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
-    $inputs_ref->{problemUUID} = md5_hex($source);
+    $inputs_ref->{problemUUID} = md5_hex(Encode::encode_utf8($source));
 
     # TODO verify line ending are LF instead of CRLF
 
