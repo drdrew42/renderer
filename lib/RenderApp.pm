@@ -25,6 +25,8 @@ BEGIN {
     }
 
 	$ENV{MOJO_CONFIG} = (-r "$ENV{RENDER_ROOT}/render_app.conf") ? "$ENV{RENDER_ROOT}/render_app.conf" : "$ENV{RENDER_ROOT}/render_app.conf.dist";
+	# $ENV{MOJO_MODE} = 'production';
+	# $ENV{MOJO_LOG_LEVEL} = 'debug';
 }
 
 use lib "$main::dirname";
@@ -41,7 +43,7 @@ sub startup {
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
 	$self->secrets($self->config('secrets'));
-	for ('problemJWTsecret', 'webworkJWTsecret', 'baseURL', 'formURL', 'SITE_HOST') {
+	for ( qw(problemJWTsecret webworkJWTsecret baseURL formURL SITE_HOST MOJO_MODE) ) {
 		$ENV{$_} //= $self->config($_);
 	};
 
@@ -65,31 +67,42 @@ sub startup {
 	# Models
 	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
-	# helper to validate incoming request parameters
+	# Helpers
 	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
-	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_)});
-	$self->helper(croak => sub { RenderApp::Controller::Render::croak(@_)});
+	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_) });
+	$self->helper(croak => sub { RenderApp::Controller::Render::croak(@_) });
 	$self->helper(logID => sub { shift->req->request_id });
+	$self->helper(exception => sub { RenderApp::Controller::Render::exception(@_) });
 
 	# Routes to controller
 	my $r = $self->routes;
 
-	$r->any('/')->to('pages#twocolumn');
-	$r->any('/opl')->to('pages#oplUI');
-
-	$r->any('/health' => sub {shift->rendered(200)});
-
 	$r->post('/render-api')->to('render#problem');
-	$r->any('/render-api/jwt')->to('render#jwtFromRequest');
-	$r->any('/render-api/jwe')->to('render#jweFromRequest');
-	$r->any('/render-api/tap')->to('IO#raw');
-	$r->post('/render-api/can')->to('IO#writer');
-	$r->any('/render-api/cat')->to('IO#catalog');
-	$r->any('/render-api/find')->to('IO#search');
-	$r->post('/render-api/upload')->to('IO#upload');
-	$r->post('/render-api/sma')->to('IO#findNewVersion');
-	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
-	$r->post('/render-api/tags')->to('IO#setTags');
+	$r->any('/health' => sub {shift->rendered(200)});
+	if ($self->mode eq 'development') {
+		$r->any('/')->to('pages#twocolumn');
+		$r->any('/opl')->to('pages#oplUI');
+		$r->any('/die' => sub {die "what did you expect, flowers?"});
+		$r->any('/timeout' => sub {
+			my $c = shift;
+			my $tx = $c->render_later->tx;
+			Mojo::IOLoop->timer(2 => sub {
+				$tx = $tx; # prevent $tx from going out of scope
+				$c->rendered(200);
+			});
+		});
+
+		$r->any('/render-api/jwt')->to('render#jwtFromRequest');
+		$r->any('/render-api/jwe')->to('render#jweFromRequest');
+		$r->any('/render-api/tap')->to('IO#raw');
+		$r->post('/render-api/can')->to('IO#writer');
+		$r->any('/render-api/cat')->to('IO#catalog');
+		$r->any('/render-api/find')->to('IO#search');
+		$r->post('/render-api/upload')->to('IO#upload');
+		$r->post('/render-api/sma')->to('IO#findNewVersion');
+		$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
+		$r->post('/render-api/tags')->to('IO#setTags');
+	}
 
 	# pass all requests via ww2_files through to lib/WeBWorK/htdocs
 	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/";

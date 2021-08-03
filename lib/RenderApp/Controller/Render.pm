@@ -8,29 +8,12 @@ use WeBWorK::Form;
 sub parseRequest {
   my $c = shift;
   my %params = WeBWorK::Form->new_from_paramable($c->req)->Vars;
-  delete $params{JWTanswerURL}; # may ONLY be set by a JWT...
-
-  # problemJWT sets basic problem request configuration and rendering options
-  if (defined $params{problemJWT}) {
-    $c->log->info("Received JWT: using problemJWT");
-    my $problemJWT = $params{problemJWT};
-    my $claims;
-    eval {
-      $claims = decode_jwt(
-          token      => $problemJWT,
-          key        => $ENV{problemJWTsecret},
-          verify_aud => $ENV{SITE_HOST},
-      );
-      1;
-    } or do {
-      $c->croak($@, 3);
-      return undef;
-    };
-    $claims = $claims->{webwork} if defined $claims->{webwork};
-    # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
-    # override key-values in params with those provided in the JWT
-    @params{ keys %$claims } = values %$claims;
+  if ($c->app->mode eq 'production' && !( defined $params{problemJWT} || defined $params{sessionJWT} )) {
+    $c->exception('Not allowed to request problems with raw data.', 403);
+    return undef;
   }
+
+  delete $params{JWTanswerURL}; # may ONLY be set by a JWT...
 
   # set session-specific info (previous attempts, correct/incorrect count)
   if (defined $params{sessionJWT}) {
@@ -57,13 +40,34 @@ sub parseRequest {
     # @params{ keys %$claims } = values %$claims;
   }
 
+  # problemJWT sets basic problem request configuration and rendering options
+  if (defined $params{problemJWT}) {
+    $c->log->info("Received JWT: using problemJWT");
+    my $problemJWT = $params{problemJWT};
+    my $claims;
+    eval {
+      $claims = decode_jwt(
+          token      => $problemJWT,
+          key        => $ENV{problemJWTsecret},
+          verify_aud => $ENV{SITE_HOST},
+      );
+      1;
+    } or do {
+      $c->croak($@, 3);
+      return undef;
+    };
+    $claims = $claims->{webwork} if defined $claims->{webwork};
+    # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
+    # override key-values in params with those provided in the JWT
+    @params{ keys %$claims } = values %$claims;
+  }
+  warn join(', ', keys %params);
   return \%params;
 }
 
 sub fetchRemoteSource_p {
   my $c = shift;
   my $url = shift;
-  $c->log->info("Problem requested from $url");
   # tell the library who originated the request for pg source
   my $req_origin   = $c->req->headers->origin   || 'no origin';
   my $req_referrer = $c->req->headers->referrer || 'no referrer';
@@ -107,21 +111,14 @@ async sub problem {
     if ( $problem_contents ) {
       $c->log->info("Problem source fetched from $inputs_ref->{problemSourceURL}");
     } else {
-      return $c->respond_to(
-          json => { json => {
-              status  => 500,
-              message => "Failed to retrieve problem source.",
-          },
-          status => 500},
-          html => { template => 'exception' }
-      );
+      return $c->exception('Failed to retrieve problem source.', 500);
     }
   } else {
     $problem_contents = $inputs_ref->{problemSource};
   }
 
   my $problem = $c->newProblem({ log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents });
-  return $c->render(json => $problem->errport(), status => $problem->{status}) unless $problem->success();
+  return $c->exception($problem->{_message}, status => $problem->{status}) unless $problem->success();
 
   $inputs_ref->{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
@@ -254,6 +251,20 @@ sub checkOutputs {
   return @errs;
 }
 
+sub exception {
+  my $c = shift;
+  my $id = $c->logID;
+  my $message = "[$id] " . shift;
+  my $status = shift;
+  return $c->respond_to(
+    json => { json => {
+        message => $message,
+        status => $status,
+      }, status => $status},
+    html => { template => 'exception', message => $message, status => $status }
+  );
+}
+
 sub croak {
   my $c = shift;
   my $exception = shift;
@@ -264,14 +275,9 @@ sub croak {
   splice(@err, $depth, $#err) if ($depth <= scalar @err);
   $c->log->error( join "\n", @err );
 
-  my $id = $c->req->request_id;
   my $pretty_error = $err[0] =~ s/^(.*?) at .*$/$1/r;
 
-  $c->stash( error => "$pretty_error [$id]", exception => $exception );
-  $c->respond_to(
-    html => {template=>'exception', message=>"$pretty_error [$id]", status => 403},
-    json => {json => {message=>$c->stash('error')}, status => 403},
-  );
+  $c->exception($pretty_error, 403);
   return;
 }
 

@@ -6,6 +6,7 @@
   webworkJWTsecret => 'private',
   SITE_HOST => 'http://localhost:3000',
   CORS_ORIGIN => '*',
+  MOJO_MODE => 'development',
   hypnotoad => {
     listen => ['http://*:3000'],
     accepts => 400,
