@@ -52,7 +52,14 @@ If using a local install instead of docker:
 
 # Editor Interface
 
-Point your browser at `localhost:3000`, select an output format, a problem path and a problem seed. Click on "Load" to load the problem source into the editor, and from there you can render the contents of the editor (with or without edits). Clicking on "Save" will save your edits to the specified file path.
+* point your browser at [`localhost:3000`](http://localhost:3000/)
+* select an output format (see below)
+* specify a problem path (e.g. `Library/Rochester/setMAAtutorial/hello.pg`) and a problem seed (e.g. `1234`)
+* click on "Load" to load the problem source into the editor
+* render the contents of the editor (with or without edits) via "Render contents of editor"
+* click on "Save" to save your edits to the specified file path
+
+![image](https://user-images.githubusercontent.com/3385756/129100124-72270558-376d-4265-afe2-73b5c9a829af.png)
 
 # Renderer API
 Can be interfaced through `/render-api`
