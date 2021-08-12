@@ -1,19 +1,19 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-# Translators:
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: webwork2\n"
+"Project-Id-Version: PACKAGE VERSION\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2021-03-09 17:00-0600\n"
-"Last-Translator: \n"
-"Language: en_US\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. (wwRound(0, $answerScore*100)
 #: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:255
@@ -26,9 +26,7 @@ msgid "%quant(%1,of the questions remains,of the questions remain) unanswered."
 msgstr ""
 
 #: PG/macros/PGbasicmacros.pl:1277 PG/macros/PGbasicmacros.pl:1286
-msgid ""
-"(Instructor hint preview: show the student hint after the following number "
-"of attempts:"
+msgid "(Instructor hint preview: show the student hint after the following number of attempts:"
 msgstr ""
 
 #: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:386
@@ -67,8 +65,7 @@ msgstr ""
 msgid "Go back to Part 1"
 msgstr ""
 
-#: PG/macros/compoundProblem.pl:291 PG/macros/compoundProblem.pl:480
-#: PG/macros/compoundProblem.pl:491
+#: PG/macros/compoundProblem.pl:291 PG/macros/compoundProblem.pl:480 PG/macros/compoundProblem.pl:491
 msgid "Go on to next part"
 msgstr ""
 
@@ -207,8 +204,7 @@ msgstr ""
 
 #. ('j','k','_0')
 #. ('j','k')
-#: PG/lib/Parser/List/Vector.pm:35 PG/lib/Value/Vector.pm:278
-#: PG/macros/contextLimitedVector.pl:94
+#: PG/lib/Parser/List/Vector.pm:35 PG/lib/Value/Vector.pm:278 PG/macros/contextLimitedVector.pl:94
 msgid "i"
 msgstr ""
 

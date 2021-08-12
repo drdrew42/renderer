@@ -182,8 +182,7 @@ sub formatRenderedProblem {
 	my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
 	my $scoreSummary  = '';
 
-	#my $mt = WeBWorK::Localize::getLangHandle($self->{inputs_ref}{language} // 'en');
-	my $mt = WeBWorK::Localize::getLangHandle('heb');
+	my $mt = WeBWorK::Localize::getLangHandle($self->{inputs_ref}{language} // 'en');
 
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$rh_answers,
@@ -213,9 +212,9 @@ sub formatRenderedProblem {
 	# render equation images
 
 	if ($submitMode && $problemResult && $showSummary) {
-		$scoreSummary = CGI::p('Your score on this attempt is '.wwRound(0, $problemResult->{score} * 100).'%');
+		$scoreSummary = CGI::p($mt->maketext('Your score on this attempt is [_1]', wwRound(0, $problemResult->{score} * 100).'%'));
 
-$scoreSummary .= CGI::p($mt->maketext("Your score was not recorded."));
+		#$scoreSummary .= CGI::p($mt->maketext("Your score was not recorded."));
 
 		#scoreSummary .= CGI::p('Your score on this problem has not been recorded.');
 		#$scoreSummary .= CGI::hidden({id=>'problem-result-score', name=>'problem-result-score',value=>$problemResult->{score}});
@@ -274,9 +273,9 @@ $scoreSummary .= CGI::p($mt->maketext("Your score was not recorded."));
 		}
 	}
 
-	my $STRING_Preview = "Preview My Answers";
-	my $STRING_ShowCorrect = "Show correct answers";
-	my $STRING_Submit = "Submit Answers";
+	my $STRING_Preview = $mt->maketext("Preview My Answers");
+	my $STRING_ShowCorrect = $mt->maketext("Show correct answers");
+	my $STRING_Submit = $mt->maketext("Submit Answers");
 
 	#my $pretty_print_self  = pretty_print($self);
 

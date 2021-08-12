@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: webwork2\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2021-03-09 17:00-0600\n"
-"Last-Translator: \n"
+"PO-Revision-Date: 2021-08-12 17:00+0300\n"
+"Last-Translator: Nathan Wallach\n"
 "Language: he\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -16,5 +16,232 @@ msgstr ""
 "Plural-Forms: nplurals=4; plural=(n == 1 && n % 1 == 0) ? 0 : (n == 2 && n % "
 "1 == 0) ? 1: (n % 10 == 0 && n % 1 == 0 && n > 10) ? 2 : 3;\n"
 
+#. (wwRound(0, $answerScore*100)
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:255
+msgid "%1% correct"
+msgstr "%1% נכון"
+
+#. ($numBlanks)
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:395
+msgid "%quant(%1,of the questions remains,of the questions remain) unanswered."
+msgstr "%quant(%1, מהשאלות לא נענתה, מהשאלות לא נענו)."
+
+#: PG/macros/PGbasicmacros.pl:1277 PG/macros/PGbasicmacros.pl:1286
+msgid ""
+"(Instructor hint preview: show the student hint after the following number "
+"of attempts:"
+msgstr "(צפייה ברמז למורה: הראה לתלמיד את הרמז לאחר מספר זה של נסיונות:"
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:386
+msgid "All of the answers above are correct."
+msgstr "כל התשובות לעיל הן נכונות."
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:384
+msgid "All of the gradeable answers above are correct."
+msgstr "כל התשבות לעיל שניתנות לבדיקה הן נכונות."
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:289
+msgid "Answer Preview"
+msgstr "תצוגה מקדימה של תשובות"
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:391
+msgid "At least one of the answers above is NOT correct."
+msgstr "לפחות אחת מהתשובות למעלה היא לא נכונה."
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:291
+msgid "Correct Answer"
+msgstr "תשובה נכונה"
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:288
+msgid "Entered"
+msgstr "הוזן"
+
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:238
+msgid "FeedbackMessage"
+msgstr "הודעת משוב"
+
+#: PG/macros/problemRandomize.pl:185 PG/macros/problemRandomize.pl:186
+msgid "Get a new version of this problem"
+msgstr "קבל גרסה חדשה של שאלה זו."
+
+#: PG/macros/compoundProblem.pl:470
+msgid "Go back to Part 1"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:291 PG/macros/compoundProblem.pl:480
+#: PG/macros/compoundProblem.pl:491
+msgid "Go on to next part"
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:409
+msgid "Hardcopy will always print the original version of the problem."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1558
+msgid "Hint:"
+msgstr "רמז:"
+
+#: PG/macros/PGbasicmacros.pl:1558
+msgid "Hint: "
+msgstr "רמז: "
+
+#: PG/macros/problemRandomize.pl:408
+msgid "If you come back to it later, it may revert to its original version."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1226
+msgid "Instructor solution preview: show the student solution after due date."
+msgstr "הצגת פתרון למורה: הראה לתלמיד פתרון לאחר מועד ההגשה."
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:292
+msgid "Message"
+msgstr "הודעה"
+
+#: PG/macros/problemRandomize.pl:382 PG/macros/problemRandomize.pl:407
+msgid "Note:"
+msgstr "הערה:"
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:276
+msgid "Preview My Answers"
+msgstr "צפייה מוקדמת בתשובות שלי"
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:290
+msgid "Result"
+msgstr "תוצאות"
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:302
+msgid "Results for this submission"
+msgstr "תוצאות של הגשה זו"
+
+#: PG/macros/problemRandomize.pl:187
+msgid "Set random seed to:"
+msgstr ""
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:277
+msgid "Show correct answers"
+msgstr "הראה תשובות נכונות"
+
+#: PG/macros/PGbasicmacros.pl:1554 PG/macros/PGbasicmacros.pl:1555
+msgid "Solution:"
+msgstr "פתרון""
+
+#: PG/macros/PGbasicmacros.pl:1553
+msgid "Solution: "
+msgstr "פתרון: "
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:377
+msgid "Some answers will be graded later."
+msgstr "חלק מהתשובות ינוקדו מאוחר יותר."
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:278
+msgid "Submit Answers"
+msgstr "שלח תשובות לבדיקה"
+
+#: PG/macros/compoundProblem.pl:502
+msgid "Submit your answers again to go on to the next part."
+msgstr "שלח את התשובות שוב כדי להתקדם לחלק הבא."
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:379
+msgid "The answer above is NOT correct."
+msgstr "התשובה לעיל היא לא נכונה."
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:375
+msgid "The answer above is correct."
+msgstr "התשובה למעלה נכונה."
+
+#: PG/macros/problemRandomize.pl:407
+msgid "This is a new (re-randomized) version of the problem."
+msgstr "הנה גרסה חדשה של השאלה."
+
+#: PG/macros/PGbasicmacros.pl:3084
+msgid "This problem contains a video which must be viewed online."
+msgstr "השאלה מכילה וידיאו שיש לראות באופן מקוון."
+
+#: PG/macros/compoundProblem.pl:602
+msgid "This problem has more than one part."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:248
+msgid "Ungraded"
+msgstr "לא נוקד"
+
+#: PG/macros/PGanswermacros.pl:1693
+msgid "You can earn partial credit on this problem."
+msgstr "ניתן לקבל ניקוד חלקי בשאלה זו."
+
+#: PG/macros/problemRandomize.pl:383
+msgid "You can get a new version of this problem after the due date."
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:610
+msgid "You may not change your answers when going on to the next part!"
+msgstr "לא ניתן לשנות תשובות כאשר אתה מתקדם לחלק הבא!"
+
+#: PG/macros/PGbasicmacros.pl:3079
+msgid "Your browser does not support the video tag."
+msgstr "הדפדפן שלך לא תומך ב-video tag."
+
+#: PG/macros/compoundProblem.pl:603
+msgid "Your score for this attempt is for this part only;"
+msgstr ""
+
+#. (wwRound(0, $problemResult->{score} * 100)
+#: RenderApp/Controller/FormatRenderedProblem.pm:215
+msgid "Your score on this attempt is %1"
+msgstr "הציון שלך בהגשה זו הוא %1"
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:217
 msgid "Your score was not recorded."
 msgstr "הציון שלך לא נשמר."
+
+#: PG/macros/PGbasicmacros.pl:645 PG/macros/PGbasicmacros.pl:656
+msgid "answer"
+msgstr "תשובה"
+
+#: PG/macros/PGbasicmacros.pl:669
+msgid "column"
+msgstr "עמודה"
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:244
+msgid "correct"
+msgstr "נכון"
+
+#. ('j','k','_0')
+#. ('j','k')
+#: PG/lib/Parser/List/Vector.pm:35 PG/lib/Value/Vector.pm:278
+#: PG/macros/contextLimitedVector.pl:94
+msgid "i"
+msgstr ""
+
+#: PG/macros/contextPiecewiseFunction.pl:774
+msgid "if"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:253
+msgid "incorrect"
+msgstr "לא נכון"
+
+#: PG/macros/contextPiecewiseFunction.pl:777
+msgid "otherwise"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:662
+msgid "part"
+msgstr "חלק"
+
+#: PG/macros/PGbasicmacros.pl:651
+msgid "problem"
+msgstr "שאלה"
+
+#: PG/macros/PGbasicmacros.pl:668
+msgid "row"
+msgstr "שורה"
+
+#: PG/macros/compoundProblem.pl:470 PG/macros/compoundProblem.pl:480
+msgid "when you submit your answers"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:604
+msgid "your overall score is for all the parts combined."
+msgstr ""
