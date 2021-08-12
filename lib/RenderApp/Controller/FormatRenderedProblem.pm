@@ -28,6 +28,7 @@ use MIME::Base64 qw( encode_base64 decode_base64);
 use WeBWorK::Utils::AttemptsTable; #import from ww2
 use WeBWorK::PG::ImageGenerator; # import from ww2
 use WeBWorK::Utils qw( wwRound);   # required for score summary
+use WeBWorK::Localize ; # for maketext
 our $UNIT_TESTS_ON  = 0;
 
 #####################
@@ -181,6 +182,9 @@ sub formatRenderedProblem {
 	my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
 	my $scoreSummary  = '';
 
+	#my $mt = WeBWorK::Localize::getLangHandle($self->{inputs_ref}{language} // 'en');
+	my $mt = WeBWorK::Localize::getLangHandle('heb');
+
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$rh_answers,
 		answersSubmitted       => $self->{inputs_ref}{answersSubmitted}//0,
@@ -210,6 +214,9 @@ sub formatRenderedProblem {
 
 	if ($submitMode && $problemResult && $showSummary) {
 		$scoreSummary = CGI::p('Your score on this attempt is '.wwRound(0, $problemResult->{score} * 100).'%');
+
+$scoreSummary .= CGI::p($mt->maketext("Your score was not recorded."));
+
 		#scoreSummary .= CGI::p('Your score on this problem has not been recorded.');
 		#$scoreSummary .= CGI::hidden({id=>'problem-result-score', name=>'problem-result-score',value=>$problemResult->{score}});
 	}
