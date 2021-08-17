@@ -77,7 +77,7 @@ sub startup {
 	# Routes to controller
 	my $r = $self->routes;
 
-	$r->post('/render-api')->to('render#problem');
+	$r->any('/render-api')->to('render#problem');
 	$r->any('/health' => sub {shift->rendered(200)});
 	if ($self->mode eq 'development') {
 		$r->any('/')->to('pages#twocolumn');
