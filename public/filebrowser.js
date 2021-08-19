@@ -20,7 +20,7 @@ function updateBrowser(formId, updateBackNav) {
     } else if (value.match(/\.pg$/)) {
         target = '/render-api/';
         formData.set('sourceFilePath', value);
-        formData.set('randomSeed', value);
+        formData.set('problemSeed', 1234);
         formData.set('outputFormat', 'static');
         formData.set('format', 'json');
         formData.set('permissionLevel', 20);
