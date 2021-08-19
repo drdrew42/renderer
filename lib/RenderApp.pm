@@ -66,11 +66,12 @@ sub startup {
 
 	# Models
 	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
+	$self->helper(newJWT => sub { shift; RenderApp::Model::JWT->new(@_) });
+	$self->helper(decodeJWT => sub { shift; RenderApp::Model::JWT::decode(@_) });
 
 	# Helpers
 	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
 	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_) });
-	$self->helper(croak => sub { RenderApp::Controller::Render::croak(@_) });
 	$self->helper(logID => sub { shift->req->request_id });
 	$self->helper(exception => sub { RenderApp::Controller::Render::exception(@_) });
 
