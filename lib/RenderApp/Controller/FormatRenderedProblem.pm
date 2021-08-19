@@ -29,6 +29,7 @@ use WeBWorK::Utils::AttemptsTable; #import from ww2
 use WeBWorK::PG::ImageGenerator; # import from ww2
 use WeBWorK::Utils::LanguageAndDirection;
 use WeBWorK::Utils qw( wwRound);   # required for score summary
+use WeBWorK::Localize ; # for maketext
 our $UNIT_TESTS_ON  = 0;
 
 #####################
@@ -189,6 +190,7 @@ sub formatRenderedProblem {
 	# $formLanguage instead.
 	my %PROBLEM_LANG_AND_DIR = get_problem_lang_and_dir($rh_result->{flags}, "auto:en:ltr", $formLanguage);
 	my $PROBLEM_LANG_AND_DIR = join(" ", map { qq{$_="$PROBLEM_LANG_AND_DIR{$_}"} } keys %PROBLEM_LANG_AND_DIR);
+	my $mt = WeBWorK::Localize::getLangHandle($self->{inputs_ref}{language} // 'en');
 
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$rh_answers,
@@ -218,7 +220,10 @@ sub formatRenderedProblem {
 	# render equation images
 
 	if ($submitMode && $problemResult && $showSummary) {
-		$scoreSummary = CGI::p('Your score on this attempt is '.wwRound(0, $problemResult->{score} * 100).'%');
+		$scoreSummary = CGI::p($mt->maketext('Your score on this attempt is [_1]', wwRound(0, $problemResult->{score} * 100).'%'));
+
+		#$scoreSummary .= CGI::p($mt->maketext("Your score was not recorded."));
+
 		#scoreSummary .= CGI::p('Your score on this problem has not been recorded.');
 		#$scoreSummary .= CGI::hidden({id=>'problem-result-score', name=>'problem-result-score',value=>$problemResult->{score}});
 	}
@@ -276,9 +281,9 @@ sub formatRenderedProblem {
 		}
 	}
 
-	my $STRING_Preview = "Preview My Answers";
-	my $STRING_ShowCorrect = "Show correct answers";
-	my $STRING_Submit = "Submit Answers";
+	my $STRING_Preview = $mt->maketext("Preview My Answers");
+	my $STRING_ShowCorrect = $mt->maketext("Show correct answers");
+	my $STRING_Submit = $mt->maketext("Submit Answers");
 
 	#my $pretty_print_self  = pretty_print($self);
 
