@@ -27,6 +27,7 @@ use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
 use MIME::Base64 qw( encode_base64 decode_base64);
 use WeBWorK::Utils::AttemptsTable; #import from ww2
 use WeBWorK::PG::ImageGenerator; # import from ww2
+use WeBWorK::Utils::LanguageAndDirection;
 use WeBWorK::Utils qw( wwRound);   # required for score summary
 use WeBWorK::Localize ; # for maketext
 our $UNIT_TESTS_ON  = 0;
@@ -182,6 +183,13 @@ sub formatRenderedProblem {
 	my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
 	my $scoreSummary  = '';
 
+	my $COURSE_LANG_AND_DIR = get_lang_and_dir($formLanguage);
+	# Set up the problem language and direction
+	# PG files can request their language and text direction be set.  If we do
+	# not have access to a default course language, fall back to the
+	# $formLanguage instead.
+	my %PROBLEM_LANG_AND_DIR = get_problem_lang_and_dir($rh_result->{flags}, "auto:en:ltr", $formLanguage);
+	my $PROBLEM_LANG_AND_DIR = join(" ", map { qq{$_="$PROBLEM_LANG_AND_DIR{$_}"} } keys %PROBLEM_LANG_AND_DIR);
 	my $mt = WeBWorK::Localize::getLangHandle($self->{inputs_ref}{language} // 'en');
 
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
