@@ -1,0 +1,241 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. (wwRound(0, $answerScore*100)
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:255
+msgid "%1% correct"
+msgstr ""
+
+#. ($numBlanks)
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:395
+msgid "%quant(%1,of the questions remains,of the questions remain) unanswered."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1277 PG/macros/PGbasicmacros.pl:1286
+msgid "(Instructor hint preview: show the student hint after the following number of attempts:"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:386
+msgid "All of the answers above are correct."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:384
+msgid "All of the gradeable answers above are correct."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:289
+msgid "Answer Preview"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:391
+msgid "At least one of the answers above is NOT correct."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:291
+msgid "Correct Answer"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:288
+msgid "Entered"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:238
+msgid "FeedbackMessage"
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:185 PG/macros/problemRandomize.pl:186
+msgid "Get a new version of this problem"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:470
+msgid "Go back to Part 1"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:291 PG/macros/compoundProblem.pl:480 PG/macros/compoundProblem.pl:491
+msgid "Go on to next part"
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:409
+msgid "Hardcopy will always print the original version of the problem."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1558
+msgid "Hint:"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1558
+msgid "Hint: "
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:408
+msgid "If you come back to it later, it may revert to its original version."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1226
+msgid "Instructor solution preview: show the student solution after due date."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:292
+msgid "Message"
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:382 PG/macros/problemRandomize.pl:407
+msgid "Note:"
+msgstr ""
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:276
+msgid "Preview My Answers"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:290
+msgid "Result"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:302
+msgid "Results for this submission"
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:187
+msgid "Set random seed to:"
+msgstr ""
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:277
+msgid "Show correct answers"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1554 PG/macros/PGbasicmacros.pl:1555
+msgid "Solution:"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:1553
+msgid "Solution: "
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:377
+msgid "Some answers will be graded later."
+msgstr ""
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:278
+msgid "Submit Answers"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:502
+msgid "Submit your answers again to go on to the next part."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:379
+msgid "The answer above is NOT correct."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:375
+msgid "The answer above is correct."
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:407
+msgid "This is a new (re-randomized) version of the problem."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:3084
+msgid "This problem contains a video which must be viewed online."
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:602
+msgid "This problem has more than one part."
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:248
+msgid "Ungraded"
+msgstr ""
+
+#: PG/macros/PGanswermacros.pl:1693
+msgid "You can earn partial credit on this problem."
+msgstr ""
+
+#: PG/macros/problemRandomize.pl:383
+msgid "You can get a new version of this problem after the due date."
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:610
+msgid "You may not change your answers when going on to the next part!"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:3079
+msgid "Your browser does not support the video tag."
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:603
+msgid "Your score for this attempt is for this part only;"
+msgstr ""
+
+#. (wwRound(0, $problemResult->{score} * 100)
+#: RenderApp/Controller/FormatRenderedProblem.pm:215
+msgid "Your score on this attempt is %1"
+msgstr ""
+
+#: RenderApp/Controller/FormatRenderedProblem.pm:217
+msgid "Your score was not recorded."
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:645 PG/macros/PGbasicmacros.pl:656
+msgid "answer"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:669
+msgid "column"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:244
+msgid "correct"
+msgstr ""
+
+#. ('j','k','_0')
+#. ('j','k')
+#: PG/lib/Parser/List/Vector.pm:35 PG/lib/Value/Vector.pm:278 PG/macros/contextLimitedVector.pl:94
+msgid "i"
+msgstr ""
+
+#: PG/macros/contextPiecewiseFunction.pl:774
+msgid "if"
+msgstr ""
+
+#: WeBWorK/lib/WeBWorK/Utils/AttemptsTable.pm:253
+msgid "incorrect"
+msgstr ""
+
+#: PG/macros/contextPiecewiseFunction.pl:777
+msgid "otherwise"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:662
+msgid "part"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:651
+msgid "problem"
+msgstr ""
+
+#: PG/macros/PGbasicmacros.pl:668
+msgid "row"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:470 PG/macros/compoundProblem.pl:480
+msgid "when you submit your answers"
+msgstr ""
+
+#: PG/macros/compoundProblem.pl:604
+msgid "your overall score is for all the parts combined."
+msgstr ""
