@@ -28,6 +28,7 @@ use WeBWorK::PG;           #webwork2 (use to set up environment)
 use WeBWorK::CourseEnvironment;
 use WeBWorK::Utils::Tags;
 use RenderApp::Controller::FormatRenderedProblem;
+use Data::Dumper;
 
 use 5.10.0;
 $Carp::Verbose = 1;
@@ -439,6 +440,12 @@ sub standaloneRenderer {
         debug_messages          => $pgdebug_messages,
         internal_debug_messages => $internal_debug_messages,
     };
+    {
+        open(FH, '>', $ENV{RENDER_ROOT}.'/logs/pg-object.log') or die "Couldn't open log file: $!";
+
+        print FH Dumper($pg);
+        close FH;
+    }
     $pg->free;
     $out2;
 }
@@ -465,53 +472,63 @@ sub get_current_process_memory {
 sub generateJWTs {
     my $pg = shift;
     my $inputs_ref = shift;
-    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}};
-    my $scoreHash = {};
 
     # if no problemJWT exists, then why bother?
     return unless $inputs_ref->{problemJWT};
 
+    # create a empty JWT or pre-populate from existing sessionJWT
+    my $session = RenderApp::Model::JWT->decode($inputs_ref->{sessionJWT});
+    my $maximum = $inputs_ref->{max_score} || 1; # sourced from problemJWT
+    my $submission = { submitAnswers => 1 };
+    my $result = $pg->{problem_result}{score};
+    my $bestScore = $session->payload('best_score');
+    my $scoreHash = { result => $result };
+    
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
-        # TODO: Anything else we want to add to sessionHash?
-        $sessionHash->{$ans}                  = $inputs_ref->{$ans};
-        $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
-        $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans } if ($inputs_ref->{ 'MaThQuIlL_' . $ans});
-
-        # $scoreHash->{ans_id} = $ans;
-        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
-        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
+        $submission->{$ans}     = $pg->{answers}{$ans}{original_student_ans} // $inputs_ref->{$ans};
+        my $MQ_name             = "MaThQuIlL_$ans";
+        $submission->{$MQ_name} = $inputs_ref->{$MQ_name} if ($inputs_ref->{$MQ_name});
+        # $submission->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
 
         # TODO see why this key is causing JWT corruption in PHP
         delete( $pg->{answers}{$ans}{student_ans});
     }
-    $scoreHash->{answers}   = unbless($pg->{answers});
+    $scoreHash->{answers} = unbless($pg->{answers});
 
-    # update the number of correct/incorrect submissions if answers were 'submitted'
-    $sessionHash->{numCorrect} = (defined $inputs_ref->{submitAnswers}) ?
-        $pg->{problem_state}{num_of_correct_ans} : ($inputs_ref->{numCorrect} // 0);
-    $sessionHash->{numIncorrect} = (defined $inputs_ref->{submitAnswers}) ?
-        $pg->{problem_state}{num_of_incorrect_ans} : ($inputs_ref->{numIncorrect} // 0);
+    # only update status IF we haven't previously capped the problem
+    if( $inputs_ref->{submitAnswers} && $bestScore < $maximum ) {
+        $session->push( 'submitted', $submission ); # record the submitted responses
+        if ( $result == $maximum ) {
+            $session->push( 'correct', $submission ); # future-use with entanglement
+        } else {
+            $session->payload( 'correct', [] ); # make sure correct exists and empty
+        }
+        $session->payload('best_score', $result) if $result > $bestScore;
+    }
 
-    # include the final result of the combined scores
-    $scoreHash->{result} = $pg->{problem_result}{score};
+    # make sure that the session includes the original problemJWT
+    $session->payload('problemJWT', $inputs_ref->{problemJWT});
+    my $sessionJWT = $session->encode();
+    my $answerJWT = '';
 
-    # create and return the session JWT
-    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
-    my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
+    # only form an answerJWT if we have a place to send it to...
+    if ( $inputs_ref->{JWTanswerURL} ) {
+        my $responseHash = {
+            score      => $scoreHash,
+            problemJWT => $inputs_ref->{problemJWT},
+            sessionJWT => $sessionJWT,
+            platform   => 'standaloneRenderer'
+        };
 
-    # form answerJWT
-    my $responseHash = {
-      iss        => $ENV{SITE_HOST},
-      aud        => $inputs_ref->{JWTanswerURL},
-      score      => $scoreHash,
-      problemJWT => $inputs_ref->{problemJWT},
-      sessionJWT => $sessionJWT,
-      platform   => 'standaloneRenderer'
-    };
-
-    # Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
-    my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
+        # using alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
+        $answerJWT = RenderApp::Model::JWT->new(
+            $responseHash,
+            aud      => $inputs_ref->{JWTanswerURL},
+            # alg      => 'HS256',
+            key      => $ENV{problemJWTsecret},
+        )->encode();
+    }
 
     return ($sessionJWT, $answerJWT);
 }
