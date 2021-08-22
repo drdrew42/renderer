@@ -21,6 +21,7 @@ docker run -d \
   --name standalone-renderer \
   --publish 3000:3000 \
   --mount type=bind,source="$(pwd)"/volumes/webwork-open-problem-library/,target=/usr/app/webwork-open-problem-library \
+  --env MOJO_MODE=development \
   renderer:1.0
 ```
 
