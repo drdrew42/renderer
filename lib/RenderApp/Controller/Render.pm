@@ -8,7 +8,7 @@ use WeBWorK::Form;
 sub parseRequest {
   my $c = shift;
   my %params = WeBWorK::Form->new_from_paramable($c->req)->Vars;
-  if ($c->app->mode eq 'production' && !( defined $params{problemJWT} || defined $params{sessionJWT} )) {
+  if ($ENV{STRICT_JWT} && !( defined $params{problemJWT} || defined $params{sessionJWT} )) {
     $c->exception('Not allowed to request problems with raw data.', 403);
     return undef;
   }
