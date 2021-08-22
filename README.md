@@ -31,10 +31,10 @@ If you have non-OPL content, it can be mounted as a volume at `/usr/app/private`
   --mount type=bind,source=/pathToYourLocalContentRoot,target=/usr/app/private \
 ```
 
-A default configuration file is included in the container, but it can be overridden by mounting a replacement at the application root.
+A default configuration file is included in the container, but it can be overridden by mounting a replacement at the application root. This is necessary if, for example, you want to run the container in `production` mode.
 
 ```
-  --mount type=bind,source=/pathToYour/configuration_file.conf,target=/usr/app/render_app.conf \
+  --mount type=bind,source=/pathToYour/render_app.conf,target=/usr/app/render_app.conf \
 ```
 
 ## LOCAL INSTALL ###
