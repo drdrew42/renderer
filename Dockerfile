@@ -49,11 +49,7 @@ RUN apt-get update \
 RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::AsyncAwait Crypt::JWT IO::Socket::SSL CGI::Cookie \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
-ENV MOJO_MODE=production
-
 COPY . .
-
-RUN cp render_app.conf.dist render_app.conf
 
 RUN cd lib/WeBWorK/htdocs && npm install && cd ../../..
 
