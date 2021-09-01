@@ -28,7 +28,6 @@ use WeBWorK::PG;           #webwork2 (use to set up environment)
 use WeBWorK::CourseEnvironment;
 use WeBWorK::Utils::Tags;
 use RenderApp::Controller::FormatRenderedProblem;
-use Data::Dumper;
 
 use 5.10.0;
 $Carp::Verbose = 1;
@@ -440,12 +439,6 @@ sub standaloneRenderer {
         debug_messages          => $pgdebug_messages,
         internal_debug_messages => $internal_debug_messages,
     };
-    {
-        open(FH, '>', $ENV{RENDER_ROOT}.'/logs/pg-object.log') or die "Couldn't open log file: $!";
-
-        print FH Dumper($pg);
-        close FH;
-    }
     $pg->free;
     $out2;
 }
