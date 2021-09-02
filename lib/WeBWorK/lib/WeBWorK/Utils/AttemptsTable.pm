@@ -145,7 +145,8 @@ sub new {
 		answersSubmitted    => $options{answersSubmitted}//0,
 		summary             => $options{summary}//'', # summary provided by problem grader
 	    displayMode 		=> $options{displayMode} || "MathJax",
-	    showAnswerNumbers   => $options{showAnswerNumbers}//1,
+		showHeadline        => $options{showHeadline} // 1,
+		showAnswerNumbers   => $options{showAnswerNumbers}//1,
 	    showAttemptAnswers  =>  $options{showAttemptAnswers}//1,    # show student answer as entered and simplified
 	                                                                #  (e.g numerical formulas are calculated to produce numbers)
 	    showAttemptPreviews => $options{showAttemptPreviews}//1,    # show preview of student answer
@@ -159,7 +160,7 @@ sub new {
 	bless $self, $class;
 	# create read only accessors/mutators
 	$self->mk_ro_accessors(qw(answers answerOrder answersSubmitted displayMode imgGen maketext));
-	$self->mk_ro_accessors(qw(showAnswerNumbers showAttemptAnswers
+	$self->mk_ro_accessors(qw(showAnswerNumbers showAttemptAnswers showHeadline
 	                          showAttemptPreviews showAttemptResults
 	                          showCorrectAnswers showSummary));
 	$self->mk_accessors(qw(correct_ids incorrect_ids showMessages  summary));
@@ -325,6 +326,8 @@ sub previewAnswer {
 
 	return "" unless defined $tex and $tex ne "";
 
+	return $tex if $answerResult->{non_tex_preview};
+
 	if ($displayMode eq "plainText") {
 		return $tex;
 	} elsif (($answerResult->{type}//'') eq 'essay') {
@@ -332,8 +335,7 @@ sub previewAnswer {
 	} elsif ($displayMode eq "images") {
 		$imgGen->add($tex);
 	} elsif ($displayMode eq "MathJax") {
-		# return '<span class="MathJax_Preview">[math]</span><script type="math/tex; mode=display">'.$tex.'</script>';
-		return '\['.$tex.'\]';
+		return '<script type="math/tex; mode=display">' . $tex . '</script>';
 	}
 }
 
@@ -347,14 +349,15 @@ sub previewCorrectAnswer {
 	return $answerResult->{correct_ans} unless defined $tex and $tex=~/\S/;   # some answers don't have latex strings defined
 	# return "" unless defined $tex and $tex ne "";
 
+	return $tex if $answerResult->{non_tex_preview};
+
 	if ($displayMode eq "plainText") {
 		return $tex;
 	} elsif ($displayMode eq "images") {
 		$imgGen->add($tex);
 		# warn "adding $tex";
 	} elsif ($displayMode eq "MathJax") {
-		# return '<span class="MathJax_Preview">[math]</span><script type="math/tex; mode=display">'.$tex.'</script>';
-		return '\['.$tex.'\]';
+		return '<script type="math/tex; mode=display">' . $tex . '</script>';
 	}
 }
 
