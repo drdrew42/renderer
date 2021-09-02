@@ -17,7 +17,9 @@
 ################################################################################
 
 =head1 NAME
+
 FormatRenderedProblem.pm
+
 =cut
 
 package RenderApp::Controller::FormatRenderedProblem;

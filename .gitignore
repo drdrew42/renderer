@@ -14,3 +14,4 @@ node_modules/*
 *.pm.tdy
 *.bs
 .idea/
+logs/standalone_results.log

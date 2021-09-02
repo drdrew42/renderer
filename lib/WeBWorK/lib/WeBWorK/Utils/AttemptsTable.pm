@@ -18,8 +18,11 @@ use 5.010;
 ################################################################################
 
 =head1 NAME
+
 	AttemptsTable
+
 =head1 SYNPOSIS
+
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$answers,
 		answersSubmitted       => 1,
@@ -43,9 +46,12 @@ use 5.010;
 	$self->{incorrect_ids} = $tbl->incorrect_ids;
 
 =head1 DESCRIPTION
+
 This module handles the formatting of the table which presents the results of analyzing a student's
 answer to a WeBWorK problem.  It is used in Problem.pm, OpaqueServer.pm, standAlonePGproblemRender
+
 =head2 new
+
 	my $tbl = WeBWorK::Utils::AttemptsTable->new(
 		$answers,
 		answersSubmitted       => 1,
@@ -88,20 +94,30 @@ answer to a WeBWorK problem.  It is used in Problem.pm, OpaqueServer.pm, standAl
 
 
 =head2 Methods
+
 =over 4
+
 =item answerTemplate
+
 Returns HTML which formats the analysis of the student's answers to the problem.
+
 =back
+
 =head2 Read/Write Properties
+
 =over 4
+
 =item correct_ids, incorrect_ids,
+
 These are references to lists of the ids of the correct answers and the incorrect answers respectively.
+
 =item showMessages,
 
 This can be switched on or off before exporting the answerTemplate, perhaps under instructions
 	from the PG problem.
 
 =item summary
+
 The contents of the summary can be defined when the attemptsTable object is created.
 The summary can be defined by the PG problem grader
 usually returned as $pg->{result}->{summary}.
@@ -114,6 +130,7 @@ of the default summaries are created:
 	"At least one of the answers above is NOT [fully] correct.',
 
 =back
+
 =cut
 
 package WeBWorK::Utils::AttemptsTable;
