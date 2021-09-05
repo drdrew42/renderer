@@ -43,7 +43,7 @@ sub startup {
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
 	$self->secrets($self->config('secrets'));
-	for ( qw(problemJWTsecret webworkJWTsecret baseURL formURL SITE_HOST MOJO_MODE) ) {
+	for ( qw(problemJWTsecret webworkJWTsecret baseURL formURL SITE_HOST STRICT_JWT) ) {
 		$ENV{$_} //= $self->config($_);
 	};
 
