@@ -18,9 +18,12 @@ package WeBWorK::PG::Local;
 use base qw(WeBWorK::PG);
 
 =head1 NAME
+
 WeBWorK::PG::Local - Use the WeBWorK::PG API to invoke a local
 WeBWorK::PG::Translator object.
+
 =head1 DESCRIPTION
+
 WeBWorK::PG::Local encapsulates the PG translation process, making multiple
 calls to WeBWorK::PG::Translator. Much of the flexibility of the Translator is
 hidden, instead making choices that are appropriate for the webwork2
@@ -28,6 +31,7 @@ system
 It implements the WeBWorK::PG interface and uses a local
 WeBWorK::PG::Translator to perform problem rendering. See the documentation for
 the WeBWorK::PG module for information about the API.
+
 =cut
 
 use strict;
@@ -37,8 +41,6 @@ use File::Path qw(rmtree);
 use WeBWorK::PG::Translator;
 use WeBWorK::Utils qw(readFile writeTimingLogEntry);
 
-#use WeBWorK::Utils::RestrictedMailer;
-use WeBWorK::Utils::DelayedMailer;
 
 #BEGIN{
 # 	unless (exists $ENV{MOD_PERL_API_VERSION} and $ENV{MOD_PERL_API_VERSION} >= 2) {
@@ -478,49 +480,86 @@ EOF
 1;
 
 __END__
+
 =head1 OPERATION
+
 WeBWorK::PG::Local goes through the following operations when constructed:
+
 =over
+
 =item Create a translator
+
 Instantiate a WeBWorK::PG::Translator object.
+
 =item Set the directory hash
+
 Set the translator's directory hash (courseScripts, macros, templates, and temp
 directories) from the course environment.
+
 =item Evaluate PG modules
+
 Using the module list from the course environment (pg->modules), perform a
 "use"-like operation to evaluate modules at runtime.
+
 =item Set the problem environment
+
 Use data from the user, set, and problem, as well as the course
 environemnt and translation options, to set the problem environment. The
 default subroutine, &WeBWorK::PG::defineProblemEnvir, is used.
+
 =item Initialize the translator
+
 Call &WeBWorK::PG::Translator::initialize. What more do you want?
+
 =item Load IO.pl, PG.pl and dangerousMacros.pl
+
 These macros must be loaded without opcode masking, so they are loaded here.
+
 =item Set the opcode mask
+
 Set the opcode mask to the default specified by WeBWorK::PG::Translator.
+
 =item Load the problem source
+
 Give the problem source to the translator.
+
 =item Install a safety filter
+
 The safety filter is used to preprocess student input before evaluation. The
 default safety filter, &WeBWorK::PG::safetyFilter, is used.
+
 =item Translate the problem source
+
 Call &WeBWorK::PG::Translator::translate to render the problem source into the
 format given by the display mode.
+
 =item Process student answers
+
 Use form field inputs to evaluate student answers.
+
 =item Load the problem state
+
 Use values from the database to initialize the problem state, so that the
 grader will have a point of reference.
+
 =item Determine an entry order
+
 Use the ANSWER_ENTRY_ORDER flag to determine the order of answers in the
 problem. This is important for problems with dependancies among parts.
+
 =item Install a grader
+
 Use the PROBLEM_GRADER_TO_USE flag, or a default from the course environment,
 to install a grader.
+
 =item Grade the problem
+
 Use the selected grader to grade the problem.
+
 =back
+
 =head1 AUTHOR
+
 Written by Sam Hathaway, sh002i (at) math.rochester.edu.
+
 =cut

@@ -20,8 +20,11 @@ use Date::Format;
 our @EXPORT = qw(debug);
 
 =head1 NAME
+
 WeBWorK::Debug - Print (or don't print) debugging output.
-head1 SYNOPSIS
+
+=head1 SYNOPSIS
+
  use WeBWorK::Debug;
 
  # Enable debugging
@@ -32,6 +35,7 @@ head1 SYNOPSIS
 
  # log some debugging output
  debug("Generated 5 widgets.");
+ 
 =cut
 
 use strict;

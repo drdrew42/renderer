@@ -17,9 +17,12 @@
 package WeBWorK::Utils::RestrictedClosureClass;
 
 =head1 NAME
+
 WeBWorK::Utils::RestrictedClosureClass - Protect instance data and only allow
 calling of specified methods.
+
 =head1 SYNPOSIS
+
  package MyScaryClass;
 
  sub new { return bless { @_[1..$#_] }, ref $_[0] || $_[0] }
@@ -47,24 +50,36 @@ calling of specified methods.
  $locked->call_for_help;               # OK
  print $locked->{secret_data};         # NG (not a hash reference)
  $locked->{secret_data} = "WySiWyG";   # NG (not a hash reference)
+
 =head1 DESCRIPTION
+
 RestrictedClosureClass generates a wrapper object for a given object that
 prevents access to the objects instance data and only allows specified method
 calls. The wrapper object is a closure that calls methods of the underlying
 object, if permitted.
 This is great for exposing a limited API to an untrusted environment, i.e. the
 PG Safe compartment.
+
 =head1 CONSTRUCTOR
+
 =over
+
 =item $wrapper_object = CLASS->new($object, @methods)
+
 Generate a wrapper object for the given $object. Only calls to the methods
 listed in @methods will be permitted.
+
 =back
+
 =head1 LIMITATIONS
+
 You can't call SUPER methods, or methods with an explicit class given:
  $locked->SUPER::call_for_help         # NG, would be superclass of RestrictedClosureClass
+
 =head1 SEE ALSO
+
 L<perltoot/Closures-as-Objects>
+
 =cut
 
 use strict;

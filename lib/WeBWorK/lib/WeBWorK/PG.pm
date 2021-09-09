@@ -17,8 +17,10 @@
 package WeBWorK::PG;
 
 =head1 NAME
+
 WeBWorK::PG - Invoke one of several PG rendering methods using an easy-to-use
 API.
+
 =cut
 
 use strict;

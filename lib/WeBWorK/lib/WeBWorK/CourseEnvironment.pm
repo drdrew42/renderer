@@ -17,9 +17,12 @@
 package WeBWorK::CourseEnvironment;
 
 =head1 NAME
+
 WeBWorK::CourseEnvironment - Read configuration information from defaults.config
 and course.conf files.
+
 =head1 SYNOPSIS
+
  use WeBWorK::CourseEnvironment;
  $ce = WeBWorK::CourseEnvironment->new({
  	webwork_url         => "/webwork2",
@@ -35,13 +38,16 @@ and course.conf files.
  my $timeout = $courseEnv->{sessionKeyTimeout};
  my $mode    = $courseEnv->{pg}->{options}->{displayMode};
  # etc...
+
 =head1 DESCRIPTION
+
 The WeBWorK::CourseEnvironment module reads the system-wide F<defaults.config> and
 course-specific F<course.conf> files used by WeBWorK to calculate and store
 settings needed throughout the system. The F<.conf> files are perl source files
 that can contain any code allowed under the default safe compartment opset.
 After evaluation of both files, any package variables are copied out of the
 safe compartment into a hash. This hash becomes the course environment.
+
 =cut
 
 use strict;
