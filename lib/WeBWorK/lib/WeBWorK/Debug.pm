@@ -20,8 +20,11 @@ use Date::Format;
 our @EXPORT = qw(debug);
 
 =head1 NAME
+
 WeBWorK::Debug - Print (or don't print) debugging output.
+
 head1 SYNOPSIS
+
  use WeBWorK::Debug;
 
  # Enable debugging
@@ -32,6 +35,7 @@ head1 SYNOPSIS
 
  # log some debugging output
  debug("Generated 5 widgets.");
+
 =cut
 
 use strict;
@@ -43,42 +47,57 @@ use WeBWorK::Utils qw/undefstr/;
 ################################################################################
 
 =head1 CONFIGURATION VARIABLES
+
 =over
+
 =item $Enabled
+
 If true, debugging messages will be output. If false, they will be ignored.
+
 =cut
 
 our $Enabled = 0 unless defined $Enabled;
 
 =item $Logfile
+
 If non-empty, debugging output will be sent to the file named rather than STDERR.
+
 =cut
 
 our $Logfile = "" unless defined $Logfile;
 
 =item $DenySubroutineOutput
+
 If defined, prevent subroutines matching the following regular expression from
 logging.
+
 =cut
 
 our $DenySubroutineOutput;
 
 =item $AllowSubroutineOutput
+
 If defined, allow only subroutines matching the following regular expression to
 log.
+
 =cut
 
 our $AllowSubroutineOutput;
 
 =back
+
 =cut
 
 ################################################################################
 
 =head1 FUNCTIONS
+
 =over
+
 =item debug(@messages)
+
 Write @messages to the debugging log.
+
 =cut
 
 sub debug {
@@ -113,12 +132,15 @@ sub debug {
 }
 
 =back
+
 =cut
 
 ################################################################################
 
 =head1 AUTHOR
+
 Written by Sam Hathaway, sh002i (at) math.rochester.edu.
+
 =cut
 
 1;
