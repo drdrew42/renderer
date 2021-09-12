@@ -244,16 +244,19 @@ sub formatRenderedProblem {
 	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
 	my $extra_js_files = '';
 	if (ref($rh_result->{flags}{extra_js_files}) eq "ARRAY") {
+		$rh_result->{js} = [];
 		my %jsFiles;
 		# Avoid duplicates
 		$jsFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_js_files}};
 		for (keys(%jsFiles)) {
 			if ($jsFiles{$_}) {
+				push @{$rh_result->{js}}, $_;
 				$extra_js_files .=
 					CGI::start_script({type => "text/javascript", src => $_})
 					. CGI::end_script()
 					. "\n";
 			} elsif (!$jsFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
+				push @{$rh_result->{js}}, "$webwork_htdocs_url/$_";
 				$extra_js_files .=
 					CGI::start_script({type => "text/javascript", src => "$webwork_htdocs_url/$_"})
 					. CGI::end_script()
@@ -273,10 +276,13 @@ sub formatRenderedProblem {
 	if (ref($rh_result->{flags}{extra_css_files}) eq "ARRAY") {
 		$cssFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_css_files}};
 	}
+	$rh_result->{css} = [];
 	for (keys(%cssFiles)) {
 		if ($cssFiles{$_}) {
+			push @{$rh_result->{css}}, $_;
 			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$_\" />\n";
 		} elsif (!$cssFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
+			push @{$rh_result->{css}}, "$webwork_htdocs_url/$_";
 			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$webwork_htdocs_url/$_\" />\n";
 		} else {
 			$extra_css_files .= "<!-- $_ is not available in htdocs/ on this server -->\n";
