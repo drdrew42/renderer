@@ -127,12 +127,19 @@ sub process_pg_file {
         problem_result    => $pg_obj->{problem_result},
         problem_state     => $pg_obj->{problem_state},
         flags             => $pg_obj->{flags},
-        resources         => $pg_obj->{resources},
+        resources         => {
+            regex         => $pg_obj->{resources},
+            tags          => $pg_obj->{pgResources},
+            js            => $pg_obj->{js},
+            css           => $pg_obj->{css},
+        },
         form_data         => $inputHash,
-        pgResources       => $pg_obj->{pgResources},
         raw_metadata_text => $pg_obj->{raw_metadata_text},
-        sessionJWT        => $pg_obj->{sessionJWT},
-        answerJWT         => $pg_obj->{answerJWT},
+        JWT               => {
+            problem       => $inputHash->{problemJWT},
+            session       => $pg_obj->{sessionJWT},
+            answer        => $pg_obj->{answerJWT}
+        },
     };
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
