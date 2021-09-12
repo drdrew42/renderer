@@ -1,3 +1,4 @@
 [submodule "lib/PG"]
 	path = lib/PG
 	url = https://github.com/drdrew42/pg.git
+	branch = renderer/speed-boost

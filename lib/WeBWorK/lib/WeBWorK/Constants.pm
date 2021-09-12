@@ -17,7 +17,9 @@
 package WeBWorK::Constants;
 
 =head1 NAME
+
 WeBWorK::Constants - provide constant values for other WeBWorK modules.
+
 =cut
 
 use strict;

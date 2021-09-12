@@ -48,10 +48,10 @@ sub startup {
 	};
 
 	# convert to absolute URLs
-	$ENV{baseURL} = ''if ( $ENV{baseURL} eq '/' );
+	$ENV{baseURL} = '' if ( $ENV{baseURL} eq '/' );
 	$ENV{SITE_HOST} =~ s|/$||;  # remove trailing slash
-	$ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} if ( $ENV{baseURL} !~ m|^https?://| );
-	$ENV{formURL} = $ENV{baseURL} . $ENV{formURL} if ( $ENV{formURL} !~ m|^https?://| );
+	# $ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} if ( $ENV{baseURL} !~ m|^https?://| );
+	$ENV{formURL} = $ENV{SITE_HOST} . $ENV{baseURL} . $ENV{formURL} if ( $ENV{formURL} !~ m|^https?://| );
 
 	# Handle optional CORS settings
 	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
@@ -75,7 +75,7 @@ sub startup {
 	$self->helper(exception => sub { RenderApp::Controller::Render::exception(@_) });
 
 	# Routes to controller
-	my $r = $self->routes;
+	my $r = $self->routes->under($ENV{baseURL});
 
 	$r->any('/render-api')->to('render#problem');
 	$r->any('/health' => sub {shift->rendered(200)});

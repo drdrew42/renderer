@@ -59,25 +59,51 @@ sub isEndDescription {
   return ($line =~ /ENDDESCRIPTION/) ? 1 : 0;
 }
 
+# sub kwtidy {
+#   my $s = shift;
+#   $s =~ s/\W//g;
+#   $s =~ s/_//g;
+#   $s = lc($s);
+#   return($s);
+# }
+
+# sub keywordcleaner {
+#   my $string = shift;
+#   my @spl1 = split /,/, $string;
+#   foreach my $keyword (@spl1) {
+#     # strip quotes and trim, then lowercase
+#     # $keyword =~ s/^\s*['"]\s*(.*?)\s*['"]\s*$/$1/;
+#     # $keyword = lc $keyword;
+#     $keyword = kwtidy($keyword);
+#   }
+# #  my @spl2 = map(kwtidy($_), @spl1);
+#   return(@spl1);
+# }
+my $quote = qr/['"\x{2018}\x{2019}\x{91}\x{92}]/;
+my $space = qr/[\s\x{85}]/;
+my $kwtidy_qr = qr/^$space*$quote*$space*(.*?)$space*$quote*$space*$/;
+my $kwcleaner_qr = qr/$quote$space*$quote/;
+
+sub trim {
+    my $s = shift;
+    $s =~ s/^$space*$quote*$space*//;
+    $s =~ s/$space*$quote*$space*$//;
+    return $s;
+}
+
 sub kwtidy {
   my $s = shift;
-  $s =~ s/\W//g;
-  $s =~ s/_//g;
+  $s =~ s/$kwtidy_qr/$1/;
+  $s =~ s/[_\s]/-/g;
   $s = lc($s);
-  return($s);
+  return ( $s =~ /\S/ ) ? $s : ();
 }
 
 sub keywordcleaner {
   my $string = shift;
-  my @spl1 = split /,/, $string;
-  foreach my $keyword (@spl1) {
-    # strip quotes and trim, then lowercase
-    # $keyword =~ s/^\s*['"]\s*(.*?)\s*['"]\s*$/$1/;
-    # $keyword = lc $keyword;
-    $keyword = kwtidy($keyword);
-  }
-#  my @spl2 = map(kwtidy($_), @spl1);
-  return(@spl1);
+  my @spl1 = split /[;,.]/, $string;
+  @spl1 = map( { split( $kwcleaner_qr, $_ ) } @spl1 );
+  return map( kwtidy($_), @spl1 );
 }
 
 sub mergekeywords {
@@ -291,11 +317,11 @@ sub new {
             }
             if (/$re/) {    # Checks all other un-numbered tags
                 my $tmp1 = $1;
-                my $tmp  = $2;
+                my $tmp  = trim($2);
 
                 #$tmp =~ s/'/\'/g;
-                $tmp =~ s/\s+$//;
-                $tmp =~ s/^\s+//;
+                # $tmp =~ s/\s+$//;
+                # $tmp =~ s/^\s+//;
                 $self->{$tmp1} = $tmp;
                 $lasttag = $lineno;
                 last SWITCH;
