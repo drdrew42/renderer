@@ -59,18 +59,25 @@ use WeBWorK::Debug;
 use Opcode qw(empty_opset);
 
 =head1 CONSTRUCTION
+
 =over
+
 =item new(HASHREF)
+
 HASHREF is a reference to a hash containing scalar variables with which to seed
 the course environment. It must contain at least a value for the key
 C<webworkRoot>.
+
 The C<new> method finds the file F<conf/defaults.config> relative to the given
 C<webwork_dir> directory. After reading this file, it uses the
 C<$courseFiles{environment}> variable, if present, to locate the course
 environment file. If found, the file is read and added to the environment.
+
 =item new(ROOT URLROOT PGROOT COURSENAME)
+
 A deprecated form of the constructor in which four seed variables are given
 explicitly: C<webwork_dir>, C<webwork_url>, C<pg_dir>, and C<courseName>.
+
 =cut
 
 # NEW SYNTAX
@@ -253,24 +260,35 @@ sub new {
 }
 
 =back
+
 =head1 ACCESS
+
 There are no formal accessor methods. However, since the course environemnt is
 a hash of hashes and arrays, is exists as the self hash of an instance
 variable:
+
 	$ce->{someKey}{someOtherKey};
+
 =head1 EXPERIMENTAL ACCESS METHODS
+
 This is an experiment in extending CourseEnvironment to know a little more about
 its contents, and perform useful operations for me.
+
 There is a set of operations that require certain data from the course
 environment. Most of these are un Utils.pm. I've been forced to pass $ce into
 them, so that they can get their data out. But some things are so intrinsically
 linked to the course environment that they might as well be methods in this
 class.
+
 =head2 STATUS METHODS
+
 =over
+
 =item status_abbrev_to_name($status_abbrev)
+
 Given the abbreviation for a status, return the name. Returns undef if the
 abbreviation is not found.
+
 =cut
 
 sub status_abbrev_to_name {
@@ -284,8 +302,10 @@ sub status_abbrev_to_name {
 }
 
 =item status_name_to_abbrevs($status_name)
+
 Returns the list of abbreviations for a given status. Returns an empty list if
 the status is not found.
+
 =cut
 
 sub status_name_to_abbrevs {
@@ -300,7 +320,9 @@ sub status_name_to_abbrevs {
 }
 
 =item status_has_behavior($status_name, $behavior)
+
 Return true if $status_name lists $behavior.
+
 =cut
 
 sub status_has_behavior {
@@ -328,7 +350,9 @@ sub status_has_behavior {
 }
 
 =item status_abbrev_has_behavior($status_abbrev, $behavior)
+
 Return true if the status abbreviated by $status_abbrev lists $behavior.
+
 =cut
 
 sub status_abbrev_has_behavior {
@@ -351,6 +375,7 @@ sub status_abbrev_has_behavior {
 }
 
 =back
+
 =cut
 
 1;

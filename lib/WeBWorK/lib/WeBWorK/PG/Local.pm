@@ -28,6 +28,7 @@ WeBWorK::PG::Local encapsulates the PG translation process, making multiple
 calls to WeBWorK::PG::Translator. Much of the flexibility of the Translator is
 hidden, instead making choices that are appropriate for the webwork2
 system
+
 It implements the WeBWorK::PG interface and uses a local
 WeBWorK::PG::Translator to perform problem rendering. See the documentation for
 the WeBWorK::PG module for information about the API.

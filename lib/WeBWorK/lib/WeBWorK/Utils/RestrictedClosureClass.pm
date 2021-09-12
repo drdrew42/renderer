@@ -57,6 +57,7 @@ RestrictedClosureClass generates a wrapper object for a given object that
 prevents access to the objects instance data and only allows specified method
 calls. The wrapper object is a closure that calls methods of the underlying
 object, if permitted.
+
 This is great for exposing a limited API to an untrusted environment, i.e. the
 PG Safe compartment.
 
@@ -74,6 +75,7 @@ listed in @methods will be permitted.
 =head1 LIMITATIONS
 
 You can't call SUPER methods, or methods with an explicit class given:
+
  $locked->SUPER::call_for_help         # NG, would be superclass of RestrictedClosureClass
 
 =head1 SEE ALSO
