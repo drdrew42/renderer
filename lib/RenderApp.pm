@@ -47,10 +47,16 @@ sub startup {
 		$ENV{$_} //= $self->config($_);
 	};
 
-	# convert to absolute URLs
 	$ENV{baseURL} = '' if ( $ENV{baseURL} eq '/' );
 	$ENV{SITE_HOST} =~ s|/$||;  # remove trailing slash
-	# $ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} if ( $ENV{baseURL} !~ m|^https?://| );
+
+	# $r needs to be defined before the SITE_HOST is added to the baseURL
+	my $r = $self->routes->under($ENV{baseURL});
+
+	# while iFrame embedded problems are likely to need the baseURL to include SITE_HOST
+	# convert to absolute URLs
+	$ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} if ( $ENV{baseURL} !~ m|^https?://| );
+
 	$ENV{formURL} = $ENV{SITE_HOST} . $ENV{baseURL} . $ENV{formURL} if ( $ENV{formURL} !~ m|^https?://| );
 
 	# Handle optional CORS settings
@@ -75,7 +81,6 @@ sub startup {
 	$self->helper(exception => sub { RenderApp::Controller::Render::exception(@_) });
 
 	# Routes to controller
-	my $r = $self->routes->under($ENV{baseURL});
 
 	$r->any('/render-api')->to('render#problem');
 	$r->any('/health' => sub {shift->rendered(200)});
