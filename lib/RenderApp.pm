@@ -55,9 +55,8 @@ sub startup {
 
 	# while iFrame embedded problems are likely to need the baseURL to include SITE_HOST
 	# convert to absolute URLs
-	$ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} if ( $ENV{baseURL} !~ m|^https?://| );
-
-	$ENV{formURL} = $ENV{SITE_HOST} . $ENV{baseURL} . $ENV{formURL} if ( $ENV{formURL} !~ m|^https?://| );
+	$ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} unless ( $ENV{baseURL} =~ m|^https?://| );
+	$ENV{formURL} = $ENV{baseURL} . $ENV{formURL} unless ( $ENV{formURL} =~ m|^https?://| );
 
 	# Handle optional CORS settings
 	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
