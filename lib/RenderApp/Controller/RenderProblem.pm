@@ -523,22 +523,19 @@ sub generateJWTs {
 
 sub insert_mathquill_responses {
     my ( $form_data, $pg ) = @_;
-    for my $answerLabel ( keys %{ $pg->{pgcore}->{PG_ANSWERS_HASH} } ) {
-        my $mq_opts = $pg->{pgcore}->{PG_ANSWERS_HASH}->{$answerLabel}
-          ->{ans_eval}{rh_ans}{mathQuillOpts};
-        my $response_obj =
-          $pg->{pgcore}->{PG_ANSWERS_HASH}->{$answerLabel}->response_obj;
+    for my $answerLabel ( keys %{ $pg->{pgcore}{PG_ANSWERS_HASH} } ) {
+        my $mq_opts = $pg->{pgcore}{PG_ANSWERS_HASH}{$answerLabel}{ans_eval}{rh_ans}{mathQuillOpts} // '';
+        next if ( $mq_opts =~ /\s*disabled\s*/ );
+        my $response_obj = $pg->{pgcore}{PG_ANSWERS_HASH}{$answerLabel}->response_obj;
         for my $response ( $response_obj->response_labels ) {
             next if ( ref( $response_obj->{responses}{$response} ) );
             my $name = "MaThQuIlL_$response";
             push( @{ $response_obj->{response_order} }, $name );
             $response_obj->{responses}{$name} = '';
-            my $value =
-              defined( $form_data->{$name} ) ? $form_data->{$name} : '';
-            $pg->{body_text} .=
-              CGI::hidden( { -name => $name, -id => $name, -value => $value } );
-            $pg->{body_text} .= "<script>var ${name}_Opts = {$mq_opts}</script>"
-              if ($mq_opts);
+            my $value = defined( $form_data->{$name} ) ? $form_data->{$name} : '';
+            $pg->{body_text} .= CGI::hidden({
+                -name => $name, -id => $name, -value => $value, data_mq_opts => "$mq_opts"
+            });
         }
     }
 }

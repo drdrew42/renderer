@@ -55,8 +55,8 @@ $nextBlock = <<'ENDPROBLEMTEMPLATE';
 <script type="text/javascript" src="$webwork_htdocs_url/themes/math4/math4.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.1/iframeResizer.contentWindow.min.js" integrity="sha512-qw2bX9KUhi7HLuUloyRsvxRlWJvj0u0JWVegc5tf7qsw47T0pwXZIk1Kyc0utTH3NlrpHtLa4HYTVUyHBr9Ufg==" crossorigin="anonymous"></script>
 
-<script type="text/javascript" src="$webwork_htdocs_url/js/apps/MathQuill/mathquill.min.js"></script>
-<script type="text/javascript" src="$webwork_htdocs_url/js/apps/MathQuill/mqeditor.js"></script>
+<script type="text/javascript" src="$webwork_htdocs_url/js/apps/MathQuill/mathquill.min.js" defer></script>
+<script type="text/javascript" src="$webwork_htdocs_url/js/apps/MathQuill/mqeditor.js" defer></script>
 <script type="text/javascript" src="$webwork_htdocs_url/js/submithelper.js"></script>
 ENDPROBLEMTEMPLATE
 
