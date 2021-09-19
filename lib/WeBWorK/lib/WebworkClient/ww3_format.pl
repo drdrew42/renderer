@@ -1,5 +1,6 @@
 $ww3_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
+$problemHeadText
 $answerTemplate
 $color_input_blanks_script
 <form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit="submitAction()">
