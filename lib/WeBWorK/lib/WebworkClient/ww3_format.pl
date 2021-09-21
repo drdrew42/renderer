@@ -3,7 +3,7 @@ $ww3_format = <<'ENDPROBLEMTEMPLATE';
 $problemHeadText
 $answerTemplate
 $color_input_blanks_script
-<form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post" onsubmit="submitAction()">
+<form id="problemMainForm" class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post">
   <div id="problem_body" class="problem-content" $PROBLEM_LANG_AND_DIR>
     $problemText
   </div>
