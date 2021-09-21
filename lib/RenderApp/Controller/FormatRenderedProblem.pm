@@ -299,6 +299,16 @@ sub formatRenderedProblem {
 	# Return interpolated problem template
 	######################################################
 	my $format_name = $self->{inputs_ref}->{outputFormat};
+
+	if ($format_name eq "ww3") {
+		my $json_output = do("WebworkClient/ww3_format.pl");
+		for my $key (keys %$json_output) {
+			# Interpolate values
+			$json_output->{$key} =~ s/(\$\w+)/"defined $1 ? $1 : ''"/gee;
+		}
+		return $json_output;
+	}
+
 	$format_name //= 'formatRenderedProblemFailure';
 	# find the appropriate template in WebworkClient folder
 	my $template = do("WebworkClient/${format_name}_format.pl")//'';
