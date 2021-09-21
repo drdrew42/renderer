@@ -454,11 +454,11 @@ sub formatToolTip {  # note that formatToolTip output includes CGI::td wrapper
 	return CGI::td(
 		CGI::span(
 			{
-				"class"          => "answer-preview",
-				"data-toggle"    => "popover",
-				"data-content"   => $answer,
-				"data-placement" => "bottom",
-				"data-html"      => "true"
+				"class"             => "answer-preview",
+				"data-bs-toggle"    => "popover",
+				"data-bs-content"   => $answer,
+				"data-bs-placement" => "bottom",
+				"data-bs-html"      => "true"
 			},
 			$self->nbsp($formattedAnswer)
 		)
