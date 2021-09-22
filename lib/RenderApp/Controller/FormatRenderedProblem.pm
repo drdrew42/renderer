@@ -286,7 +286,7 @@ sub formatRenderedProblem {
 	}
 
 	my $STRING_Preview = $mt->maketext("Preview My Answers");
-	my $STRING_ShowCorrect = $mt->maketext("Show correct answers");
+	my $STRING_ShowCorrect = $mt->maketext("Show Correct Answers");
 	my $STRING_Submit = $mt->maketext("Submit Answers");
 
 	#my $pretty_print_self  = pretty_print($self);
@@ -302,6 +302,13 @@ sub formatRenderedProblem {
 			# Interpolate values
 			$json_output->{$key} =~ s/(\$\w+)/"defined $1 ? $1 : ''"/gee;
 		}
+		$json_output->{submitButtons} = [];
+		push(@{$json_output->{submitButtons}}, { name => 'previewAnswers', value => $STRING_Preview })
+			if $self->{inputs_ref}{showPreviewButton};
+		push(@{$json_output->{submitButtons}}, { name => 'submitAnswers', value => $STRING_Submit })
+			if $self->{inputs_ref}{showCheckAnswersButton};
+		push(@{$json_output->{submitButtons}}, { name => 'showCorrectAnswers', value => $STRING_ShowCorrect })
+			if $self->{inputs_ref}{showCorrectAnswersButton};
 		return $json_output;
 	}
 
