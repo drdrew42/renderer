@@ -18,11 +18,6 @@ $color_input_blanks_script
 	<input type="hidden" name="problemSeed" value = "$problemSeed">
 	<input type="hidden" name="language" value="$formLanguage">
 	<input type="hidden" name="showSummary" value="$showSummary">
-	<p>
-	<input type="submit" name="previewAnswers"  value="$STRING_Preview" />
-	<input type="submit" name="submitAnswers" value="$STRING_Submit"/>
-	<input type="submit" name="showCorrectAnswers" value="$STRING_ShowCorrect"/>
-	</p>
 </form>
 ENDPROBLEMTEMPLATE
 };
