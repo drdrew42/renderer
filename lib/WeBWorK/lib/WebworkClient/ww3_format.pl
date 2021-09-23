@@ -1,15 +1,14 @@
 {
 	answerTemplate => '$answerTemplate',
+	scoreSummary => '$scoreSummary',
+	LTIGradeMessage => '$LTIGradeMessage',
 
 	problemText => <<'ENDPROBLEMTEMPLATE'
 $problemHeadText
-$color_input_blanks_script
 <form class="problem-main-form" name="problemMainForm" action="$FORM_ACTION_URL" method="post">
 	<div class="problem-content" $PROBLEM_LANG_AND_DIR>
 		$problemText
 	</div>
-	$scoreSummary
-	$LTIGradeMessage
 
 	<input type="hidden" name="answersSubmitted" value="1">
 	<input type="hidden" name="sourceFilePath" value = "$sourceFilePath">
