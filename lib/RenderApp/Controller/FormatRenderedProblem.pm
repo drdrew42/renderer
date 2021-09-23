@@ -246,23 +246,18 @@ sub formatRenderedProblem {
 	if (ref($rh_result->{flags}{extra_js_files}) eq "ARRAY") {
 		$rh_result->{js} = [];
 		my %jsFiles;
-		# Avoid duplicates
-		$jsFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_js_files}};
-		for (keys(%jsFiles)) {
-			if ($jsFiles{$_}) {
-				push @{$rh_result->{js}}, $_;
-				$extra_js_files .=
-					CGI::start_script({type => "text/javascript", src => $_})
-					. CGI::end_script()
-					. "\n";
-			} elsif (!$jsFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
-				push @{$rh_result->{js}}, "$webwork_htdocs_url/$_";
-				$extra_js_files .=
-					CGI::start_script({type => "text/javascript", src => "$webwork_htdocs_url/$_"})
-					. CGI::end_script()
-					. "\n";
+		for (@{$rh_result->{flags}{extra_js_files}}) {
+			next if $jsFiles{$_->{file}};
+			$jsFiles{$_->{file}} = 1;
+			my $attributes = ref($_->{attributes}) eq "HASH" ? $_->{attributes} : {};
+			if ($_->{external}) {
+				push @{$rh_result->{js}}, $_->{file};
+				$extra_js_files .= CGI::script({ src => $_->{file}, %$attributes}, '');
+			} elsif (!$_->{external} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_->{file}") {
+				push @{$rh_result->{js}}, "$webwork_htdocs_url/$_->{file}";
+				$extra_js_files .= CGI::script({ src => "$webwork_htdocs_url/$_->{file}", %$attributes }, '');
 			} else {
-				$extra_js_files .= "<!-- $_ is not available in htdocs/ on this server -->\n";
+				$extra_js_files .= "<!-- $_->{file} is not available in htdocs/ on this server -->";
 			}
 		}
 	}

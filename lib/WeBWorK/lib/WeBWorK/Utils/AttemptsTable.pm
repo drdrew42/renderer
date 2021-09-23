@@ -317,9 +317,10 @@ sub answerTemplate {
     	push @incorrect_ids,   $ans_id if ($rh_answers->{$ans_id}->{score}//0) < 1;
     	#$self->{essayFlag} = 1;
     }
-	my $answerTemplate = CGI::h3($self->maketext("Results for this submission")) .
-    	CGI::table({class=>"attemptResults"},@tableRows);
-    ### "results for this submission" is better than "attempt results" for a headline
+	my $answerTemplate = "";
+	$answerTemplate .= CGI::h3({ class => 'attemptResultsHeader' }, $self->maketext("Results for this submission"))
+		if $self->showHeadline;
+    $answerTemplate .= CGI::table({ class => "attemptResults" }, @tableRows);
     $answerTemplate .= ($self->showSummary)? $self->createSummary() : '';
     $answerTemplate = "" unless $self->answersSubmitted; # only print if there is at least one non-blank answer
     $self->correct_ids(\@correct_ids);
