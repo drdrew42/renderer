@@ -41,7 +41,7 @@ our $UNIT_TESTS_ON = 0;
 # create log files :: expendable
 ##################################################
 
-my $path_to_log_file = 'logs/standalone_results.log';
+my $path_to_log_file = "$ENV{RENDER_ROOT}/logs/standalone_results.log";
 
 eval {    # attempt to create log file
     local (*FH);
