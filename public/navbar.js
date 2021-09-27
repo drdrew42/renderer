@@ -106,6 +106,7 @@ renderbutton.addEventListener("click", event => {
   formData.set("permissionLevel", 20);
   formData.set("includeTags", 1);
   formData.set("showComments", 1);
+  formData.set("entryAssist", "MathQuill");
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
   formData.set("problemSeed", document.getElementById('problemSeed').value);
   formData.set("outputFormat", outputFormat);
@@ -181,6 +182,7 @@ function insertListener() {
     formData.set("permissionLevel", 20);
     formData.set("includeTags", 1);
     formData.set("showComments", 1);
+	formData.set("entryAssist", 'MathQuill');
     formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
     formData.set("problemSeed", document.getElementById('problemSeed').value);
     formData.set("outputFormat", outputFormat);

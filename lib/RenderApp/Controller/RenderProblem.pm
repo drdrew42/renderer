@@ -421,7 +421,8 @@ sub standaloneRenderer {
           ['Problem failed during render - no PGcore received.'];
     }
 
-    insert_mathquill_responses( $inputs_ref, $pg );
+    insert_mathquill_responses( $inputs_ref, $pg )
+        if defined($inputs_ref->{entryAssist}) && $inputs_ref->{entryAssist} eq 'MathQuill';
 
     my $out2 = {
         text                    => $pg->{body_text},
