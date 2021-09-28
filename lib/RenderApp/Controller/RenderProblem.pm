@@ -367,7 +367,7 @@ sub standaloneRenderer {
         showSolutions   => $showSolutions,
         refreshMath2img => 1,
         processAnswers  => $processAnswers,
-        QUIZ_PREFIX     => '',
+        QUIZ_PREFIX     => $inputs_ref->{answerPrefix} // '',
 
         #use_site_prefix 	=> 'http://localhost:3000',
         use_opaque_prefix        => 0,
