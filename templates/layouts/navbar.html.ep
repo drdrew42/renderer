@@ -27,8 +27,8 @@
           <span id="hiddenSourceFilePath"></span>
           <input type="text" placeholder="file path..." name="sourceFilePath" id="sourceFilePath">
           <input type="text" placeholder="random seed..." name="problemSeed" id="problemSeed" style="width:130px;">
-          <button type="button" id="save-problem">Save</a>
-          <button type="button" id="load-problem">Load</a>
+          <button type="button" id="save-problem">Save</button>
+          <button type="button" id="load-problem">Load</button>
         <!--/form-->
       </div>
     </div>

@@ -247,6 +247,7 @@ sub formatRenderedProblem {
 		$rh_result->{js} = [];
 		my %jsFiles;
 		for (@{$rh_result->{flags}{extra_js_files}}) {
+			# Avoid duplicates
 			next if $jsFiles{$_->{file}};
 			$jsFiles{$_->{file}} = 1;
 			my $attributes = ref($_->{attributes}) eq "HASH" ? $_->{attributes} : {};
@@ -255,7 +256,7 @@ sub formatRenderedProblem {
 				$extra_js_files .= CGI::script({ src => $_->{file}, %$attributes}, '');
 			} elsif (!$_->{external} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_->{file}") {
 				push @{$rh_result->{js}}, "$webwork_htdocs_url/$_->{file}";
-				$extra_js_files .= CGI::script({ src => "$webwork_htdocs_url/$_->{file}", %$attributes }, '');
+				$extra_js_files .= CGI::script({src => "$webwork_htdocs_url/$_->{file}", %$attributes}, '');
 			} else {
 				$extra_js_files .= "<!-- $_->{file} is not available in htdocs/ on this server -->";
 			}
