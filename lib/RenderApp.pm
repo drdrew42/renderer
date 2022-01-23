@@ -69,6 +69,37 @@ sub startup {
 		});
 	}
 
+	# Add Cache-Control and Expires headers to static content from webwork2_files
+	if (my $STATIC_EXPIRES = $self->config('STATIC_EXPIRES')) {
+	    $STATIC_EXPIRES = int( $STATIC_EXPIRES );
+	    my $cache_control_setting = "max-age=$STATIC_EXPIRES";
+	    my $no_cache_setting = "max-age=1, no-cache";
+	    $self->hook(after_dispatch => sub {
+		my $c = shift;
+
+		# Only process if file requested is under webwork2_files
+		unless ( $c->req->url->path =~ '^/webwork2_files' ) {
+		    return;
+		}
+
+		if ( $c->req->url->path =~ '/tmp/renderer' ) {
+		    # Treat problem generated files as already expired.
+		    # They should not be cached.
+		    $c->res->headers->cache_control( $no_cache_setting );
+		    $c->res->headers->header(Expires =>
+		        Mojo::Date->new(time - 86400) # expired 24 hours ago
+		    );
+		} else {
+		    # Standard "static" files.
+		    # They can be cached
+		    $c->res->headers->cache_control( $cache_control_setting );
+		    $c->res->headers->header(Expires =>
+		        Mojo::Date->new(time + $STATIC_EXPIRES)
+			);
+		}
+	    });
+	}
+
 	# Models
 	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
