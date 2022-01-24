@@ -58,6 +58,16 @@ sub startup {
 	$ENV{baseURL} = $ENV{SITE_HOST} . $ENV{baseURL} unless ( $ENV{baseURL} =~ m|^https?://| );
 	$ENV{formURL} = $ENV{baseURL} . $ENV{formURL} unless ( $ENV{formURL} =~ m|^https?://| );
 
+	# Handle optional Strict-Transport-Security header
+	if (my $HSTS_HEADER = $self->config('HSTS_HEADER')) {
+		$self->hook(before_dispatch => sub {
+			my $c = shift;
+			$c->res->headers->header(
+				'Strict-Transport-Security' => $HSTS_HEADER
+			       );
+		});
+	}
+
 	# Handle optional CORS settings
 	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
 		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'" 
