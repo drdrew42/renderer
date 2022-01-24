@@ -73,16 +73,14 @@ sub startup {
 	if (my $STATIC_EXPIRES = $self->config('STATIC_EXPIRES')) {
 	    $STATIC_EXPIRES = int( $STATIC_EXPIRES );
 	    my $cache_control_setting = "max-age=$STATIC_EXPIRES";
-	    my $no_cache_setting = "max-age=1, no-cache";
+	    my $no_cache_setting = 'max-age=1, no-cache';
 	    $self->hook(after_dispatch => sub {
 		my $c = shift;
 
 		# Only process if file requested is under webwork2_files
-		unless ( $c->req->url->path =~ '^/webwork2_files' ) {
-		    return;
-		}
+		return unless ($c->req->url->path =~ '^/webwork2_files/');
 
-		if ( $c->req->url->path =~ '/tmp/renderer' ) {
+		if ($c->req->url->path =~ '/tmp/renderer') {
 		    # Treat problem generated files as already expired.
 		    # They should not be cached.
 		    $c->res->headers->cache_control( $no_cache_setting );
