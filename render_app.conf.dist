@@ -6,6 +6,7 @@
   webworkJWTsecret => 'private',
   SITE_HOST => 'http://localhost:3000',
   CORS_ORIGIN => '*',
+  STATIC_EXPIRES => 86400,
   STRICT_JWT => 0,
   hypnotoad => {
     listen => ['http://*:3000'],
