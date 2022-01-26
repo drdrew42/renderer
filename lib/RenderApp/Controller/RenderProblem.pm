@@ -93,6 +93,11 @@ sub process_pg_file {
     $inputHash->{outputFormat}   ||= 'static';
     $inputHash->{language}       ||= 'en';
 
+    # Set a course environment language setting (which is used for
+    # maketext in PG) based on the value set above. When an API call
+    # arrives and provides a setting, it will then be used.
+    $seed_ce->{language} = $inputHash->{language};
+
     # HACK: required for problemRandomize.pl
     $inputHash->{effectiveUser} = 'red.ted';
     $inputHash->{user}          = 'red.ted';
