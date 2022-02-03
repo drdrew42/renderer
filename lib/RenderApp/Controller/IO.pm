@@ -35,10 +35,8 @@ sub raw {
     my $file_path = $validatedInput->{sourceFilePath};
     my $problem   = $c->newProblem( { log => $c->log, read_path => $file_path } );
     $problem->{action} = 'fetch source';
-    return $c->render(
-        json   => $problem->errport(),
-        status => $problem->{status}
-    ) unless $problem->success();
+    return $c->exception( $problem->{_message}, $problem->{status} )
+      unless $problem->success();
     $c->render( text => $problem->{problem_contents} );
 }
 
@@ -73,17 +71,15 @@ async sub writer {
         }
     );
 
-    return $c->render(
-        json   => $problem->errport(),
-        status => $problem->{status}
-    ) unless $problem->success();
+    return $c->exception( $problem->{_message}, $problem->{status} )
+      unless $problem->success();
 
     $c->render_later;
     my $saveSuccess = await $problem->save;
 
     return ( $saveSuccess ) ?
       $c->render( text => $problem->{write_path} ) :
-      $c->render( json => $problem->errport(), status => $problem->{status} );
+      $c->exception( $problem->{_message}, $problem->{status} );
 }
 
 sub upload {

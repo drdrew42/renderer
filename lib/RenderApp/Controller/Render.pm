@@ -61,7 +61,6 @@ sub parseRequest {
     # override key-values in params with those provided in the JWT
     @params{ keys %$claims } = values %$claims;
   }
-  warn join(', ', keys %params);
   return \%params;
 }
 
@@ -118,41 +117,25 @@ async sub problem {
   }
 
   my $problem = $c->newProblem({ log => $c->log, read_path => $file_path, random_seed => $random_seed, problem_contents => $problem_contents });
-  return $c->exception($problem->{_message}, status => $problem->{status}) unless $problem->success();
+  return $c->exception($problem->{_message}, $problem->{status})
+    unless $problem->success();
 
   $inputs_ref->{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
 
-  my @input_errs = checkInputs($inputs_ref);
-  if (@input_errs) {
-    my $err_log = "Form data submitted for ".$inputs_ref->{sourceFilePath}." contained errors: {";
-    $err_log .= join "}, {", @input_errs;
-    $c->log->error($err_log."}");
-  }
+  my $input_errs = checkInputs($inputs_ref);
 
-  $c->render_later;
+  $c->render_later; # tell Mojo that this might take a while
   my $ww_return_json = await $problem->render($inputs_ref);
 
-  unless ($problem->success()) {
-    $c->log->warn($problem->{_message});
-    return $c->render(
-      json   => $problem->errport(),
-      status => $problem->{status}
-    );
-  }
+  return $c->exception( $problem->{_message}, $problem->{status} )
+    unless $problem->success();
 
   my $ww_return_hash = decode_json($ww_return_json);
-  my @output_errs = checkOutputs($ww_return_hash);
-  if (@output_errs) {
-    my $err_log = "Output from rendering ".$inputs_ref->{sourceFilePath}." contained errors: {";
-    $err_log .= join "}, {", @output_errs;
-    $c->log->error($err_log."}");
-  }
+  my $output_errs = checkOutputs($ww_return_hash);
 
-  $ww_return_hash->{debug}->{render_warn} = [@input_errs, @output_errs];
+  $ww_return_hash->{debug}->{render_warn} = [$input_errs, $output_errs];
 
   # if answers are submitted and there is a provided answerURL...
-
-
   if ($inputs_ref->{JWTanswerURL} && $ww_return_hash->{answerJWT} && $inputs_ref->{submitAnswers}) {
     my $answerJWTresponse = {
       iss    => $ENV{SITE_HOST},
@@ -220,7 +203,11 @@ sub checkInputs {
       push @errs, $err;
     }
   }
-  return @errs;
+  return "Form data submitted for "
+      . $inputs_ref->{sourceFilePath}
+      . " contained errors: {"
+      . join "}, {", @errs
+      . "}";
 }
 
 sub checkOutputs {
@@ -248,7 +235,11 @@ sub checkOutputs {
       }
     }
   }
-  return @errs;
+  return
+      "Output from rendering "
+    . $outputs_ref->{sourceFilePath}
+    . " contained errors: {"
+    . join "}, {", @errs . "}";
 }
 
 sub exception {
@@ -256,6 +247,7 @@ sub exception {
   my $id = $c->logID;
   my $message = "[$id] " . shift;
   my $status = shift;
+  $c->log->error("($status) EXCEPTION: $message");
   return $c->respond_to(
     json => { json => {
         message => $message,
