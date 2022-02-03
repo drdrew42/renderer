@@ -553,7 +553,7 @@ sub fake_user {
         first_name    => 'Motoko',
         last_name     => 'Kusanagi',
         email_address => 'motoko.kusanagi@npsc.go.jp',
-        student_id    => '',
+        student_id    => '123456789',
         section       => '9',
         recitation    => '',
         comment       => '',

@@ -28,7 +28,7 @@ use RenderApp::Controller::RenderProblem;
 # - load   (overwrite problem_contents with contents of file at read_path)
 ## Error handling
 # - success (checks for internal errors and sets error code and message)
-# - errport (delivers a hash reference to be rendered as JSON)
+# - exception (renders JSON/HTML message w/ status & logs)
 
 our $codes = {
     400 => 'Bad Request',
@@ -54,7 +54,6 @@ sub new {
 
 sub _init {
     my ( $self, $args ) = @_;
-    my $availability = 'private';
     $self->{log} = $args->{log} if $args->{log};
 
     my $read_path        = $args->{read_path}        || '';
@@ -222,32 +221,19 @@ sub render {
     })->catch(sub {
         $self->{exception} = Mojo::Exception->new(shift)->trace;
         $self->{_error} = "500 Render failed: " . $self->{exception}->message;
-        $self->{log}->debug( $self->{_error} );
     });
     return $renderPromise;
 }
 
 sub success {
     my $self = shift;
-    # my $report = ( $self->{_error} =~ /\S/ ) ? $self->{_error} : 'NO ERRORS';
-    # $self->{log}->debug('CHECKING SUCCESS... ' . $report);
+    my $report = ( $self->{_error} =~ /\S/ ) ? $self->{_error} : 'NO ERRORS';
     return 1 unless $self->{_error} =~ /\S/;
     my ( $code, $mesg ) = split( / /, $self->{_error}, 2 );
     $self->{status}   = $code;
     $self->{_error}   = $codes->{$code};
     $self->{_message} = $mesg;
     return 0;
-}
-
-sub errport {
-    my $self = shift;
-    return unless $self->{_error};
-    my $err_ref = {
-        statusCode => $self->{status},
-        status     => $self->{_error},
-        message    => $self->{_message},
-    };
-    return $err_ref;
 }
 
 sub DESTROY {
