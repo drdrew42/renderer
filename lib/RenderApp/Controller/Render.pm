@@ -35,7 +35,7 @@ sub parseRequest {
     # only supply key-values that are not already provided
     # e.g. numCorrect/numIncorrect or restarting an interrupted session
     foreach my $key (keys %$claims) {
-      $params{$key} ||= $claims->{$key};
+      $params{$key} //= $claims->{$key};
     }
     # @params{ keys %$claims } = values %$claims;
   }
