@@ -25,6 +25,7 @@ API.
 
 use strict;
 use warnings;
+no warnings qw( redefine );
 use WeBWorK::Debug;
 use WeBWorK::PG::ImageGenerator;
 use WeBWorK::Utils qw(runtime_use formatDateTime makeTempDirectory);
