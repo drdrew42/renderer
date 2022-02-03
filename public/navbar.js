@@ -140,8 +140,8 @@ renderbutton.addEventListener("click", event => {
   }).then(function(data) {
     console.log("render data: ", data)
     problemiframe.srcdoc = data.renderedHTML;
-    if (data.debug.errors !== "") {
-      alert(data.debug.errors.replace(/<br\/>/,"\n"));
+    if (data.debug.perl_warn !== "") {
+      alert(data.debug.perl_warn.replace(/<br\/>/g,""));
     }
   }).catch(function(error) {
     document.getElementById("rendered-problem").innerHTML = error.message;
