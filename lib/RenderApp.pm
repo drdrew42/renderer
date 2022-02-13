@@ -108,12 +108,35 @@ sub startup {
 		$r->post('/render-api/tags')->to('IO#setTags');
 	}
 
-	# pass all requests via ww2_files through to lib/WeBWorK/htdocs
-	my $staticPath = $WeBWorK::Constants::WEBWORK_DIRECTORY."/htdocs/";
-	$r->any('/webwork2_files/*static' => sub {
-		my $c = shift;
-		$c->reply->file($staticPath.$c->stash('static'));
-	});
+	# Route requests for webwork2_files/CAPA_Graphics to render root Contrib/CAPA/CAPA_Graphics
+	$r->any(
+		'/webwork2_files/CAPA_Graphics/*static' => sub {
+			my $c = shift;
+			$c->reply->file("$ENV{RENDER_ROOT}/Contrib/CAPA/CAPA_Graphics/" . $c->stash('static'));
+		}
+	);
+
+	# Route requests for webwork2_files/tmp to the render root tmp
+	# This should really be configurable.
+	$r->any(
+		'/webwork2_files/tmp/*static' => sub {
+			my $c = shift;
+			$c->reply->file("$ENV{RENDER_ROOT}/tmp/" . $c->stash('static'));
+		}
+	);
+
+	# Route requests to webwork2_files to lib/WeBWorK/htdocs if the requested file exists there,
+	# otherwise route them to lib/PG/htdocs.
+	$r->any(
+		'/webwork2_files/*static' => sub {
+			my $c = shift;
+			if (-e "$WeBWorK::Constants::WEBWORK_DIRECTORY/htdocs/" . $c->stash('static')) {
+				$c->reply->file("$WeBWorK::Constants::WEBWORK_DIRECTORY/htdocs/" . $c->stash('static'));
+			} else {
+				$c->reply->file("$WeBWorK::Constants::PG_DIRECTORY/htdocs/" . $c->stash('static'));
+			}
+		}
+	);
 
 	# any other requests fall through
 	$r->any('/*fail' => sub {

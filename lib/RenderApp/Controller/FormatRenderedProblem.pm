@@ -245,42 +245,56 @@ sub formatRenderedProblem {
 	if (ref($rh_result->{flags}{extra_js_files}) eq "ARRAY") {
 		$rh_result->{js} = [];
 		my %jsFiles;
-		for (@{$rh_result->{flags}{extra_js_files}}) {
-			# Avoid duplicates
-			next if $jsFiles{$_->{file}};
-			$jsFiles{$_->{file}} = 1;
+		for (@{ $rh_result->{flags}{extra_js_files} }) {
+			next if $jsFiles{ $_->{file} };
+			$jsFiles{ $_->{file} } = 1;
 			my $attributes = ref($_->{attributes}) eq "HASH" ? $_->{attributes} : {};
 			if ($_->{external}) {
-				push @{$rh_result->{js}}, $_->{file};
-				$extra_js_files .= CGI::script({ src => $_->{file}, %$attributes}, '');
-			} elsif (!$_->{external} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_->{file}") {
-				push @{$rh_result->{js}}, "$webwork_htdocs_url/$_->{file}";
-				$extra_js_files .= CGI::script({src => "$webwork_htdocs_url/$_->{file}", %$attributes}, '');
+				push @{ $rh_result->{js} }, $_->{file};
+				$extra_js_files .= CGI::script({ src => $_->{file}, %$attributes }, '');
+			} elsif (
+				!$_->{external}
+				&& (-f "$WeBWorK::Constants::WEBWORK_DIRECTORY/htdocs/$_->{file}"
+					|| -f "$WeBWorK::Constants::PG_DIRECTORY/htdocs/$_->{file}")
+				)
+			{
+				push @{ $rh_result->{js} }, "$webwork_htdocs_url/$_->{file}";
+				$extra_js_files .= CGI::script({ src => "$webwork_htdocs_url/$_->{file}", %$attributes }, '');
 			} else {
 				$extra_js_files .= "<!-- $_->{file} is not available in htdocs/ on this server -->";
 			}
 		}
 	}
 
+	# Add CSS files requested by problems via ADD_CSS_FILE() in the PG file
+	# or via a setting of $ce->{pg}{specialPGEnvironmentVars}{extra_css_files}
+	# (the value should be an anonomous array).
 	my $extra_css_files = '';
-	my %cssFiles;
-	# Avoid duplicates
-	if (ref($self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}) eq "ARRAY") {
-		$cssFiles{$_} = 0 for @{$self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}};
+	my @cssFiles;
+	if (ref($ce->{pg}{specialPGEnvironmentVars}{extra_css_files}) eq "ARRAY") {
+		push(@cssFiles, { file => $_, external => 0 }) for @{ $ce->{pg}{specialPGEnvironmentVars}{extra_css_files} };
 	}
 	if (ref($rh_result->{flags}{extra_css_files}) eq "ARRAY") {
-		$cssFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_css_files}};
+		push @cssFiles, @{ $rh_result->{flags}{extra_css_files} };
 	}
+	my %cssFilesAdded;    # Used to avoid duplicates
 	$rh_result->{css} = [];
-	for (keys(%cssFiles)) {
-		if ($cssFiles{$_}) {
-			push @{$rh_result->{css}}, $_;
-			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$_\" />\n";
-		} elsif (!$cssFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
-			push @{$rh_result->{css}}, "$webwork_htdocs_url/$_";
-			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$webwork_htdocs_url/$_\" />\n";
+	for (@cssFiles) {
+		next if $cssFilesAdded{ $_->{file} };
+		$cssFilesAdded{ $_->{file} } = 1;
+		if ($_->{external}) {
+			push @{ $rh_result->{css} }, $_->{file};
+			$extra_css_files .= CGI::Link({ rel => 'stylesheet', href => "$_->{file}" });
+		} elsif (
+			!$_->{external}
+			&& (-f "$WeBWorK::Constants::WEBWORK_DIRECTORY/htdocs/$_->{file}"
+				|| -f "$WeBWorK::Constants::PG_DIRECTORY/htdocs/$_->{file}")
+			)
+		{
+			push @{ $rh_result->{css} }, "$webwork_htdocs_url/$_->{file}";
+			$extra_css_files .= CGI::Link({ rel => 'stylesheet', href => "$webwork_htdocs_url/$_->{file}" });
 		} else {
-			$extra_css_files .= "<!-- $_ is not available in htdocs/ on this server -->\n";
+			$extra_css_files .= qq{<!-- $_->{file} is not available in htdocs/ on this server -->};
 		}
 	}
 

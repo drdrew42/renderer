@@ -368,6 +368,7 @@ sub standaloneRenderer {
         refreshMath2img => 1,
         processAnswers  => $processAnswers,
         QUIZ_PREFIX     => $inputs_ref->{answerPrefix} // '',
+        useMathQuill    => 1,
 
         #use_site_prefix 	=> 'http://localhost:3000',
         use_opaque_prefix        => 0,
@@ -427,8 +428,6 @@ sub standaloneRenderer {
         $internal_debug_messages =
           ['Problem failed during render - no PGcore received.'];
     }
-
-    insert_mathquill_responses( $inputs_ref, $pg );
 
     my $out2 = {
         text                    => $pg->{body_text},
@@ -521,30 +520,6 @@ sub generateJWTs {
     my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 
     return ($sessionJWT, $answerJWT);
-}
-
-# insert_mathquill_responses subroutine
-
-# Add responses to each answer's response group that store the latex form of the students'
-# answers and add corresponding hidden input boxes to the page.
-
-sub insert_mathquill_responses {
-    my ( $form_data, $pg ) = @_;
-    for my $answerLabel ( keys %{ $pg->{pgcore}{PG_ANSWERS_HASH} } ) {
-        my $mq_opts = $pg->{pgcore}{PG_ANSWERS_HASH}{$answerLabel}{ans_eval}{rh_ans}{mathQuillOpts} // '';
-        next if ( $mq_opts =~ /\s*disabled\s*/ );
-        my $response_obj = $pg->{pgcore}{PG_ANSWERS_HASH}{$answerLabel}->response_obj;
-        for my $response ( $response_obj->response_labels ) {
-            next if ( ref( $response_obj->{responses}{$response} ) );
-            my $name = "MaThQuIlL_$response";
-            push( @{ $response_obj->{response_order} }, $name );
-            $response_obj->{responses}{$name} = '';
-            my $value = defined( $form_data->{$name} ) ? $form_data->{$name} : '';
-            $pg->{body_text} .= CGI::hidden({
-                -name => $name, -id => $name, -value => $value, data_mq_opts => "$mq_opts"
-            });
-        }
-    }
 }
 
 sub fake_user {
