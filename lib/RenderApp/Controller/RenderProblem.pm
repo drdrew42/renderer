@@ -368,7 +368,7 @@ sub standaloneRenderer {
         refreshMath2img => 1,
         processAnswers  => $processAnswers,
         QUIZ_PREFIX     => $inputs_ref->{answerPrefix} // '',
-        useMathQuill    => 1,
+		useMathQuill    => !defined $inputs_ref->{entryAssist} || $inputs_ref->{entryAssist} eq 'MathQuill' ? 1 : 0,
 
         #use_site_prefix 	=> 'http://localhost:3000',
         use_opaque_prefix        => 0,

@@ -5,15 +5,18 @@ BEGIN {
     use Mojo::File;
     $main::dirname = Mojo::File::curfile->dirname;
 
-    #RENDER_ROOT is required for initializing conf files
+    # RENDER_ROOT is required for initializing conf files.
     $ENV{RENDER_ROOT} = $main::dirname->dirname
       unless ( defined( $ENV{RENDER_ROOT} ) );
 
-    #WEBWORK_ROOT is required for PG/lib/WeBWorK/IO
-    $ENV{WEBWORK_ROOT} = $main::dirname . '/WeBWorK'
-      unless ( defined( $ENV{WEBWORK_ROOT} ) );
+    # WEBWORK_ROOT is required for PG/lib/WeBWorK/IO.
+    # PG_ROOT is required for PG/lib/PGEnvironment.pm.
+    # These are hardcoded to avoid conflict with environment variables for webwork2.
+    # There is no need for these to be configurable.
+    $ENV{WEBWORK_ROOT} = $main::dirname . '/WeBWorK';
+    $ENV{PG_ROOT} = $main::dirname . '/PG';
 
-    #used for reconstructing library paths from sym-links
+    # Used for reconstructing library paths from sym-links.
     $ENV{OPL_DIRECTORY}                    = "webwork-open-problem-library";
     $WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname . "/WeBWorK";
     $WeBWorK::Constants::PG_DIRECTORY      = $main::dirname . "/PG";
@@ -60,7 +63,7 @@ sub startup {
 
 	# Handle optional CORS settings
 	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
-		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'" 
+		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'"
 			unless ($CORS_ORIGIN eq '*' || $CORS_ORIGIN =~ /^https?:\/\//);
 
 		$self->hook(before_dispatch => sub {
@@ -108,35 +111,10 @@ sub startup {
 		$r->post('/render-api/tags')->to('IO#setTags');
 	}
 
-	# Route requests for webwork2_files/CAPA_Graphics to render root Contrib/CAPA/CAPA_Graphics
-	$r->any(
-		'/webwork2_files/CAPA_Graphics/*static' => sub {
-			my $c = shift;
-			$c->reply->file("$ENV{RENDER_ROOT}/Contrib/CAPA/CAPA_Graphics/" . $c->stash('static'));
-		}
-	);
-
-	# Route requests for webwork2_files/tmp to the render root tmp
-	# This should really be configurable.
-	$r->any(
-		'/webwork2_files/tmp/*static' => sub {
-			my $c = shift;
-			$c->reply->file("$ENV{RENDER_ROOT}/tmp/" . $c->stash('static'));
-		}
-	);
-
-	# Route requests to webwork2_files to lib/WeBWorK/htdocs if the requested file exists there,
-	# otherwise route them to lib/PG/htdocs.
-	$r->any(
-		'/webwork2_files/*static' => sub {
-			my $c = shift;
-			if (-e "$WeBWorK::Constants::WEBWORK_DIRECTORY/htdocs/" . $c->stash('static')) {
-				$c->reply->file("$WeBWorK::Constants::WEBWORK_DIRECTORY/htdocs/" . $c->stash('static'));
-			} else {
-				$c->reply->file("$WeBWorK::Constants::PG_DIRECTORY/htdocs/" . $c->stash('static'));
-			}
-		}
-	);
+	# Static file routes
+	$r->any('/webwork2_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
+	$r->any('/webwork2_files/tmp/*static')->to('StaticFiles#temp_file');
+	$r->any('/pg_files/*static')->to('StaticFiles#pg_file');
 
 	# any other requests fall through
 	$r->any('/*fail' => sub {

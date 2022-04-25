@@ -16,7 +16,7 @@ $nextBlock = <<'ENDPROBLEMTEMPLATE';
 <head>
 <meta charset='utf-8'>
 <base href="TO_SET_LATER_SITE_URL">
-<link rel="shortcut icon" href="$webwork_htdocs_url/images/favicon.ico"/>
+<link rel="shortcut icon" href="/favicon.ico"/>
 ENDPROBLEMTEMPLATE
 
 push( @pairs_for_json, "head_part010", $nextBlock );
@@ -32,15 +32,15 @@ push( @pairs_for_json, "head_part100", $nextBlock );
 
 $nextBlock = <<'ENDPROBLEMTEMPLATE';
 <!-- JS Loads -->
-<script src="$webwork_htdocs_url/Problem/mathjax-config.js" defer></script>
+<script src="/Problem/mathjax-config.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.1.2/es5/tex-chtml.min.js" defer integrity="sha512-OEN4O//oR+jeez1OLySjg7HPftdoSaKHiWukJdbFJOfi2b7W0r0ppziSgVRVNaG37qS1f9SmttcutYgoJ6rwNQ==" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js" integrity="sha512-uto9mlQzrs59VwILcLiRYeLKPPbS/bT71da/OEBYEwcdNUk8jYIy+D176RYoop1Da+f9mvkYrmj5MCLZWEtQuA==" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.1/iframeResizer.contentWindow.min.js" integrity="sha512-qw2bX9KUhi7HLuUloyRsvxRlWJvj0u0JWVegc5tf7qsw47T0pwXZIk1Kyc0utTH3NlrpHtLa4HYTVUyHBr9Ufg==" crossorigin="anonymous"></script>
 
-<script src="$webwork_htdocs_url/Problem/problem.js" defer></script>
-<script src="$webwork_htdocs_url/js/submithelper.js" defer></script>
+<script src="/Problem/problem.js" defer></script>
+<script src="/Problem/submithelper.js" defer></script>
 ENDPROBLEMTEMPLATE
 
 push( @pairs_for_json, "head_part200", $nextBlock );

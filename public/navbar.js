@@ -1,7 +1,12 @@
-function templateSelect(element) {
-  document.querySelectorAll(".dropdown-item").forEach(e => { e.classList.remove("selected"); });
-  element.classList.add("selected");
-  document.querySelector("#template-select").innerHTML = element.innerText + ' <i class="fa fa-caret-down"></i>';
+const templateSelect = document.getElementById('template-select');
+const templateItems = document.getElementById('template-select-dropdown')?.querySelectorAll('.dropdown-item') ?? [];
+for (const element of templateItems) {
+	element.addEventListener('click', (e) => {
+		e.preventDefault();
+		templateItems.forEach(item => { item.classList.remove('selected'); });
+		element.classList.add('selected');
+		templateSelect.innerHTML = element.textContent + ' <i class="fa fa-caret-down"></i>';
+	});
 }
 
 $(function(){

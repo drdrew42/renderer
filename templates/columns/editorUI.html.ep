@@ -1,11 +1,11 @@
-%= stylesheet 'https://codemirror.net/theme/monokai.css'
-%= stylesheet 'https://codemirror.net/theme/rubyblue.css'
-%= stylesheet 'https://codemirror.net/theme/material-palenight.css'
-%= stylesheet 'https://codemirror.net/theme/tomorrow-night-eighties.css'
-%= stylesheet 'https://codemirror.net/lib/codemirror.css'
-%= javascript 'https://codemirror.net/lib/codemirror.js'
-%= javascript $ENV{SITE_HOST} . '/PGCodeMirror/PG.js'
-%= javascript $ENV{SITE_HOST} . '/PGCodeMirror/PGaddons.js'
+%= stylesheet '/vendor/codemirror/theme/monokai.css'
+%= stylesheet '/vendor/codemirror/theme/rubyblue.css'
+%= stylesheet '/vendor/codemirror/theme/material-palenight.css'
+%= stylesheet '/vendor/codemirror/theme/tomorrow-night-eighties.css'
+%= stylesheet '/vendor/codemirror/lib/codemirror.css'
+%= javascript '/vendor/codemirror/lib/codemirror.js'
+%= javascript '/PGCodeMirror/PG.js'
+%= javascript '/PGCodeMirror/PGaddons.js'
 
   <div id='edit-header' class='header'>
     <b>Editing problem:</b><br>
@@ -16,9 +16,9 @@
   </div>
 
 %= javascript 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js'
-%= javascript 'https://codemirror.net/addon/selection/active-line.js'
-%= javascript 'https://codemirror.net/addon/edit/matchbrackets.js'
-%= javascript 'https://codemirror.net/addon/edit/closebrackets.js'
+%= javascript '/vendor/codemirror/addon/selection/active-line.js'
+%= javascript '/vendor/codemirror/addon/edit/matchbrackets.js'
+%= javascript '/vendor/codemirror/addon/edit/closebrackets.js'
 %= javascript begin
 $(function(){
   cm = new CodeMirror.fromTextArea(
