@@ -9,17 +9,17 @@
   </head>
   <body>
     <div class="topnav" id="myTopnav">
-      <div class="dropdown">
+      <div class="dropdown" id="template-select-dropdown">
         <button class="dropbtn" id="template-select">Template
           <i class="fa fa-caret-down"></i>
         </button>
         <div class="dropdown-content">
-          <a href="#" class="dropdown-item" id="static" onclick="templateSelect(this)">Static <i class="fa fa-check" aria-hidden="true"></i></a>
-          <a href="#" class="dropdown-item" id="single" onclick="templateSelect(this)">Single <i class="fa fa-check" aria-hidden="true"></i></a>
-          <a href="#" class="dropdown-item" id="practice" onclick="templateSelect(this)">Practice <i class="fa fa-check" aria-hidden="true"></i></a>
-          <a href="#" class="dropdown-item" id="classic" onclick="templateSelect(this)">Classic <i class="fa fa-check" aria-hidden="true"></i></a>
-          <a href="#" class="dropdown-item" id="simple" onclick="templateSelect(this)">Simple <i class="fa fa-check" aria-hidden="true"></i></a>
-          <a href="#" class="dropdown-item" id="standard" onclick="templateSelect(this)">Standard <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="static">Static <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="single">Single <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="practice">Practice <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="classic">Classic <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="simple">Simple <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="standard">Standard <i class="fa fa-check" aria-hidden="true"></i></a>
         </div>
       </div>
       <div class="search-container" >

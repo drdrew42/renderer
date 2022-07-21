@@ -1,7 +1,12 @@
-function templateSelect(element) {
-  document.querySelectorAll(".dropdown-item").forEach(e => { e.classList.remove("selected"); });
-  element.classList.add("selected");
-  document.querySelector("#template-select").innerHTML = element.innerText + ' <i class="fa fa-caret-down"></i>';
+const templateSelect = document.getElementById('template-select');
+const templateItems = document.getElementById('template-select-dropdown')?.querySelectorAll('.dropdown-item') ?? [];
+for (const element of templateItems) {
+	element.addEventListener('click', (e) => {
+		e.preventDefault();
+		templateItems.forEach(item => { item.classList.remove('selected'); });
+		element.classList.add('selected');
+		templateSelect.innerHTML = element.textContent + ' <i class="fa fa-caret-down"></i>';
+	});
 }
 
 $(function(){
@@ -125,7 +130,7 @@ renderbutton.addEventListener("click", event => {
   [...document.querySelectorAll('.checkbox-input:checked')].map(e => e.name).forEach( (box) => {
     formData.append(box, 1);
   });
-  formData.append("format", "json");
+  formData.append("_format", "json");
   const render_params = {
     body : formData,
     method : "post"
@@ -169,7 +174,7 @@ function insertListener() {
     event.preventDefault()
     let formData = new FormData(problemForm)
     let clickedButton = problemForm.querySelector('.btn-clicked')
-    formData.set("format", "json");
+    formData.set("_format", "json");
     const selectedformat = document.querySelector(".dropdown-item.selected");
     let outputFormat;
     if ( selectedformat === null ) {

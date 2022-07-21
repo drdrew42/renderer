@@ -1,11 +1,11 @@
-%= stylesheet 'http://codemirror.net/theme/monokai.css'
-%= stylesheet 'http://codemirror.net/theme/rubyblue.css'
-%= stylesheet 'http://codemirror.net/theme/material-palenight.css'
-%= stylesheet 'http://codemirror.net/theme/tomorrow-night-eighties.css'
-%= stylesheet '/webwork2_files/js/vendor/codemirror/codemirror.css'
-%= javascript '/webwork2_files/js/vendor/codemirror/codemirror.js'
-%= javascript '/webwork2_files/js/vendor/codemirror/PG.js'
-%= javascript '/webwork2_files/js/vendor/codemirror/PGaddons.js'
+%= stylesheet '/vendor/codemirror/theme/monokai.css'
+%= stylesheet '/vendor/codemirror/theme/rubyblue.css'
+%= stylesheet '/vendor/codemirror/theme/material-palenight.css'
+%= stylesheet '/vendor/codemirror/theme/tomorrow-night-eighties.css'
+%= stylesheet '/vendor/codemirror/lib/codemirror.css'
+%= javascript '/vendor/codemirror/lib/codemirror.js'
+%= javascript '/PGCodeMirror/PG.js'
+%= javascript '/PGCodeMirror/PGaddons.js'
 
   <div id='edit-header' class='header'>
     <b>Editing problem:</b><br>
@@ -15,10 +15,10 @@
     %= text_area problemContentsEditor => q(Load a problem, then click on "render contents."), id => 'problemContentsEditor'
   </div>
 
-%= javascript '/webwork2_files/node_modules/jquery/dist/jquery.min.js'
-%= javascript 'https://codemirror.net/addon/selection/active-line.js'
-%= javascript 'https://codemirror.net/addon/edit/matchbrackets.js'
-%= javascript 'https://codemirror.net/addon/edit/closebrackets.js'
+%= javascript 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js'
+%= javascript '/vendor/codemirror/addon/selection/active-line.js'
+%= javascript '/vendor/codemirror/addon/edit/matchbrackets.js'
+%= javascript '/vendor/codemirror/addon/edit/closebrackets.js'
 %= javascript begin
 $(function(){
   cm = new CodeMirror.fromTextArea(
