@@ -24,13 +24,16 @@ FormatRenderedProblem.pm
 
 package RenderApp::Controller::FormatRenderedProblem;
 
+use warnings;
+use strict;
+
 use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
 use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
 use MIME::Base64 qw( encode_base64 decode_base64);
 use WeBWorK::Utils::AttemptsTable; #import from ww2
 use WeBWorK::PG::ImageGenerator; # import from ww2
 use WeBWorK::Utils::LanguageAndDirection;
-use WeBWorK::Utils qw( wwRound);   # required for score summary
+use WeBWorK::Utils qw(wwRound getAssetURL);   # required for score summary
 use WeBWorK::Localize ; # for maketext
 our $UNIT_TESTS_ON  = 0;
 
@@ -46,7 +49,7 @@ sub format_hash_ref {
 sub new {
   my $invocant = shift;
   my $class = ref $invocant || $invocant;
-	$self = { # Is this function redundant given the declarations within sub formatRenderedProblem?
+  my $self = { # Is this function redundant given the declarations within sub formatRenderedProblem?
 		return_object => {},
 		encoded_source => {},
 		sourceFilePath => '',
@@ -199,7 +202,7 @@ sub formatRenderedProblem {
 		answersSubmitted       => $self->{inputs_ref}{answersSubmitted}//0,
 		answerOrder            => $answerOrder//[],
 		displayMode            => $self->{inputs_ref}{displayMode},
-		imgGen                 => $imgGen,
+		imgGen                 => undef, # $imgGen,
 		ce                     => '',	#used only to build the imgGen
 		showAnswerNumbers      => 0,
 		showAttemptAnswers     => 0,
@@ -242,45 +245,47 @@ sub formatRenderedProblem {
 
 	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
 	my $extra_js_files = '';
-	if (ref($rh_result->{flags}{extra_js_files}) eq "ARRAY") {
+	if (ref($rh_result->{flags}{extra_js_files}) eq 'ARRAY') {
 		$rh_result->{js} = [];
 		my %jsFiles;
-		for (@{$rh_result->{flags}{extra_js_files}}) {
-			# Avoid duplicates
-			next if $jsFiles{$_->{file}};
-			$jsFiles{$_->{file}} = 1;
-			my $attributes = ref($_->{attributes}) eq "HASH" ? $_->{attributes} : {};
+		for (@{ $rh_result->{flags}{extra_js_files} }) {
+			next if $jsFiles{ $_->{file} };
+			$jsFiles{ $_->{file} } = 1;
+			my %attributes = ref($_->{attributes}) eq 'HASH' ? %{ $_->{attributes} } : ();
 			if ($_->{external}) {
-				push @{$rh_result->{js}}, $_->{file};
-				$extra_js_files .= CGI::script({ src => $_->{file}, %$attributes}, '');
-			} elsif (!$_->{external} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_->{file}") {
-				push @{$rh_result->{js}}, "$webwork_htdocs_url/$_->{file}";
-				$extra_js_files .= CGI::script({src => "$webwork_htdocs_url/$_->{file}", %$attributes}, '');
+				push @{ $rh_result->{js} }, $_->{file};
+				$extra_js_files .= CGI::script({ src => $_->{file}, %attributes }, '');
 			} else {
-				$extra_js_files .= "<!-- $_->{file} is not available in htdocs/ on this server -->";
+				my $url = getAssetURL($self->{inputs_ref}{language} // 'en', $_->{file});
+				push @{ $rh_result->{js} }, $SITE_URL.$url;
+				$extra_js_files .= CGI::script({ src => $url, %attributes }, '');
 			}
 		}
 	}
 
+	# Add CSS files requested by problems via ADD_CSS_FILE() in the PG file
+	# or via a setting of $self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}
+	# (the value should be an anonomous array).
 	my $extra_css_files = '';
-	my %cssFiles;
-	# Avoid duplicates
-	if (ref($self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}) eq "ARRAY") {
-		$cssFiles{$_} = 0 for @{$self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}};
+	my @cssFiles;
+	if (ref($self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}) eq 'ARRAY') {
+		push(@cssFiles, { file => $_, external => 0 }) for @{ $self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files} };
 	}
-	if (ref($rh_result->{flags}{extra_css_files}) eq "ARRAY") {
-		$cssFiles{$_->{file}} = $_->{external} for @{$rh_result->{flags}{extra_css_files}};
+	if (ref($rh_result->{flags}{extra_css_files}) eq 'ARRAY') {
+		push @cssFiles, @{ $rh_result->{flags}{extra_css_files} };
 	}
+	my %cssFilesAdded;    # Used to avoid duplicates
 	$rh_result->{css} = [];
-	for (keys(%cssFiles)) {
-		if ($cssFiles{$_}) {
-			push @{$rh_result->{css}}, $_;
-			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$_\" />\n";
-		} elsif (!$cssFiles{$_} && -f "$ENV{WEBWORK_ROOT}/htdocs/$_") {
-			push @{$rh_result->{css}}, "$webwork_htdocs_url/$_";
-			$extra_css_files .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$webwork_htdocs_url/$_\" />\n";
+	for (@cssFiles) {
+		next if $cssFilesAdded{ $_->{file} };
+		$cssFilesAdded{ $_->{file} } = 1;
+		if ($_->{external}) {
+			push @{ $rh_result->{css} }, $_->{file};
+			$extra_css_files .= CGI::Link({ rel => 'stylesheet', href => $_->{file} });
 		} else {
-			$extra_css_files .= "<!-- $_ is not available in htdocs/ on this server -->\n";
+			my $url = getAssetURL($self->{inputs_ref}{language} // 'en', $_->{file});
+			push @{ $rh_result->{css} }, $SITE_URL.$url;
+			$extra_css_files .= CGI::Link({ href => $url, rel => 'stylesheet' });
 		}
 	}
 

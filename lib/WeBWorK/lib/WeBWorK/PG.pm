@@ -281,6 +281,10 @@ sub defineProblemEnvir {
 	$envir{QUIZ_PREFIX}              = $translationOptions->{QUIZ_PREFIX}//''; # used by quizzes
 	$envir{PROBLEM_GRADER_TO_USE}    = "avg_problem_grader";
 	$envir{PRINT_FILE_NAMES_FOR}     = "professor";
+	$envir{useMathQuill}             = $translationOptions->{useMathQuill};
+	$envir{useMathView}              = $translationOptions->{useMathView};
+	$envir{mathViewLocale}           = $ce->{pg}{options}{mathViewLocale};
+	$envir{useWirisEditor}           = $translationOptions->{useWirisEditor};
 
         #  ADDED: __files__
         #    an array for mapping (eval nnn) to filenames in error messages

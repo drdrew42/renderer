@@ -22,7 +22,7 @@ function updateBrowser(formId, updateBackNav) {
         formData.set('sourceFilePath', value);
         formData.set('problemSeed', 1234);
         formData.set('outputFormat', 'static');
-        formData.set('format', 'json');
+        formData.set('_format', 'json');
         formData.set('permissionLevel', 20);
         formData.set('includeTags', 1);
         formData.set('showComments', 1);

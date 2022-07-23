@@ -237,7 +237,7 @@ sub checkOutputs {
   }
   return
       "Output from rendering "
-    . $outputs_ref->{sourceFilePath}
+    . ($outputs_ref->{sourceFilePath} // '')
     . " contained errors: {"
     . join "}, {", @errs . "}";
 }
