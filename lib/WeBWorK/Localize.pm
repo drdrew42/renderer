@@ -5,10 +5,10 @@ use File::Spec;
 use Locale::Maketext;
 use Locale::Maketext::Lexicon;
 
-my $path = "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib/WeBWorK/Localize";
-my   $pattern = File::Spec->catfile($path, '*.[pm]o');
-my   $decode = 1;
-my   $encoding = undef;
+my $path     = "$ENV{RENDER_ROOT}/lib/WeBWorK/Localize";
+my $pattern  = File::Spec->catfile($path, '*.[pm]o');
+my $decode   = 1;
+my $encoding = undef;
 
 eval "
 	package WeBWorK::Localize::I18N;

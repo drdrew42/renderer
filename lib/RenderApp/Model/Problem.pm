@@ -162,7 +162,7 @@ sub save {
     my $self    = shift;
     my $success = 0;
     my $write_path =
-      ( $self->{write_path} =~ /\S/ ) ? 
+      ( $self->{write_path} =~ /\S/ ) ?
         $self->{write_path} :
         $self->{read_path};
 

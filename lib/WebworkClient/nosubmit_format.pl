@@ -1,4 +1,4 @@
-$jwe_format = <<'ENDPROBLEMTEMPLATE';
+$nosubmit_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
 <html $COURSE_LANG_AND_DIR>
 <head>
@@ -21,15 +21,12 @@ $extra_css_files
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.1/iframeResizer.contentWindow.min.js" integrity="sha512-qw2bX9KUhi7HLuUloyRsvxRlWJvj0u0JWVegc5tf7qsw47T0pwXZIk1Kyc0utTH3NlrpHtLa4HYTVUyHBr9Ufg==" crossorigin="anonymous"></script>
 
-<script src="/Problem/problem.js" defer></script>
-<script src="/Problem/submithelper.js" defer></script>
-
 $extra_js_files
 
 $problemHeadText
 $problemPostHeaderText
 
-<title>WeBWorK using host: $SITE_URL</title>
+<title>WeBWorK Standalone Renderer</title>
 </head>
 <body>
   <div class="container-fluid">
@@ -41,26 +38,20 @@ $problemPostHeaderText
             $problemText
           </div>
           $scoreSummary
-          $LTIGradeMessage
-          <input type="hidden" name="sessionJWT" value="$sessionJWT">
-          <input type="hidden" name="problemJWT" value="$problemJWT">
-          <p>
-            <input type="submit" name="previewAnswers" class="btn btn-primary" value="$STRING_Preview" />
-            <input type="submit" name="submitAnswers" class="btn btn-primary" value="$STRING_Submit"/>
-          </p>
+
+          <input type="hidden" name="answersSubmitted" value="1">
+          <input type="hidden" name="sourceFilePath" value = "$sourceFilePath">
+          <input type="hidden" name="problemSource" value="$encoded_source">
+          <input type="hidden" name="problemSeed" value = "$problemSeed">
+          <input type="hidden" name="language" value="$formLanguage">
+          <input type="hidden" name="showSummary" value="$showSummary">
         </form>
       </div>
     </div>
   </div>
-  <script>
-    if ('JWTanswerURLstatus') {
-      console.log("response message ", JSON.parse('JWTanswerURLstatus'));
-      window.parent.postMessage('JWTanswerURLstatus', '*');
-    }
-  </script>
 </body>
 </html>
 
 ENDPROBLEMTEMPLATE
 
-$jwe_format;
+$nosubmit_format;

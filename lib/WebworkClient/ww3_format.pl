@@ -1,7 +1,6 @@
 {
 	answerTemplate => '$answerTemplate',
 	scoreSummary => '$scoreSummary',
-	LTIGradeMessage => '$LTIGradeMessage',
 
 	problemText => <<'ENDPROBLEMTEMPLATE'
 $problemHeadText

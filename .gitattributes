@@ -1,3 +1,2 @@
-lib/WeBWorK/htdocs/** linguist-vendored
 public/** linguist-vendored
 *.pl linguist-language=Perl

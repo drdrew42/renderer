@@ -108,7 +108,7 @@ renderbutton.addEventListener("click", event => {
     outputFormat = selectedformat.id;
   }
   let formData = new FormData();
-  formData.set("permissionLevel", 20);
+  formData.set("isInstructor", 1);
   formData.set("includeTags", 1);
   formData.set("showComments", 1);
   formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
@@ -183,7 +183,7 @@ function insertListener() {
     } else {
       outputFormat = selectedformat.id;
     }
-    formData.set("permissionLevel", 20);
+    formData.set("isInstructor", 1);
     formData.set("includeTags", 1);
     formData.set("showComments", 1);
     formData.set("sourceFilePath", document.getElementById('sourceFilePath').value);
@@ -220,6 +220,9 @@ function insertListener() {
       }
     }).then( function(data) {
       console.log("render data: ", data)
+      if (data.debug.perl_warn !== "") {
+        alert(data.debug.perl_warn.replace(/<br\/>/g,""));
+      }
       problemiframe.srcdoc = data.renderedHTML
     }).catch( function(error) {
       document.getElementById("rendered-problem").innerHTML = error.message

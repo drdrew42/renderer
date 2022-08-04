@@ -1,7 +1,7 @@
 %= stylesheet '/tags.css'
 
 % my $taxo = '[]';
-% if (open(TAXONOMY, "<:encoding(utf8)", $ENV{WEBWORK_ROOT}.'/htdocs/DATA/tagging-taxonomy.json') ) {
+% if (open(TAXONOMY, "<:encoding(utf8)", $c->app->home->child('tmp/tagging-taxonomy.json') ) {
 %     $taxo = join("", <TAXONOMY>);
 %     close TAXONOMY;
 % }
