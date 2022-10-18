@@ -285,7 +285,7 @@ sub getAssetURL {
 
 	# If the file was not found in the lists, then just use the given file and assume its path is relative to the pg
 	# htdocs location.
-	return "pg_files/$file";
+	return "/pg_files/$file";
 }
 
 

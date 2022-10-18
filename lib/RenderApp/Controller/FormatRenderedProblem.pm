@@ -257,7 +257,7 @@ sub formatRenderedProblem {
 				$extra_js_files .= CGI::script({ src => $_->{file}, %attributes }, '');
 			} else {
 				my $url = getAssetURL($self->{inputs_ref}{language} // 'en', $_->{file});
-				push @{ $rh_result->{js} }, "$SITE_URL/$url";
+				push @{ $rh_result->{js} }, $SITE_URL.$url;
 				$extra_js_files .= CGI::script({ src => $url, %attributes }, '');
 			}
 		}
@@ -284,7 +284,7 @@ sub formatRenderedProblem {
 			$extra_css_files .= CGI::Link({ rel => 'stylesheet', href => $_->{file} });
 		} else {
 			my $url = getAssetURL($self->{inputs_ref}{language} // 'en', $_->{file});
-			push @{ $rh_result->{css} }, "$SITE_URL/$url";
+			push @{ $rh_result->{css} }, $SITE_URL.$url;
 			$extra_css_files .= CGI::Link({ href => $url, rel => 'stylesheet' });
 		}
 	}
