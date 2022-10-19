@@ -23,7 +23,7 @@ sub parseRequest {
     eval {
       $claims = decode_jwt(
         token      => $sessionJWT,
-        key        => $ENV{sessionJWTsecret},
+        key        => $ENV{webworkJWTsecret},
         verify_iss => $ENV{SITE_HOST},
       );
       1;
