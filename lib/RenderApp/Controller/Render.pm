@@ -136,20 +136,20 @@ async sub problem {
   $ww_return_hash->{debug}->{render_warn} = [$input_errs, $output_errs];
 
   # if answers are submitted and there is a provided answerURL...
-  if ($inputs_ref->{JWTanswerURL} && $ww_return_hash->{answerJWT} && $inputs_ref->{submitAnswers}) {
+  if ($inputs_ref->{JWTanswerURL} && $ww_return_hash->{JWT}{answer} && $inputs_ref->{submitAnswers}) {
     my $answerJWTresponse = {
-      iss    => $ENV{SITE_HOST},
-      subject => "webwork.result",
-      status    => 502,
-      message => "initial message"
+      iss     => $ENV{SITE_HOST},
+      subject => 'webwork.result',
+      status  => 502,
+      message => 'initial message'
     };
     my $reqBody = {
       Origin         => $ENV{SITE_HOST},
-      "Content-Type" => 'text/plain',
+      'Content-Type' => 'text/plain',
     };
 
-    $c->log->info("sending answerJWT to " . $inputs_ref->{JWTanswerURL});
-    await $c->ua->max_redirects(5)->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{answerJWT})->
+    $c->log->info("sending answerJWT to $inputs_ref->{JWTanswerURL}");
+    await $c->ua->max_redirects(5)->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{JWT}{answer})->
       then(sub {
         my $response = shift->result;
 
