@@ -31,7 +31,7 @@ $problemPostHeaderText
 
 <title>WeBWorK using host: $SITE_URL</title>
 </head>
-<body>
+<body onLoad="window.parent.postMessage('loaded', '*')" >
   <div class="container-fluid">
     <div class="row">
       <div class="col-12 problem">
@@ -56,6 +56,25 @@ $problemPostHeaderText
       console.log("response message ", JSON.parse('JWTanswerURLstatus'));
       window.parent.postMessage('JWTanswerURLstatus', '*');
     }
+
+    window.addEventListener('message', event => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } 
+      catch (e) {
+        return;
+      }
+      if (message.hasOwnProperty('styles')) {
+        message.styles.forEach((incoming) => {
+          const elements = window.document.querySelectorAll(incoming.selector);
+          elements.forEach(el => el.style.cssText += incoming.style);
+        });
+      } else {
+        return;
+      }
+      event.source.postMessage('css updated', event.origin);
+    });
   </script>
 </body>
 </html>
