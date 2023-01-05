@@ -66,15 +66,22 @@ $problemPostHeaderText
       catch (e) {
         return;
       }
+      
       if (message.hasOwnProperty('styles')) {
         message.styles.forEach((incoming) => {
           const elements = window.document.querySelectorAll(incoming.selector);
-          elements.forEach(el => el.style.cssText += incoming.style);
+          elements.forEach(el => el.style.cssText = incoming.style);
         });
-      } else {
-        return;
+        event.source.postMessage('css styles updated', event.origin);
       }
-      event.source.postMessage('css updated', event.origin);
+
+      if (message.hasOwnProperty('classes')) {
+        message.classes.forEach((incoming) => {
+          const elements = window.document.querySelectorAll(incoming.selector);
+          elements.forEach(el => el.className = incoming.class);
+        });
+        event.source.postMessage('css classes updated', event.origin);
+      }
     });
   </script>
 </body>
