@@ -67,20 +67,29 @@ $problemPostHeaderText
         return;
       }
       
-      if (message.hasOwnProperty('styles')) {
-        message.styles.forEach((incoming) => {
-          const elements = window.document.querySelectorAll(incoming.selector);
-          elements.forEach(el => el.style.cssText = incoming.style);
+      if (message.hasOwnProperty('elements')) {
+        message.elements.forEach((incoming) => {
+          let elements;
+          if (incoming.hasOwnProperty('selector')) {
+            elements = window.document.querySelectorAll(incoming.selector);
+            if (incoming.hasOwnProperty('style')) {
+              elements.forEach(el => {el.style.cssText = incoming.style});
+            }
+            if (incoming.hasOwnProperty('class')) {
+              elements.forEach(el => {el.className = incoming.class});
+            }
+          }
         });
-        event.source.postMessage('css styles updated', event.origin);
+        event.source.postMessage('updated elements', event.origin);
       }
 
-      if (message.hasOwnProperty('classes')) {
-        message.classes.forEach((incoming) => {
-          const elements = window.document.querySelectorAll(incoming.selector);
-          elements.forEach(el => el.className = incoming.class);
+      if (message.hasOwnProperty('templates')) {
+        message.templates.forEach((cssString) => {
+          const element = document.createElement('style');
+          element.innerText = cssString;
+          document.head.insertAdjacentElement('beforeend', element);
         });
-        event.source.postMessage('css classes updated', event.origin);
+        event.source.postMessage('updated templates', event.origin);
       }
     });
   </script>
