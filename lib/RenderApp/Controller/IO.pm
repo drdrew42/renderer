@@ -254,13 +254,12 @@ sub depthSearch_p {
             my $wanted = sub {
                 # measure depth relative to root_path
                 ( my $rel = $File::Find::name ) =~ s!^\Q$root_path\E/?!!;
+                return unless $rel;
                 my $path = $File::Find::name;
                 $File::Find::prune = 1
                   if File::Spec::Functions::splitdir($rel) >= $depth;
                 $path = $path . '/' if -d $File::Find::name;
-                # only report .pg files and directories
-                $all{$rel} = $path
-                  if ( $rel =~ /\S/ && ( $path =~ m!.+/$! || $path =~ m!.+\.pg$! ) );
+                $all{$rel} = $path;
             };
             File::Find::find { wanted => $wanted, no_chdir => 1 }, $root_path;
             return \%all, 200;
