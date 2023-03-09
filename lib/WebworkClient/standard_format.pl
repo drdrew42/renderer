@@ -68,7 +68,7 @@ $answerTemplate
 
     <input type="submit" name="previewAnswers" class="btn btn-primary" value="$STRING_Preview" />
     <input type="submit" name="submitAnswers" class="btn btn-primary" value="$STRING_Submit"/>
-    <input type="submit" name="showCorrectAns" class="btn btn-primary" value="$STRING_ShowCorrect"/>
+    <input type="submit" name="showCorrectAnswers" class="btn btn-primary" value="$STRING_ShowCorrect"/>
   </p>
 </form>
 <HR>

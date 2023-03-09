@@ -102,7 +102,7 @@ sub formatRenderedProblem {
 	my $problemHeadText       = $rh_result->{header_text}//'';  ##head_text vs header_text
 	my $problemPostHeaderText = $rh_result->{post_header_text}//'';
 	my $rh_answers            = $rh_result->{answers}//{};
-	my $answerOrder           = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}; #[sort keys %{ $rh_result->{answers} }];
+	my $answerOrder           = $rh_result->{flags}->{ANSWER_ENTRY_ORDER}//[]; #[sort keys %{ $rh_result->{answers} }];
 	my $encoded_source        = $self->encoded_source//'';
 	my $sourceFilePath        = $self->{sourceFilePath}//'';
 	my $problemSourceURL      = $self->{inputs_ref}->{problemSourceURL};
@@ -166,9 +166,9 @@ sub formatRenderedProblem {
 	my $sessionJWT         = $self->{return_object}{sessionJWT} // '';
 
 	my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
-	my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
-	my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
+	# showCorrectMode needs more security -- ww2 uses want/can/will
 	my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
+	my $submitMode = defined($self->{inputs_ref}{submitAnswers}) || $self->{inputs_ref}{answersSubmitted} || 0;
 
 	# problemUUID can be added to the request as a parameter.  It adds a prefix
 	# to the identifier used by the  format so that several different problems
@@ -180,6 +180,8 @@ sub formatRenderedProblem {
 		// $rh_result->{flags}{showPartialCorrectAnswers};
 	my $showSummary   = $self->{inputs_ref}{showSummary} // 1;    #default to show summary for the moment
 	my $formLanguage  = $self->{inputs_ref}{language}    // 'en';
+	my $showTable = $self->{inputs_ref}{hideAttemptsTable} ? 0 : 1;
+	my $showMessages = $self->{inputs_ref}{hideMessages} ? 0 : 1;
 	my $scoreSummary  = '';
 
 	my $COURSE_LANG_AND_DIR = get_lang_and_dir($formLanguage);
@@ -191,24 +193,27 @@ sub formatRenderedProblem {
 	my $PROBLEM_LANG_AND_DIR = join(" ", map { qq{$_="$PROBLEM_LANG_AND_DIR{$_}"} } keys %PROBLEM_LANG_AND_DIR);
 	my $mt = WeBWorK::Localize::getLangHandle($self->{inputs_ref}{language} // 'en');
 
-	my $tbl = WeBWorK::Utils::AttemptsTable->new(
-		$rh_answers,
-		answersSubmitted       => $self->{inputs_ref}{answersSubmitted}//0,
-		answerOrder            => $answerOrder//[],
-		displayMode            => $self->{inputs_ref}{displayMode},
-		showAnswerNumbers      => 0,
-		showAttemptAnswers     => 0,
-		showAttemptPreviews    => ($previewMode or $submitMode or $showCorrectMode),
-		showAttemptResults     => ($submitMode and $showPartialCorrectAnswers),
-		showCorrectAnswers     => ($showCorrectMode),
-		showMessages           => ($previewMode or $submitMode or $showCorrectMode),
-		showSummary            => ( ($showSummary and ($submitMode or $showCorrectMode) )//0 )?1:0,
-		maketext               => WeBWorK::Localize::getLoc($formLanguage//'en'),
-		summary                => $problemResult->{summary} //'', # can be set by problem grader???
-	);
+	my $answerTemplate = '';
+	if ($submitMode && $showTable) {
+		my $tbl = WeBWorK::Utils::AttemptsTable->new(
+			$rh_answers,
+			answersSubmitted    => 1,
+			answerOrder         => $answerOrder,
+			displayMode         => $displayMode,
+			showAnswerNumbers   => 0,
+			showAttemptAnswers  => 0,
+			showAttemptPreviews => 1,
+			showAttemptResults  => $showPartialCorrectAnswers,
+			showCorrectAnswers  => $showCorrectMode,
+			showMessages        => $showMessages,
+			showSummary         => $showSummary,
+			maketext            => WeBWorK::Localize::getLoc($formLanguage),
+			summary             => $problemResult->{summary} // '',                     # can be set by problem grader???
+		);
 
-	my $answerTemplate = $tbl->answerTemplate;
-	$tbl->imgGen->render(body_text => \$answerTemplate) if $tbl->displayMode eq 'images';
+		$answerTemplate = $tbl->answerTemplate;
+		$tbl->imgGen->render(body_text => \$answerTemplate) if $tbl->displayMode eq 'images';
+	}
 
 	# warn "imgGen is ", $tbl->imgGen;
 	#warn "answerOrder ", $tbl->answerOrder;
