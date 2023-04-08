@@ -154,24 +154,26 @@ async sub problem {
         my $response = shift->result;
 
         $answerJWTresponse->{status} = int($response->code);
-        if ($response->is_success) {
+        # answerURL responses are expected to be JSON
+        if ($response->json) {
+          # munge data with default response object
+          $answerJWTresponse = { %$answerJWTresponse, %{$response->json} };
+        } else {
+          # otherwise throw the whole body as the message
           $answerJWTresponse->{message} = $response->body;
         }
-        elsif ($response->is_error) {
-          $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $response->message;
-        }
-
-        $answerJWTresponse->{message} =~ s/"/\\"/g;
-        $answerJWTresponse->{message} =~ s/'/\'/g;
       })->
       catch(sub {
-        my $response = shift;
-        $c->log->error($response);
+        my $err = shift;
+        $c->log->error($err);
 
         $answerJWTresponse->{status} = 500;
-        $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $response;
+        $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $err;
       });
+
     $answerJWTresponse = encode_json($answerJWTresponse);
+    # this will become a string literal, so single-quote characters must be escaped
+    $answerJWTresponse =~ s/'/\\'/g;
     $c->log->info("answerJWT response ".$answerJWTresponse);
 
     $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus/$answerJWTresponse/g;
