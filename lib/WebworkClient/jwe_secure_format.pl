@@ -90,6 +90,12 @@ $problemPostHeaderText
         });
         event.source.postMessage('updated templates', event.origin);
       }
+
+      if (message.hasOwnProperty('showSolutions')) {
+        const elements = Array.from(window.document.querySelectorAll('.knowl[data-type="solution"]'));
+        const solutions = elements.map(el => el.dataset.knowlContents);
+        event.source.postMessage(JSON.stringify({solutions: solutions}), event.origin);
+      }
     });
   </script>
 </body>
