@@ -1,5 +1,5 @@
-%= stylesheet $ENV{SITE_HOST} . '/typing-sim.css'
-%= stylesheet $ENV{SITE_HOST} . '/crt-display.css'
+%= stylesheet $ENV{baseURL} . '/typing-sim.css'
+%= stylesheet $ENV{baseURL} . '/crt-display.css'
 %= javascript begin
 window.onload = function() {
     var i = 0;
