@@ -107,20 +107,20 @@ sub startup {
 	$r->any('/pg_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
 	$r->any('/pg_files/tmp/*static')->to('StaticFiles#temp_file');
 	$r->any('/pg_files/*static')->to('StaticFiles#pg_file');
-
-	# any other requests fall through
-	$r->any('/*fail' => sub {
-		my $c = shift;
-		my $report = $c->stash('fail')."\nCOOKIE:";
-		for my $cookie (@{$c->req->cookies}) {
-			$report .= "\n".$cookie->to_string;
-		}
-		$report .= "\nFORM DATA:";
-		foreach my $k (@{$c->req->params->names}) {
-			$report .= "\n$k = ".join ', ', @{$c->req->params->every_param($k)};
-		}
-		$c->log->fatal($report);
-		$c->rendered(404)});
+    $r->any('/*fail')->to('StaticFiles#public_file');
+	# # any other requests fall through
+	# $r->any('/*fail' => sub {
+	# 	my $c = shift;
+	# 	my $report = $c->stash('fail')."\nCOOKIE:";
+	# 	for my $cookie (@{$c->req->cookies}) {
+	# 		$report .= "\n".$cookie->to_string;
+	# 	}
+	# 	$report .= "\nFORM DATA:";
+	# 	foreach my $k (@{$c->req->params->names}) {
+	# 		$report .= "\n$k = ".join ', ', @{$c->req->params->every_param($k)};
+	# 	}
+	# 	$c->log->fatal($report);
+	# 	$c->rendered(404)});
 }
 
 1;

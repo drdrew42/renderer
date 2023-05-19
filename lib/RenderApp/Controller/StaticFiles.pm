@@ -28,4 +28,8 @@ sub pg_file ($c) {
 	$c->reply_with_file_if_readable(path($ENV{PG_ROOT}, 'htdocs', $c->stash('static')));
 }
 
+sub public_file($c) {
+    $c->reply_with_file_if_readable($c->app->home->child('public', $c->stash('fail')));
+}
+
 1;
