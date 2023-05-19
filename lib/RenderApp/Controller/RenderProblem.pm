@@ -427,7 +427,7 @@ sub get_current_process_memory {
 sub generateJWTs {
     my $pg = shift;
     my $inputs_ref = shift;
-    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}};
+    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}, problemJWT => $inputs_ref->{problemJWT}};
     my $scoreHash = {};
 
     # if no problemJWT exists, then why bother?

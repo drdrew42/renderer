@@ -37,7 +37,6 @@ sub parseRequest {
     foreach my $key (keys %$claims) {
       $params{$key} //= $claims->{$key};
     }
-    # @params{ keys %$claims } = values %$claims;
   }
 
   # problemJWT sets basic problem request configuration and rendering options
@@ -60,6 +59,17 @@ sub parseRequest {
     # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
     # override key-values in params with those provided in the JWT
     @params{ keys %$claims } = values %$claims;
+  } else {
+      # if no JWT is provided, create one
+      $params{aud} = $ENV{SITE_HOST};
+      my $req_jwt = encode_jwt(
+          payload => \%params,
+          key     => $ENV{problemJWTsecret},
+          alg      => 'PBES2-HS512+A256KW',
+          enc      => 'A256GCM',
+          auto_iat => 1
+      );
+      $params{problemJWT} = $req_jwt;
   }
   return \%params;
 }
@@ -280,7 +290,6 @@ sub jweFromRequest {
   my $inputs_ref = $c->parseRequest;
   return unless $inputs_ref;
   $inputs_ref->{aud} = $ENV{SITE_HOST};
-  $inputs_ref->{key} = $ENV{problemJWTsecret};
   my $req_jwt = encode_jwt(
       payload => $inputs_ref,
       key     => $ENV{problemJWTsecret},
@@ -296,7 +305,6 @@ sub jwtFromRequest {
     my $inputs_ref = $c->parseRequest;
     return unless $inputs_ref;
     $inputs_ref->{aud} = $ENV{SITE_HOST};
-    $inputs_ref->{key} = $ENV{problemJWTsecret};
     my $req_jwt = encode_jwt(
         payload => $inputs_ref,
         key     => $ENV{problemJWTsecret},
