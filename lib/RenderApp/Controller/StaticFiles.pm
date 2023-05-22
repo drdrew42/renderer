@@ -11,12 +11,12 @@ sub reply_with_file_if_readable ($c, $file) {
 	}
 }
 
-# Route requests for webwork2_files/CAPA_Graphics to render root Contrib/CAPA/CAPA_Graphics
+# Route requests for pg_files/CAPA_Graphics to render root Contrib/CAPA/CAPA_Graphics
 sub CAPA_graphics_file ($c) {
 	return $c->reply_with_file_if_readable($c->app->home->child('Contrib/CAPA/CAPA_Graphics', $c->stash('static')));
 }
 
-# Route requests for webwork2_files to the render root tmp.  The
+# Route requests for pg_files to the render root tmp.  The
 # only requests should be for files in the temporary directory.
 # FIXME: Perhaps this directory should be configurable.
 sub temp_file ($c) {
@@ -25,7 +25,7 @@ sub temp_file ($c) {
 
 # Route request to pg_files to lib/PG/htdocs.
 sub pg_file ($c) {
-	$c->reply_with_file_if_readable(path($WeBWorK::Constants::PG_DIRECTORY, 'htdocs', $c->stash('static')));
+	$c->reply_with_file_if_readable(path($ENV{PG_ROOT}, 'htdocs', $c->stash('static')));
 }
 
 1;

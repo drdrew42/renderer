@@ -40,7 +40,6 @@ $answerTemplate
     $problemText
   </div>
   $scoreSummary
-  $LTIGradeMessage
 
   <input type="hidden" name="answersSubmitted" value="1">
   <input type="hidden" name="sourceFilePath" value = "$sourceFilePath">
@@ -55,11 +54,9 @@ $answerTemplate
   <input type="hidden" name="userID" value="$userID">
   <input type="hidden" name="course_password" value="$course_password">
   <input type="hidden" name="displayMode" value="$displayMode">
-  <input type="hidden" name="session_key" value="$session_key">
   <input type="hidden" name="outputFormat" value="standard">
   <input type="hidden" name="language" value="$formLanguage">
   <input type="hidden" name="showSummary" value="$showSummary">
-  <input type="hidden" name="forcePortNumber" value="$forcePortNumber">
 
   <p>
     Show:&nbsp;&nbsp;

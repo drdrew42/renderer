@@ -146,8 +146,10 @@ use base qw(Class::Accessor);
 
 use strict;
 use warnings;
+
 use Scalar::Util 'blessed';
 use WeBWorK::Utils 'wwRound';
+use WeBWorK::PG::Environment;
 use CGI;
 
 # Object contains hash of answer results
@@ -193,7 +195,7 @@ sub new {
 
 sub _init {
 	# verify display mode
-	# build imgGen if it is not supplied
+	# build imgGen
 	my $self = shift;
 	my %options = @_;
 	$self->{submitted}=$options{submitted}//0;
@@ -207,30 +209,21 @@ sub _init {
 	$self->{numBlanks}=0;
 	$self->{numEssay}=0;
 
-	if ( $self->displayMode eq 'images') {
-		if ( blessed( $options{imgGen} ) ) {
-			$self->{imgGen} = $options{imgGen};
-		} elsif ( blessed( $options{ce} ) ) {
-			warn "building imgGen";
-			my $ce = $options{ce};
-			my $site_url = $ce->{server_root_url};
-			my %imagesModeOptions = %{$ce->{pg}->{displayModeOptions}->{images}};
+	if ($self->displayMode eq 'images') {
+		my $pg_envir = WeBWorK::PG::Environment->new;
 
-			my $imgGen = WeBWorK::PG::ImageGenerator->new(
-				tempDir         => $ce->{webworkDirs}->{tmp},
-				latex	        => $ce->{externalPrograms}->{latex},
-				dvipng          => $ce->{externalPrograms}->{dvipng},
-				useCache        => 1,
-				cacheDir        => $ce->{webworkDirs}->{equationCache},
-				cacheURL        => $site_url.$ce->{webworkURLs}->{equationCache},
-				cacheDB         => $ce->{webworkFiles}->{equationCacheDB},
-				dvipng_align    => $imagesModeOptions{dvipng_align},
-				dvipng_depth_db => $imagesModeOptions{dvipng_depth_db},
-			);
-	        $self->{imgGen} = $imgGen;
-		} else {
-			warn "Must provide image Generator (imgGen) or a course environment (ce) to build attempts table.";
-		}
+		$self->{imgGen} = WeBWorK::PG::ImageGenerator->new(
+			tempDir         => $pg_envir->{directories}{tmp},
+			latex           => $pg_envir->{externalPrograms}{latex},
+			dvipng          => $pg_envir->{externalPrograms}{dvipng},
+			useCache        => 1,
+			cacheDir        => $pg_envir->{directories}{equationCache},
+			cacheURL        => $pg_envir->{URLs}{equationCache},
+			cacheDB         => $pg_envir->{equationCacheDB},
+			useMarkers      => 1,
+			dvipng_align    => $pg_envir->{displayModeOptions}{images}{dvipng_align},
+			dvipng_depth_db => $pg_envir->{displayModeOptions}{images}{dvipng_depth_db},
+		);
 	}
 }
 

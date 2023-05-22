@@ -38,12 +38,8 @@ language.
 
 use strict;
 use warnings;
-use Carp;
-use WeBWorK::PG;
-use WeBWorK::Debug;
 
 our @EXPORT = qw(get_lang_and_dir get_problem_lang_and_dir);
-our @EXPORT_OK = ();
 
 =head1 FUNCTIONS
 

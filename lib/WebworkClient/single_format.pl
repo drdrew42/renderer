@@ -1,4 +1,4 @@
-$static_format = <<'ENDPROBLEMTEMPLATE';
+$single_format = <<'ENDPROBLEMTEMPLATE';
 <!DOCTYPE html>
 <html $COURSE_LANG_AND_DIR>
 <head>
@@ -21,6 +21,8 @@ $extra_css_files
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.1/iframeResizer.contentWindow.min.js" integrity="sha512-qw2bX9KUhi7HLuUloyRsvxRlWJvj0u0JWVegc5tf7qsw47T0pwXZIk1Kyc0utTH3NlrpHtLa4HYTVUyHBr9Ufg==" crossorigin="anonymous"></script>
 
+<script src="/Problem/submithelper.js" defer></script>
+
 $extra_js_files
 
 $problemHeadText
@@ -38,15 +40,18 @@ $problemPostHeaderText
             $problemText
           </div>
           $scoreSummary
-          $LTIGradeMessage
 
           <input type="hidden" name="answersSubmitted" value="1">
           <input type="hidden" name="sourceFilePath" value = "$sourceFilePath">
           <input type="hidden" name="problemSourceURL" value = "$problemSourceURL">
           <input type="hidden" name="problemSource" value="$encoded_source">
           <input type="hidden" name="problemSeed" value = "$problemSeed">
+		  <input type="hidden" name="outputFormat" value="$format_name">
           <input type="hidden" name="language" value="$formLanguage">
           <input type="hidden" name="showSummary" value="$showSummary">
+          <p>
+            <input type="submit" name="submitAnswers" class="btn btn-primary" value="$STRING_Submit"/>
+          </p>
         </form>
       </div>
     </div>
@@ -56,4 +61,4 @@ $problemPostHeaderText
 
 ENDPROBLEMTEMPLATE
 
-$static_format;
+$single_format;

@@ -128,7 +128,6 @@ push( @pairs_for_json, "hidden_input_field_courseID", '$courseID' );
 push( @pairs_for_json, "hidden_input_field_userID", '$userID' );
 push( @pairs_for_json, "hidden_input_field_course_password", '$course_password' );
 push( @pairs_for_json, "hidden_input_field_displayMode", '$displayMode' );
-push( @pairs_for_json, "hidden_input_field_session_key", '$session_key' );
 push( @pairs_for_json, "hidden_input_field_outputFormat", 'json' );
 push( @pairs_for_json, "hidden_input_field_language", '$formLanguage' );
 push( @pairs_for_json, "hidden_input_field_showSummary", '$showSummary' );

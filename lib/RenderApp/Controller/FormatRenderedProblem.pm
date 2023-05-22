@@ -27,11 +27,10 @@ package RenderApp::Controller::FormatRenderedProblem;
 use warnings;
 use strict;
 
-use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
-use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
+use lib "$ENV{PG_ROOT}/lib";
+
 use MIME::Base64 qw( encode_base64 decode_base64);
 use WeBWorK::Utils::AttemptsTable; #import from ww2
-use WeBWorK::PG::ImageGenerator; # import from ww2
 use WeBWorK::Utils::LanguageAndDirection;
 use WeBWorK::Utils qw(wwRound getAssetURL);   # required for score summary
 use WeBWorK::Localize ; # for maketext
@@ -60,6 +59,7 @@ sub new {
 		userID         => 'bar',  # optional?
 		course_password => 'baz',
 		inputs_ref      => {},
+		problem_seed    => 6666,
 		@_,
 	};
 	bless $self, $class;
@@ -119,7 +119,7 @@ sub formatRenderedProblem {
 	if ( defined ($rh_result->{WARNINGS}) and $rh_result->{WARNINGS} ){
 		$warnings = "<div style=\"background-color:pink\">
 		             <p >WARNINGS</p><p>"
-		             . Encode::decode("UTF-8", decode_base64($rh_result->{WARNINGS}) )
+		             . $rh_result->{WARNINGS}
 		             . "</p></div>";
 	}
 	#warn "keys: ", join(" | ", sort keys %{$rh_result });
@@ -152,34 +152,28 @@ sub formatRenderedProblem {
 
     #################################################
 
-	my $XML_URL            = $self->url                         // '';
-	my $FORM_ACTION_URL    = $self->{form_action_url}           // '';
-	my $SITE_URL           = $self->{baseURL}                   // '';
-	my $SITE_HOST          = $ENV{SITE_HOST}                    // '';
-	my $courseID           = $self->{courseID}                  // '';
-	my $userID             = $self->{userID}                    // '';
-	my $course_password    = $self->{course_password}           // '';
-	my $session_key        = $rh_result->{session_key}          // '';
+	my $XML_URL            = $self->url               // '';
+	my $FORM_ACTION_URL    = $self->{form_action_url} // '';
+	my $SITE_URL           = $self->{baseURL}         // '';
+	my $SITE_HOST          = $ENV{SITE_HOST}          // '';
+	my $courseID           = $self->{courseID}        // '';
+	my $userID             = $self->{userID}          // '';
+	my $course_password    = $self->{course_password} // '';
+	my $problemSeed        = $self->{problem_seed};
+	my $psvn               = $self->{inputs_ref}{psvn}          // 54321;
 	my $displayMode        = $self->{inputs_ref}{displayMode}   // 'MathJax';
 	my $problemJWT         = $self->{inputs_ref}{problemJWT}    // '';
 	my $sessionJWT         = $self->{return_object}{sessionJWT} // '';
-	my $webwork_htdocs_url = $self->{ce}{webworkURLs}{htdocs};
-
 
 	my $previewMode     = defined( $self->{inputs_ref}{previewAnswers} )     || 0;
 	my $checkMode       = defined( $self->{inputs_ref}{checkAnswers} )       || 0;
 	my $submitMode      = defined( $self->{inputs_ref}{submitAnswers} )      || 0;
 	my $showCorrectMode = defined( $self->{inputs_ref}{showCorrectAnswers} ) || 0;
 
-			# use Data::Dumper;
-			# print Dumper($self->{inputs_ref});
-
-	# problemIdentifierPrefix can be added to the request as a parameter.
-	# It adds a prefix to the
-	# identifier used by the  format so that several different problems
+	# problemUUID can be added to the request as a parameter.  It adds a prefix
+	# to the identifier used by the  format so that several different problems
 	# can appear on the same page.
-	my $problemIdentifierPrefix =
-		$self->{inputs_ref}->{problemIdentifierPrefix} // '';
+	my $problemUUID = $self->{inputs_ref}{problemUUID} // 1;
 	my $problemResult = $rh_result->{problem_result} // '';
 	my $problemState  = $rh_result->{problem_state}  // '';
 	my $showPartialCorrectAnswers = $self->{inputs_ref}{showPartialCorrectAnswers}
@@ -202,8 +196,6 @@ sub formatRenderedProblem {
 		answersSubmitted       => $self->{inputs_ref}{answersSubmitted}//0,
 		answerOrder            => $answerOrder//[],
 		displayMode            => $self->{inputs_ref}{displayMode},
-		imgGen                 => undef, # $imgGen,
-		ce                     => '',	#used only to build the imgGen
 		showAnswerNumbers      => 0,
 		showAttemptAnswers     => 0,
 		showAttemptPreviews    => ($previewMode or $submitMode or $showCorrectMode),
@@ -216,7 +208,7 @@ sub formatRenderedProblem {
 	);
 
 	my $answerTemplate = $tbl->answerTemplate;
-	$tbl->imgGen->render(refresh => 1) if $tbl->displayMode eq 'images';
+	$tbl->imgGen->render(body_text => \$answerTemplate) if $tbl->displayMode eq 'images';
 
 	# warn "imgGen is ", $tbl->imgGen;
 	#warn "answerOrder ", $tbl->answerOrder;
@@ -264,13 +256,9 @@ sub formatRenderedProblem {
 	}
 
 	# Add CSS files requested by problems via ADD_CSS_FILE() in the PG file
-	# or via a setting of $self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}
 	# (the value should be an anonomous array).
 	my $extra_css_files = '';
 	my @cssFiles;
-	if (ref($self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files}) eq 'ARRAY') {
-		push(@cssFiles, { file => $_, external => 0 }) for @{ $self->{ce}{pg}{specialPGEnvironmentVars}{extra_css_files} };
-	}
 	if (ref($rh_result->{flags}{extra_css_files}) eq 'ARRAY') {
 		push @cssFiles, @{ $rh_result->{flags}{extra_css_files} };
 	}

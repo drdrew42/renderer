@@ -7,6 +7,7 @@ lib/WeBWorK/bin/*
 webwork-open-problem-library/
 private/
 tmp/*
+!tmp/.gitkeep
 logs/*.log
 node_modules
 node_modules/*

@@ -9,23 +9,13 @@ BEGIN {
     $ENV{RENDER_ROOT} = $main::dirname->dirname
       unless ( defined( $ENV{RENDER_ROOT} ) );
 
-    # WEBWORK_ROOT is required for PG/lib/WeBWorK/IO.
-    # PG_ROOT is required for PG/lib/PGEnvironment.pm.
-    # These are hardcoded to avoid conflict with environment variables for webwork2.
-    # There is no need for these to be configurable.
-    $ENV{WEBWORK_ROOT} = $main::dirname . '/WeBWorK';
+	# PG_ROOT is required for PG/lib/PGEnvironment.pm, FormatRenderedProblem.pm, and RenderProblem.pm.
+    # This is hardcoded to avoid conflict with the environment variable for webwork2.
+    # There is no need for this to be configurable.
     $ENV{PG_ROOT} = $main::dirname . '/PG';
 
-    # Used for reconstructing library paths from sym-links.
-    $ENV{OPL_DIRECTORY}                    = "webwork-open-problem-library";
-    $WeBWorK::Constants::WEBWORK_DIRECTORY = $main::dirname . "/WeBWorK";
-    $WeBWorK::Constants::PG_DIRECTORY      = $main::dirname . "/PG";
-    unless ( -r $WeBWorK::Constants::WEBWORK_DIRECTORY ) {
-        die "Cannot read webwork root directory at $WeBWorK::Constants::WEBWORK_DIRECTORY";
-    }
-    unless ( -r $WeBWorK::Constants::PG_DIRECTORY ) {
-        die "Cannot read webwork pg directory at $WeBWorK::Constants::PG_DIRECTORY";
-    }
+	# Used for reconstructing library paths from sym-links.
+	$ENV{OPL_DIRECTORY} = "webwork-open-problem-library";
 
 	$ENV{MOJO_CONFIG} = (-r "$ENV{RENDER_ROOT}/render_app.conf") ? "$ENV{RENDER_ROOT}/render_app.conf" : "$ENV{RENDER_ROOT}/render_app.conf.dist";
 	# $ENV{MOJO_MODE} = 'production';
@@ -112,8 +102,8 @@ sub startup {
 	}
 
 	# Static file routes
-	$r->any('/webwork2_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
-	$r->any('/webwork2_files/tmp/*static')->to('StaticFiles#temp_file');
+	$r->any('/pg_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
+	$r->any('/pg_files/tmp/*static')->to('StaticFiles#temp_file');
 	$r->any('/pg_files/*static')->to('StaticFiles#pg_file');
 
 	# any other requests fall through

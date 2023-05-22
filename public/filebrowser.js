@@ -7,10 +7,10 @@ function updateBrowser(formId, updateBackNav) {
     var option = select.options[select.selectedIndex];
     var value = option.value;
     var formData = new FormData();
-    var processData; 
+    var processData;
 
     if (value.startsWith('/')) { value = value.replace('/', '') } // replaces first instance only
-    if (value.match(/\/$/)) { 
+    if (value.match(/\/$/)) {
         formData.set('maxDepth', 1);
         formData.set('basePath', value);
         processData = function (data) {
@@ -23,8 +23,9 @@ function updateBrowser(formId, updateBackNav) {
         formData.set('problemSeed', 1234);
         formData.set('outputFormat', 'static');
         formData.set('_format', 'json');
-        formData.set('permissionLevel', 20);
-        formData.set('includeTags', 1);
+        formData.set('isInstructor', 1);
+		formData.set('forceScaffoldsOpen', 1);
+		formData.set('includeTags', 1);
         formData.set('showComments', 1);
         processData = function (data) {
             updateIframe(data.renderedHTML);

@@ -1,9 +1,7 @@
-#/usr/bin/perl -w
+package RenderApp::Controller::RenderProblem;
 
 use strict;
 use warnings;
-
-package RenderApp::Controller::RenderProblem;
 
 use Time::HiRes qw/time/;
 use Date::Format;
@@ -20,13 +18,12 @@ use JSON::XS;
 use Crypt::JWT qw( encode_jwt );
 use Digest::MD5 qw( md5_hex );
 
-use lib "$WeBWorK::Constants::WEBWORK_DIRECTORY/lib";
-use lib "$WeBWorK::Constants::PG_DIRECTORY/lib";
+use lib "$ENV{PG_ROOT}/lib";
 
 use Proc::ProcessTable;    # use for log memory use
-use WeBWorK::PG;           #webwork2 (use to set up environment)
-use WeBWorK::CourseEnvironment;
+use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
+use WeBWorK::Localize;
 use RenderApp::Controller::FormatRenderedProblem;
 
 use 5.10.0;
@@ -81,14 +78,11 @@ sub process_pg_file {
     my $problem   = shift;
     my $inputHash = shift;
 
-    our $seed_ce = create_course_environment();
-
-    my $file_path = $problem->path;
+    my $file_path    = $problem->path;
     my $problem_seed = $problem->seed || '666';
 
     # just make sure we have the fundamentals covered...
-    $inputHash->{displayMode} =
-      'MathJax';    #	is there any reason for this to be anything else?
+    $inputHash->{displayMode} //= 'MathJax';
     $inputHash->{sourceFilePath} ||= $file_path;
     $inputHash->{outputFormat}   ||= 'static';
     $inputHash->{language}       ||= 'en';
@@ -107,7 +101,7 @@ sub process_pg_file {
       time;    # this is Time::HiRes's time, which gives floating point values
 
     my ( $error_flag, $formatter, $error_string ) =
-      process_problem( $seed_ce, $file_path, $inputHash );
+      process_problem( $file_path, $inputHash );
 
     my $pg_stop     = time;
     my $pg_duration = $pg_stop - $pg_start;
@@ -119,7 +113,7 @@ sub process_pg_file {
         renderedHTML      => $html,
         answers           => $pg_obj->{answers},
         debug             => {
-            perl_warn     => Encode::decode("UTF-8", decode_base64( $pg_obj->{WARNINGS} ) ),
+            perl_warn     => $pg_obj->{WARNINGS},
             pg_warn       => $pg_obj->{warning_messages},
             debug         => $pg_obj->{debug_messages},
             internal      => $pg_obj->{internal_debug_messages}
@@ -162,7 +156,6 @@ sub process_pg_file {
 #######################################################################
 
 sub process_problem {
-    my $ce         = shift;
     my $file_path  = shift;
     my $inputs_ref = shift;
     my $adj_file_path;
@@ -179,7 +172,6 @@ sub process_problem {
     my $problem_seed = $inputs_ref->{problemSeed};
     die "problem seed not defined in Controller::RenderProblem::process_problem"
       unless $problem_seed;
-    my $display_mode = $inputs_ref->{displayMode};
 
     # if base64 source is provided, use that over fetching problem path
     if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/ )
@@ -248,8 +240,8 @@ sub process_problem {
 
     my $memory_use_start = get_current_process_memory();
 
-    # can include @args as fourth input below
-    $return_object = standaloneRenderer( $ce, \$source, $inputs_ref );
+    # can include @args as third input below
+    $return_object = standaloneRenderer( \$source, $inputs_ref );
 
     # stash assets list in $return_object
     $return_object->{pgResources} = $pgResources;
@@ -287,10 +279,6 @@ sub process_problem {
     # Create FormatRenderedProblems object
     ##################################################
 
-    # PG/macros/PG.pl wipes out problemSeed -- put it back!
-    # $inputs_ref->{problemSeed} = $problem_seed; # NO DONT
-    $inputs_ref->{displayMode} = $display_mode;
-
  	# my $encoded_source = encode_base64($source); # create encoding of source_file;
     my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
       return_object   => $return_object,
@@ -303,7 +291,7 @@ sub process_problem {
       userID          => 'Motoko_Kusanagi',
       course_password => 'daemon',
       inputs_ref      => $inputs_ref,
-      ce              => $ce,
+      problem_seed    => $problem_seed
     );
 
     ##################################################
@@ -335,89 +323,57 @@ sub process_problem {
 ###########################################
 
 sub standaloneRenderer {
-
-    #print "entering standaloneRenderer\n\n";
-    my $ce          = shift;
     my $problemFile = shift // '';
-    my $inputs_ref   = shift // '';
+    my $inputs_ref  = shift // {};
     my %args        = @_;
 
-    # my $key = $r->param('key');
-    # WTF is this even here for? PG doesn't do authz - but it wants key?
-    my $key = '3211234567654321';
-
-    my $user             = fake_user();
-    my $set              = fake_set();
-    my $showHints        = $inputs_ref->{showHints} // 1;              # default is to showHint if neither showHints nor numIncorrect is provided
-    my $showSolutions    = $inputs_ref->{showSolutions} // 0;
-    my $problemNumber    = $inputs_ref->{problemNumber} // 1;          # ever even relevant?
-    my $displayMode      = $inputs_ref->{displayMode} || 'MathJax';    # $ce->{pg}->{options}->{displayMode};
-    my $problem_seed     = $inputs_ref->{problemSeed} || 1234;
-    my $permission_level = $inputs_ref->{permissionLevel} || 0;        # permissionLevel >= 10 will show hints, solutions + open all scaffold
-    my $num_correct      = $inputs_ref->{numCorrect} || 0;             # consider replacing - this may never be relevant...
-    my $num_incorrect    = $inputs_ref->{numIncorrect} // 1000;        # default to exceed any problem's showHint threshold unless provided
-    my $processAnswers   = $inputs_ref->{processAnswers} // 1;         # default to 1, explicitly avoid generating answer components
-    my $psvn             = $inputs_ref->{psvn} // 123;                 # by request from Tani
-
+    # default to 1, explicitly avoid generating answer components
+    my $processAnswers = $inputs_ref->{processAnswers} // 1;
     print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
-    my $translationOptions = {
-        displayMode     => $displayMode,
-        showHints       => $showHints,
-        showSolutions   => $showSolutions,
-        refreshMath2img => 1,
-        processAnswers  => $processAnswers,
-        QUIZ_PREFIX     => $inputs_ref->{answerPrefix} // '',
-		useMathQuill    => !defined $inputs_ref->{entryAssist} || $inputs_ref->{entryAssist} eq 'MathQuill' ? 1 : 0,
-
-        #use_site_prefix 	=> 'http://localhost:3000',
-        use_opaque_prefix        => 0,
-        permissionLevel          => $permission_level,
-        effectivePermissionLevel => $permission_level
-    };
-    my $extras = {};    # passed as arg to renderer->new()
-
-	# Create template of problem then add source text or a path to the source file
-    local $ce->{pg}{specialPGEnvironmentVars}{problemPreamble} =
-      { TeX => '', HTML => '' };
-    local $ce->{pg}{specialPGEnvironmentVars}{problemPostamble} =
-      { TeX => '', HTML => '' };
-
-    my $problem = fake_problem();    # eliminated $db arg
-    $problem->{problem_seed}  = $problem_seed;
-    $problem->{value}         = -1;
-    $problem->{num_correct}   = $num_correct;
-    $problem->{num_incorrect} = $num_incorrect;
-    $problem->{attempted}     = $num_correct + $num_incorrect;
-
-    if ( ref $problemFile ) {
-        $problem->{source_file}         = $inputs_ref->{sourceFilePath};
-        $translationOptions->{r_source} = $problemFile;
-
-        # warn "standaloneProblemRenderer: setting source_file = $problemFile";
-    }
-    else {
-        #in this case the actual source is passed
-        $problem->{source_file} = $problemFile;
-        warn "standaloneProblemRenderer: setting source_file = $problemFile";
-
-        # a path to the problem (relative to the course template directory?)
+    unless (ref $problemFile) {
+        # In this case the source file name is passed
+        print "standaloneProblemRenderer: setting source_file = $problemFile";
     }
 
-    my $pg = WeBWorK::PG->new(
-        $ce,
-        $user,
-        $key,
-        $set,
-        $problem,
-        $psvn,    # by request from Tani
-        $inputs_ref,
-        $translationOptions,
-        $extras,
-    );
+    # Attempt to match old parameters.
+    my $isInstructor = $inputs_ref->{isInstructor} // ($inputs_ref->{permissionLevel} // 0) >= 10;
+
+	my $pg = WeBWorK::PG->new(
+		ref $problemFile
+		? (
+			sourceFilePath => $inputs_ref->{sourceFilePath} // '',
+			r_source       => $problemFile,
+			)
+		: (sourceFilePath => $problemFile),
+		problemSeed          => $inputs_ref->{problemSeed},
+		processAnswers       => $processAnswers,
+		showHints            => $inputs_ref->{showHints},              # default is to showHint (set in PG.pm)
+		showSolutions        => $inputs_ref->{showSolutions},
+		problemNumber        => $inputs_ref->{problemNumber},          # ever even relevant?
+		num_of_correct_ans   => $inputs_ref->{numCorrect} || 0,
+		num_of_incorrect_ans => $inputs_ref->{numIncorrect} // 1000,
+		displayMode          => $inputs_ref->{displayMode},
+		useMathQuill         => !defined $inputs_ref->{entryAssist} || $inputs_ref->{entryAssist} eq 'MathQuill',
+		answerPrefix         => $inputs_ref->{answerPrefix},
+		isInstructor         => $isInstructor,
+		forceScaffoldsOpen   => $inputs_ref->{forceScaffoldsOpen},
+		psvn                 => $inputs_ref->{psvn},
+		problemUUID          => $inputs_ref->{problemUUID},
+		language             => $inputs_ref->{language} // 'en',
+		language_subroutine  => WeBWorK::Localize::getLoc($inputs_ref->{language} // 'en'),
+		inputs_ref           => {%$inputs_ref},  # Copy the inputs ref so the original can be relied on after rendering.
+		templateDirectory    => "$ENV{RENDER_ROOT}/",
+		debuggingOptions     => {
+			show_resource_info          => $inputs_ref->{show_resource_info},
+			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $isInstructor,
+			show_pg_info                => $inputs_ref->{show_pg_info},
+			show_answer_hash_info       => $inputs_ref->{show_answer_hash_info},
+			show_answer_group_info      => $inputs_ref->{show_answer_group_info}
+		}
+	);
 
     # new version of output:
-    my $warning_messages = '';    # for now -- set up warning trap later
     my ( $internal_debug_messages, $pgwarning_messages, $pgdebug_messages );
     if ( ref( $pg->{pgcore} ) ) {
         $internal_debug_messages = $pg->{pgcore}->get_internal_debug_messages;
@@ -435,7 +391,7 @@ sub standaloneRenderer {
         post_header_text        => $pg->{post_header_text},
         answers                 => $pg->{answers},
         errors                  => $pg->{errors},
-        WARNINGS                => encode_base64( Encode::encode("UTF-8", $pg->{warnings} ) ),
+        WARNINGS                => $pg->{warnings},
         PG_ANSWERS_HASH         => $pg->{pgcore}->{PG_ANSWERS_HASH},
         problem_result          => $pg->{result},
         problem_state           => $pg->{state},
@@ -522,57 +478,6 @@ sub generateJWTs {
     return ($sessionJWT, $answerJWT);
 }
 
-sub fake_user {
-    my $user = {
-        user_id       => 'Motoko_Kusanagi',
-        first_name    => 'Motoko',
-        last_name     => 'Kusanagi',
-        email_address => 'motoko.kusanagi@npsc.go.jp',
-        student_id    => '123456789',
-        section       => '9',
-        recitation    => '',
-        comment       => '',
-    };
-    return ($user);
-}
-
-sub fake_problem {
-    my $problem = {
-        set_id             => 'Section_9',
-        problem_id         => 1,
-        value              => 1,
-        max_attempts       => -1,
-        showMeAnother      => -1,
-        showMeAnotherCount => 0,
-        problem_seed       => 666,
-        status             => 0,
-        sub_status         => 0,
-        attempted          => 0,
-        last_answer        => '',
-        num_correct        => 0,
-        num_incorrect      => 0,
-        prCount            => -10
-    };
-
-    return ($problem);
-}
-
-sub fake_set {
-
-    #	my $db = shift;
-
-    my $set = {};
-    $set->{psvn}                   = 666;
-    $set->{set_id}                 = "Section_9";
-    $set->{open_date}              = time();
-    $set->{due_date}               = time();
-    $set->{answer_date}            = time();
-    $set->{visible}                = 0;
-    $set->{enable_reduced_scoring} = 0;
-    $set->{hardcopy_header}        = "defaultHeader";
-    return ($set);
-}
-
 # Get problem template source and adjust file_path name
 sub get_source {
     my $file_path = shift;
@@ -652,25 +557,11 @@ sub pretty_print_rh {
     return $out . " ";
 }
 
-sub create_course_environment {
-    my $self       = shift;
-    my $courseName = $self->{courseName} || 'renderer';
-    my $ce         = WeBWorK::CourseEnvironment->new(
-        {
-            webwork_dir => $ENV{WEBWORK_ROOT},
-            courseName  => $courseName
-        }
-    );
-    warn "Unable to find environment for course: |$courseName|" unless ref($ce);
-    return ($ce);
-}
-
 sub writeRenderLogEntry($$$) {
     my ( $function, $details, $beginEnd ) = @_;
     $beginEnd =
       ( $beginEnd eq "begin" ) ? ">" : ( $beginEnd eq "end" ) ? "<" : "-";
 
-#writeLog($seed_ce, "render_timing", "$$ ".time." $beginEnd $function [$details]");
     local *LOG;
     if ( open LOG, ">>", $path_to_log_file ) {
         print LOG "[", time2str( "%a %b %d %H:%M:%S %Y", time ),
