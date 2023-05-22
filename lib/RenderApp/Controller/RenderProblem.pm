@@ -26,8 +26,8 @@ use WeBWorK::Utils::Tags;
 use WeBWorK::Localize;
 use RenderApp::Controller::FormatRenderedProblem;
 
-use 5.10.0;
-$Carp::Verbose = 1;
+# use 5.10.0;
+# $Carp::Verbose = 1;
 
 ### verbose output when UNIT_TESTS_ON =1;
 our $UNIT_TESTS_ON = 0;
@@ -38,7 +38,7 @@ our $UNIT_TESTS_ON = 0;
 # create log files :: expendable
 ##################################################
 
-my $path_to_log_file = 'logs/standalone_results.log';
+my $path_to_log_file = "$ENV{RENDER_ROOT}/logs/standalone_results.log";
 
 eval {    # attempt to create log file
     local (*FH);
@@ -76,35 +76,33 @@ sub UNIVERSAL::TO_JSON {
 
 sub process_pg_file {
     my $problem   = shift;
-    my $inputHash = shift;
-
-    my $file_path    = $problem->path;
-    my $problem_seed = $problem->seed || '666';
+    my $inputs_ref = shift;
 
     # just make sure we have the fundamentals covered...
-    $inputHash->{displayMode} //= 'MathJax';
-    $inputHash->{sourceFilePath} ||= $file_path;
-    $inputHash->{outputFormat}   ||= 'static';
-    $inputHash->{language}       ||= 'en';
+    $inputs_ref->{displayMode}    ||= 'MathJax';
+    $inputs_ref->{outputFormat}   ||= 'static';
+    $inputs_ref->{language}       ||= 'en';
 
     # HACK: required for problemRandomize.pl
-    $inputHash->{effectiveUser} = 'red.ted';
-    $inputHash->{user}          = 'red.ted';
+    $inputs_ref->{effectiveUser} = 'red.ted';
+    $inputs_ref->{user}          = 'red.ted';
 
-    # OTHER fundamentals - urls have been handled already...
-    #	form_action_url => $inputHash->{form_action_url}||'http://failure.org',
-    #	base_url        => $inputHash->{base_url}||'http://failure.org'
-    #	#psvn            => $psvn//'23456', # DEPRECATED
-    #	#forcePortNumber => $credentials{forcePortNumber}//'',
-
-    my $pg_start =
-      time;    # this is Time::HiRes's time, which gives floating point values
+    my $pg_start = time;
+    my $memory_use_start = get_current_process_memory();
 
     my ( $error_flag, $formatter, $error_string ) =
-      process_problem( $file_path, $inputHash );
+      process_problem( $problem, $inputs_ref );
 
     my $pg_stop     = time;
     my $pg_duration = $pg_stop - $pg_start;
+    my $log_file_path  = $problem->path() || 'source provided without path';
+    my $memory_use_end = get_current_process_memory();
+    my $memory_use     = $memory_use_end - $memory_use_start;
+    writeRenderLogEntry(
+        sprintf( "(duration: %.3f sec) ", $pg_duration )
+        . sprintf( "{memory: %6d bytes} ", $memory_use )
+        . "file: $log_file_path"
+    );
 
     # format result
     my $html    = $formatter->formatRenderedProblem;
@@ -122,15 +120,15 @@ sub process_pg_file {
         problem_state     => $pg_obj->{problem_state},
         flags             => $pg_obj->{flags},
         resources         => {
-            regex         => $pg_obj->{resources},
-            tags          => $pg_obj->{pgResources},
+            regex         => $pg_obj->{pgResources},
+            alias         => $pg_obj->{resources},
             js            => $pg_obj->{js},
             css           => $pg_obj->{css},
         },
-        form_data         => $inputHash,
+        form_data         => $inputs_ref,
         raw_metadata_text => $pg_obj->{raw_metadata_text},
         JWT               => {
-            problem       => $inputHash->{problemJWT},
+            problem       => $inputs_ref->{problemJWT},
             session       => $pg_obj->{sessionJWT},
             answer        => $pg_obj->{answerJWT}
         },
@@ -145,7 +143,7 @@ sub process_pg_file {
       if $json_rh->{flags}{compoundProblem}{grader};
 
 
-    $json_rh->{tags} = WeBWorK::Utils::Tags->new($file_path, $inputHash->{problemSource}) if ( $inputHash->{includeTags} );
+    $json_rh->{tags} = WeBWorK::Utils::Tags->new('', $problem->source) if ( $inputs_ref->{includeTags} );
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($json_rh);
     return $json;
@@ -156,101 +154,36 @@ sub process_pg_file {
 #######################################################################
 
 sub process_problem {
-    my $file_path  = shift;
+    my $problem  = shift;
     my $inputs_ref = shift;
-    my $adj_file_path;
-    my $source;
+    my $source = $problem->{problem_contents};
+    my $file_path = $inputs_ref->{sourceFilePath};
 
-    # obsolete if using JSON return format
-    # These can FORCE display of AnsGroup AnsHash PGInfo and ResourceInfo
-    #	$inputs_ref->{showAnsGroupInfo}	= 1; #$print_answer_group;
-    #	$inputs_ref->{showAnsHashInfo}	= 1; #$print_answer_hash;
-    #	$inputs_ref->{showPGInfo}				= 1; #$print_pg_hash;
-    #	$inputs_ref->{showResourceInfo}	= 1; #$print_resource_hash;
-
-    ### stash inputs that get wiped by PG
-    my $problem_seed = $inputs_ref->{problemSeed};
-    die "problem seed not defined in Controller::RenderProblem::process_problem"
-      unless $problem_seed;
-
-    # if base64 source is provided, use that over fetching problem path
-    if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ m/\S/ )
-    {
-        # such hackery - but Mojo::Promises are so well-built that they are invisible
-        # ... until you leave the Mojo space
-        $inputs_ref->{problemSource} = $inputs_ref->{problemSource}{results}[0] if $inputs_ref->{problemSource} =~ /Mojo::Promise/;
-        # sanitize the base64 encoded source
-        $inputs_ref->{problemSource} =~ s/\s//gm;
-        # while ($source =~ /([^A-Za-z0-9+])/gm) {
-        #     warn "invalid character found: ".sprintf( "\\u%04x", ord($1) )."\n";
-        # }
-        $source = Encode::decode("UTF-8", decode_base64( $inputs_ref->{problemSource} ) );
-    }
-    else {
-        ( $adj_file_path, $source ) = get_source($file_path);
-
-        # WHY are there so many fields in which to stash the file path?
-        #$inputs_ref->{fileName} = $adj_file_path;
-        #$inputs_ref->{probFileName} = $adj_file_path;
-        #$inputs_ref->{sourceFilePath} = $adj_file_path;
-        #$inputs_ref->{pathToProblemFile} = $adj_file_path;
-    }
-    my $raw_metadata_text = $1 if ($source =~ /(.*?)DOCUMENT\(\s*\)\s*;/s);
     $inputs_ref->{problemUUID} = md5_hex(Encode::encode_utf8($source));
 
-    # TODO verify line ending are LF instead of CRLF
-
-    # included (external) pg content is not recorded by PGalias
+    # external dependencies on pg content is not recorded by PGalias
     # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
-    my $pgResources = [];
+    my @pgResources;
     while ($source =~ m/includePG(?:problem|file)\(["'](.*)["']\);/g )
     {
         warn "PG asset reference found: $1\n" if $UNIT_TESTS_ON;
-        push @$pgResources, $1;
+        push @pgResources, $1;
     }
-
-    # # this does not capture _all_ image asset references, unfortunately...
-    # # asset filenames may be stored as variables before image() is called
-    # while ($source =~ m/image\(\s*("[^\$]+?"|'[^\$]+?')\s*[,\)]/g) {
-    #     warn "Image asset reference found!\n" . $1 . "\n" if $UNIT_TESTS_ON;
-    #     my $image = $1;
-    #     $image =~ s/['"]//g;
-    #     $image = dirname($file_path) . '/' . $image if ($image =~ /^[^\/]*\.(?:gif|jpg|jpeg|png)$/i);
-    #     warn "Recording image asset as: $image\n" if $UNIT_TESTS_ON;
-    #     push @$assets, $image;
-    # }
-
-    # $inputs_ref->{pathToProblemFile} = $adj_file_path
-    #   if ( defined $adj_file_path );
 
     ##################################################
     # Process the pg file
     ##################################################
-    ### store the time before we invoke the content generator
-    my $cg_start =
-      time;    # this is Time::HiRes's time, which gives floating point values
-
-    ############################################
-    # Call server via standaloneRenderer to render problem
-    ############################################
-
     our ( $return_object, $error_flag, $error_string );
     $error_flag   = 0;
     $error_string = '';
-
-    my $memory_use_start = get_current_process_memory();
 
     # can include @args as third input below
     $return_object = standaloneRenderer( \$source, $inputs_ref );
 
     # stash assets list in $return_object
-    $return_object->{pgResources} = $pgResources;
-
-    # stash raw metadata text in $return_object
-    $return_object->{raw_metadata_text} = $raw_metadata_text;
+    $return_object->{pgResources} = \@pgResources;
 
     # generate sessionJWT to store session data and answerJWT to update grade store
-    # only occurs if problemJWT exists!
     my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
     $return_object->{sessionJWT} = $sessionJWT // '';
     $return_object->{answerJWT}  = $answerJWT // '';
@@ -262,7 +195,7 @@ sub process_problem {
     print "\n\n Result of renderProblem \n\n" if $UNIT_TESTS_ON;
     print pretty_print_rh($return_object)     if $UNIT_TESTS_ON;
     if ( not defined $return_object )
-    {    #FIXME make sure this is the right error message if site is unavailable
+    {
         $error_string = "0\t Could not process $file_path problem file \n";
     }
     elsif ( defined( $return_object->{flags}->{error_flag} )
@@ -279,36 +212,14 @@ sub process_problem {
     # Create FormatRenderedProblems object
     ##################################################
 
- 	# my $encoded_source = encode_base64($source); # create encoding of source_file;
     my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
       return_object   => $return_object,
-      encoded_source  => '', #encode_base64($source),
-      sourceFilePath  => $file_path,
+      sourceFilePath  => $inputs_ref->{sourceFilePath},
       url             => $inputs_ref->{baseURL},
       form_action_url => $inputs_ref->{formURL},
       maketext        => sub {return @_},
-      courseID        => 'blackbox',
-      userID          => 'Motoko_Kusanagi',
-      course_password => 'daemon',
       inputs_ref      => $inputs_ref,
-      problem_seed    => $problem_seed
-    );
-
-    ##################################################
-    # log elapsed time
-    ##################################################
-    my $scriptName     = 'standalonePGproblemRenderer';
-    my $log_file_path  = $file_path // 'source provided without path';
-    my $cg_end         = time;
-    my $cg_duration    = $cg_end - $cg_start;
-    my $memory_use_end = get_current_process_memory();
-    my $memory_use     = $memory_use_end - $memory_use_start;
-    writeRenderLogEntry(
-        "",
-        "{script:$scriptName; file:$log_file_path; "
-          . sprintf( "duration: %.3f sec;", $cg_duration )
-          . sprintf( " memory: %6d bytes;", $memory_use ) . "}",
-        ''
+      problem_seed    => $inputs_ref->{problemSeed},
     );
 
     #######################################################################
@@ -331,21 +242,12 @@ sub standaloneRenderer {
     my $processAnswers = $inputs_ref->{processAnswers} // 1;
     print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
-    unless (ref $problemFile) {
-        # In this case the source file name is passed
-        print "standaloneProblemRenderer: setting source_file = $problemFile";
-    }
-
     # Attempt to match old parameters.
     my $isInstructor = $inputs_ref->{isInstructor} // ($inputs_ref->{permissionLevel} // 0) >= 10;
 
 	my $pg = WeBWorK::PG->new(
-		ref $problemFile
-		? (
-			sourceFilePath => $inputs_ref->{sourceFilePath} // '',
-			r_source       => $problemFile,
-			)
-		: (sourceFilePath => $problemFile),
+        sourceFilePath       => $inputs_ref->{sourceFilePath} // '',
+        r_source             => $problemFile,
 		problemSeed          => $inputs_ref->{problemSeed},
 		processAnswers       => $processAnswers,
 		showHints            => $inputs_ref->{showHints},              # default is to showHint (set in PG.pm)
@@ -377,8 +279,8 @@ sub standaloneRenderer {
     my ( $internal_debug_messages, $pgwarning_messages, $pgdebug_messages );
     if ( ref( $pg->{pgcore} ) ) {
         $internal_debug_messages = $pg->{pgcore}->get_internal_debug_messages;
-        $pgwarning_messages      = $pg->{pgcore}->get_warning_messages();
-        $pgdebug_messages        = $pg->{pgcore}->get_debug_messages();
+        $pgwarning_messages      = $pg->{pgcore}->get_warning_messages;
+        $pgdebug_messages        = $pg->{pgcore}->get_debug_messages;
     }
     else {
         $internal_debug_messages =
@@ -405,19 +307,12 @@ sub standaloneRenderer {
     $out2;
 }
 
-sub display_html_output {    #display the problem in a browser
-    my $file_path   = shift;
-    my $formatter   = shift;
-    my $output_text = $formatter->formatRenderedProblem;
-    return $output_text;
-}
-
 ##################################################
 # utilities
 ##################################################
 
 sub get_current_process_memory {
-    state $pt = Proc::ProcessTable->new;
+    CORE::state $pt = Proc::ProcessTable->new;
     my %info = map { $_->pid => $_ } @{ $pt->table };
     return $info{$$}->rss;
 }
@@ -429,9 +324,18 @@ sub generateJWTs {
     my $inputs_ref = shift;
     my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}, problemJWT => $inputs_ref->{problemJWT}};
     my $scoreHash = {};
+    
+    # TODO: sometimes student_ans causes JWT corruption in PHP - why?
+    # proposed restructuring of the answerJWT -- prepare with LibreTexts
+    # my %studentKeys = qw(student_value value student_formula formula student_ans answer original_student_ans original);
+    # my %previewKeys = qw(preview_text_string text preview_latex_string latex);
+    # my %correctKeys = qw(correct_value value correct_formula formula correct_ans ans);
+    # my %messageKeys = qw(ans_message answer error_message error);
+    # my @resultKeys  = qw(score weight);
+    my %answers     = %{unbless($pg->{answers})};
 
-    # if no problemJWT exists, then why bother?
-    return unless $inputs_ref->{problemJWT};
+    # once the correct answers are shown, this setting is permanent
+    $sessionHash->{showCorrectAnswers}    = 1 if $inputs_ref->{showCorrectAnswers};
 
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
@@ -440,19 +344,20 @@ sub generateJWTs {
         $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans } if ($inputs_ref->{ 'MaThQuIlL_' . $ans});
 
-        # $scoreHash->{ans_id} = $ans;
-        # $scoreHash->{answer} = unbless($pg->{answers}{$ans}) // {},
-        # $scoreHash->{score}  = $pg->{answers}{$ans}{score} // 0,
-
-        # TODO see why this key is causing JWT corruption in PHP
-        delete( $pg->{answers}{$ans}{student_ans});
+        # More restructuring -- confirm with LibreTexts
+        # $scoreHash->{$ans}{student} = { map {exists $answers{$ans}{$_} ? ($studentKeys{$_} => $answers{$ans}{$_}) : ()} keys %studentKeys };
+        # $scoreHash->{$ans}{preview} = { map {exists $answers{$ans}{$_} ? ($previewKeys{$_} => $answers{$ans}{$_}) : ()} keys %previewKeys };
+        # $scoreHash->{$ans}{correct} = { map {exists $answers{$ans}{$_} ? ($correctKeys{$_} => $answers{$ans}{$_}) : ()} keys %correctKeys };
+        # $scoreHash->{$ans}{message} = { map {exists $answers{$ans}{$_} ? ($messageKeys{$_} => $answers{$ans}{$_}) : ()} keys %messageKeys };
+        # $scoreHash->{$ans}{result}  = { map {exists $answers{$ans}{$_} ? ($_ => $answers{$ans}{$_}) : ()} @resultKeys };
     }
     $scoreHash->{answers}   = unbless($pg->{answers});
 
     # update the number of correct/incorrect submissions if answers were 'submitted'
-    $sessionHash->{numCorrect} = (defined $inputs_ref->{submitAnswers}) ?
+    # but don't update either if the problem was already correct
+    $sessionHash->{numCorrect} = (defined $inputs_ref->{submitAnswers} && $inputs_ref->{numCorrect} == 0) ?
         $pg->{problem_state}{num_of_correct_ans} : ($inputs_ref->{numCorrect} // 0);
-    $sessionHash->{numIncorrect} = (defined $inputs_ref->{submitAnswers}) ?
+    $sessionHash->{numIncorrect} = (defined $inputs_ref->{submitAnswers} && $inputs_ref->{numCorrect} == 0) ?
         $pg->{problem_state}{num_of_incorrect_ans} : ($inputs_ref->{numIncorrect} // 0);
 
     # include the final result of the combined scores
@@ -474,38 +379,9 @@ sub generateJWTs {
 
     # Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
     my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
+    warn("answerJWT claims: ".encode_json($scoreHash));
 
     return ($sessionJWT, $answerJWT);
-}
-
-# Get problem template source and adjust file_path name
-sub get_source {
-    my $file_path = shift;
-    my $source;
-    die "Unable to read file $file_path \n"
-      unless $file_path eq '-' or -r $file_path;
-    eval {    #File::Slurp would be faster (see perl monks)
-        local $/ = undef;
-        if ( $file_path eq '-' ) {
-            $source = <STDIN>;
-        } else {
-            # To support proper behavior with UTF-8 files, we need to open them with "<:encoding(UTF-8)"
-            # as otherwise, the first HTML file will render properly, but when "Preview" "Submit answer"
-            # or "Show correct answer" is used it will make problems, as in process_problem() the
-            # encodeSource() method is called on a data which is still UTF-8 encoded, and leads to double
-            # encoding and gibberish.
-            # NEW:
-            open( FH, "<:encoding(UTF-8)", $file_path )
-              or die "Couldn't open file $file_path: $!";
-
-          # OLD:
-          #open(FH, "<" ,$file_path) or die "Couldn't open file $file_path: $!";
-            $source = <FH>;    #slurp  input
-            close FH;
-        }
-    };
-    die "Something is wrong with the contents of $file_path\n" if $@;
-    return $file_path, $source;
 }
 
 sub pretty_print_rh {
@@ -557,18 +433,15 @@ sub pretty_print_rh {
     return $out . " ";
 }
 
-sub writeRenderLogEntry($$$) {
-    my ( $function, $details, $beginEnd ) = @_;
-    $beginEnd =
-      ( $beginEnd eq "begin" ) ? ">" : ( $beginEnd eq "end" ) ? "<" : "-";
+sub writeRenderLogEntry($) {
+    my $message = shift;
 
     local *LOG;
     if ( open LOG, ">>", $path_to_log_file ) {
         print LOG "[", time2str( "%a %b %d %H:%M:%S %Y", time ),
-          "] $$ " . time . " $beginEnd $function [$details]\n";
+          "] $message\n";
         close LOG;
-    }
-    else {
+    } else {
         warn "failed to open $path_to_log_file for writing: $!";
     }
 }
