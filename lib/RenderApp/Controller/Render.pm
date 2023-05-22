@@ -91,7 +91,7 @@ sub fetchRemoteSource_p {
     then(
       sub {
           my $tx = shift;
-          return encode_base64($tx->result->body);
+          return $tx->result->body;
       })->
     catch(
       sub {

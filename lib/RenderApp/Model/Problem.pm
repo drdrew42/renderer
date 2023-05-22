@@ -8,6 +8,7 @@ use Mojo::IOLoop;
 use Mojo::JSON qw( encode_json );
 use Mojo::Base -async_await;
 use Time::HiRes qw( time );
+use MIME::Base64 qw( decode_base64 );
 use RenderApp::Controller::RenderProblem;
 
 ##### Problem params: #####
@@ -88,9 +89,12 @@ sub source {
     if ( scalar(@_) == 1 ) {
         my $contents = shift;
 
+        # recognize and decode base64 if necessary
+        $contents = Encode::decode( "UTF-8", decode_base64($contents) )
+            if ( $contents =~ m!^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$!);
+
         # UNIX style line-endings are required
-        $contents =~ s/\r\n/\n/g;
-        $contents =~ s/\r/\n/g;
+        $contents =~ s!\r\n?!\n!g;
         $self->{problem_contents} = $contents;
     }
     return $self->{problem_contents};
@@ -131,7 +135,8 @@ sub path {
         }
         $self->{_error} = "404 I cannot find a problem with that file path."
           unless ( -e $read_path || $force );
-        $self->{read_path} = Mojo::File->new($read_path);
+        # if we objectify an empty string, it becomes truth-y -- AVOID!
+        $self->{read_path} = Mojo::File->new($read_path) if $read_path;
     }
     return $self->{read_path};
 }
