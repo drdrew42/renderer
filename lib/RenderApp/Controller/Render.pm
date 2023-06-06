@@ -56,7 +56,6 @@ sub parseRequest {
       return undef;
     };
     $claims = $claims->{webwork} if defined $claims->{webwork};
-    # $claims->{problemJWT} = $problemJWT; # because we're merging claims, this is unnecessary?
     # override key-values in params with those provided in the JWT
     @params{ keys %$claims } = values %$claims;
   } else {
@@ -107,6 +106,7 @@ async sub problem {
   my $c = shift;
   my $inputs_ref = $c->parseRequest;
   return unless $inputs_ref;
+
   $inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}) if $inputs_ref->{problemSourceURL};
 
   my $file_path = $inputs_ref->{sourceFilePath};
@@ -130,71 +130,67 @@ async sub problem {
   return $c->exception($problem->{_message}, $problem->{status})
     unless $problem->success();
 
-  $inputs_ref->{sourceFilePath} = $problem->{read_path}; # in case the path was updated...
-
-  my $input_errs = checkInputs($inputs_ref);
-
   $c->render_later; # tell Mojo that this might take a while
   my $ww_return_json = await $problem->render($inputs_ref);
 
   return $c->exception( $problem->{_message}, $problem->{status} )
     unless $problem->success();
 
-  my $ww_return_hash = decode_json($ww_return_json);
-  my $output_errs = checkOutputs($ww_return_hash);
+  my $return_object = decode_json($ww_return_json);
 
-  $ww_return_hash->{debug}->{render_warn} = [$input_errs, $output_errs];
-
-  # if answers are submitted and there is a provided answerURL...
-  if ($inputs_ref->{JWTanswerURL} && $ww_return_hash->{JWT}{answer} && $inputs_ref->{submitAnswers}) {
-    my $answerJWTresponse = {
-      iss     => $ENV{SITE_HOST},
-      subject => 'webwork.result',
-      status  => 502,
-      message => 'initial message'
-    };
-    my $reqBody = {
-      Origin         => $ENV{SITE_HOST},
-      'Content-Type' => 'text/plain',
-    };
-
-    $c->log->info("sending answerJWT to $inputs_ref->{JWTanswerURL}");
-    await $c->ua->max_redirects(5)->request_timeout(7)->post_p($inputs_ref->{JWTanswerURL}, $reqBody, $ww_return_hash->{JWT}{answer})->
-      then(sub {
-        my $response = shift->result;
-
-        $answerJWTresponse->{status} = int($response->code);
-        # answerURL responses are expected to be JSON
-        if ($response->json) {
-          # munge data with default response object
-          $answerJWTresponse = { %$answerJWTresponse, %{$response->json} };
-        } else {
-          # otherwise throw the whole body as the message
-          $answerJWTresponse->{message} = $response->body;
-        }
-      })->
-      catch(sub {
-        my $err = shift;
-        $c->log->error($err);
-
-        $answerJWTresponse->{status} = 500;
-        $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $err;
-      });
-
-    $answerJWTresponse = encode_json($answerJWTresponse);
-    # this will become a string literal, so single-quote characters must be escaped
-    $answerJWTresponse =~ s/'/\\'/g;
-    $c->log->info("answerJWT response ".$answerJWTresponse);
-
-    $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus/$answerJWTresponse/g;
-  } else {
-    $ww_return_hash->{renderedHTML} =~ s/JWTanswerURLstatus//;
+  # if answerURL provided and this is a submit, then send the answerJWT
+  if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers} && !$inputs_ref->{showCorrectAnswers}) {
+    $return_object->{JWTanswerURLstatus} = await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});
   }
 
-  $c->respond_to(
-    html => { text => $ww_return_hash->{renderedHTML} },
-    json => { json => $ww_return_hash }
-  );
+  # format the response
+  $c->format($return_object);
+}
+
+async sub sendAnswerJWT {
+  my $c = shift;
+  my $JWTanswerURL = shift;
+  my $answerJWT = shift;
+
+  my $answerJWTresponse = {
+    iss     => $ENV{SITE_HOST},
+    subject => 'webwork.result',
+    status  => 502,
+    message => 'initial message'
+  };
+  my $reqBody = {
+    Origin         => $ENV{SITE_HOST},
+    'Content-Type' => 'text/plain',
+  };
+
+  $c->log->info("sending answerJWT to $JWTanswerURL");
+  await $c->ua->max_redirects(5)->request_timeout(7)->post_p($JWTanswerURL, $reqBody, $answerJWT)->
+    then(sub {
+      my $response = shift->result;
+
+      $answerJWTresponse->{status} = int($response->code);
+      # answerURL responses are expected to be JSON
+      if ($response->json) {
+        # munge data with default response object
+        $answerJWTresponse = { %$answerJWTresponse, %{$response->json} };
+      } else {
+        # otherwise throw the whole body as the message
+        $answerJWTresponse->{message} = $response->body;
+      }
+    })->
+    catch(sub {
+      my $err = shift;
+      $c->log->error($err);
+
+      $answerJWTresponse->{status} = 500;
+      $answerJWTresponse->{message} = '[' . $c->logID . '] ' . $err;
+    });
+
+  $answerJWTresponse = encode_json($answerJWTresponse);
+  # this will become a string literal, so single-quote characters must be escaped
+  $answerJWTresponse =~ s/'/\\'/g;
+  $c->log->info("answerJWT response ".$answerJWTresponse);
+  return $answerJWTresponse;
 }
 
 sub checkInputs {
@@ -215,11 +211,12 @@ sub checkInputs {
       push @errs, $err;
     }
   }
-  return "Form data submitted for "
+  return @errs ? "Form data submitted for "
       . $inputs_ref->{sourceFilePath}
       . " contained errors: {"
       . join "}, {", @errs
-      . "}";
+      . "}"
+      : undef;
 }
 
 sub checkOutputs {
@@ -247,11 +244,12 @@ sub checkOutputs {
       }
     }
   }
-  return
+  return @errs ?
       "Output from rendering "
-    . ($outputs_ref->{sourceFilePath} // '')
-    . " contained errors: {"
-    . join "}, {", @errs . "}";
+      . ($outputs_ref->{sourceFilePath} // '')
+      . " contained errors: {"
+      . join "}, {", @errs . "}"
+      : undef;
 }
 
 sub exception {

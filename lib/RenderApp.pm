@@ -1,3 +1,8 @@
+use strict;
+use warnings;
+# use feature 'signatures';
+# no warnings qw(experimental::signatures);
+
 package RenderApp;
 use Mojo::Base 'Mojolicious';
 
@@ -15,7 +20,7 @@ BEGIN {
     $ENV{PG_ROOT} = $main::dirname . '/PG';
 
 	# Used for reconstructing library paths from sym-links.
-	$ENV{OPL_DIRECTORY} = "webwork-open-problem-library";
+	$ENV{OPL_DIRECTORY} = "$ENV{RENDER_ROOT}/webwork-open-problem-library";
 
 	$ENV{MOJO_CONFIG} = (-r "$ENV{RENDER_ROOT}/render_app.conf") ? "$ENV{RENDER_ROOT}/render_app.conf" : "$ENV{RENDER_ROOT}/render_app.conf.dist";
 	# $ENV{MOJO_MODE} = 'production';
@@ -26,8 +31,9 @@ use lib "$main::dirname";
 print "home directory " . $main::dirname . "\n";
 
 use RenderApp::Model::Problem;
-use RenderApp::Controller::RenderProblem;
 use RenderApp::Controller::IO;
+use WeBWorK::RenderProblem;
+use WeBWorK::FormatRenderedProblem;
 
 sub startup {
 	my $self = shift;
@@ -66,6 +72,7 @@ sub startup {
 	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
 
 	# Helpers
+	$self->helper(format => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
 	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
 	$self->helper(parseRequest => sub { RenderApp::Controller::Render::parseRequest(@_) });
 	$self->helper(croak => sub { RenderApp::Controller::Render::croak(@_) });
@@ -107,20 +114,7 @@ sub startup {
 	$r->any('/pg_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
 	$r->any('/pg_files/tmp/*static')->to('StaticFiles#temp_file');
 	$r->any('/pg_files/*static')->to('StaticFiles#pg_file');
-    $r->any('/*fail')->to('StaticFiles#public_file');
-	# # any other requests fall through
-	# $r->any('/*fail' => sub {
-	# 	my $c = shift;
-	# 	my $report = $c->stash('fail')."\nCOOKIE:";
-	# 	for my $cookie (@{$c->req->cookies}) {
-	# 		$report .= "\n".$cookie->to_string;
-	# 	}
-	# 	$report .= "\nFORM DATA:";
-	# 	foreach my $k (@{$c->req->params->names}) {
-	# 		$report .= "\n$k = ".join ', ', @{$c->req->params->every_param($k)};
-	# 	}
-	# 	$c->log->fatal($report);
-	# 	$c->rendered(404)});
+    $r->any('/*static')->to('StaticFiles#public_file');
 }
 
 1;

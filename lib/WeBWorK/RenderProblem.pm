@@ -1,4 +1,4 @@
-package RenderApp::Controller::RenderProblem;
+package WeBWorK::RenderProblem;
 
 use strict;
 use warnings;
@@ -24,7 +24,7 @@ use Proc::ProcessTable;    # use for log memory use
 use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
 use WeBWorK::Localize;
-use RenderApp::Controller::FormatRenderedProblem;
+use WeBWorK::FormatRenderedProblem;
 
 # use 5.10.0;
 # $Carp::Verbose = 1;
@@ -82,7 +82,7 @@ sub process_pg_file {
     $inputs_ref->{displayMode}    ||= 'MathJax';
     $inputs_ref->{outputFormat}   ||= 'static';
     $inputs_ref->{language}       ||= 'en';
-
+    $inputs_ref->{isInstructor}   //= ($inputs_ref->{permissionLevel} // 0) >= 10;
     # HACK: required for problemRandomize.pl
     $inputs_ref->{effectiveUser} = 'red.ted';
     $inputs_ref->{user}          = 'red.ted';
@@ -90,7 +90,7 @@ sub process_pg_file {
     my $pg_start = time;
     my $memory_use_start = get_current_process_memory();
 
-    my ( $error_flag, $formatter, $error_string ) =
+    my ( $return_object, $error_flag, $error_string ) =
       process_problem( $problem, $inputs_ref );
 
     my $pg_stop     = time;
@@ -105,47 +105,48 @@ sub process_pg_file {
     );
 
     # format result
-    my $html    = $formatter->formatRenderedProblem;
-    my $pg_obj  = $formatter->{return_object};
-    my $json_rh = {
-        renderedHTML      => $html,
-        answers           => $pg_obj->{answers},
-        debug             => {
-            perl_warn     => $pg_obj->{WARNINGS},
-            pg_warn       => $pg_obj->{warning_messages},
-            debug         => $pg_obj->{debug_messages},
-            internal      => $pg_obj->{internal_debug_messages}
-        },
-        problem_result    => $pg_obj->{problem_result},
-        problem_state     => $pg_obj->{problem_state},
-        flags             => $pg_obj->{flags},
-        resources         => {
-            regex         => $pg_obj->{pgResources},
-            alias         => $pg_obj->{resources},
-            js            => $pg_obj->{js},
-            css           => $pg_obj->{css},
-        },
-        form_data         => $inputs_ref,
-        raw_metadata_text => $pg_obj->{raw_metadata_text},
-        JWT               => {
-            problem       => $inputs_ref->{problemJWT},
-            session       => $pg_obj->{sessionJWT},
-            answer        => $pg_obj->{answerJWT}
-        },
-    };
+    # my $html    = $formatter->formatRenderedProblem;
+    # my $pg_obj  = $formatter->{return_object};
+    # my $json_rh = {
+    #     renderedHTML      => $html,
+    #     answers           => $pg_obj->{answers},
+    #     debug             => {
+    #         perl_warn     => $pg_obj->{WARNINGS},
+    #         pg_warn       => $pg_obj->{warning_messages},
+    #         debug         => $pg_obj->{debug_messages},
+    #         internal      => $pg_obj->{internal_debug_messages}
+    #     },
+    #     problem_result    => $pg_obj->{problem_result},
+    #     problem_state     => $pg_obj->{problem_state},
+    #     flags             => $pg_obj->{flags},
+    #     resources         => {
+    #         regex         => $pg_obj->{pgResources},
+    #         alias         => $pg_obj->{resources},
+    #         js            => $pg_obj->{js},
+    #         css           => $pg_obj->{css},
+    #     },
+    #     form_data         => $inputs_ref,
+    #     raw_metadata_text => $pg_obj->{raw_metadata_text},
+    #     JWT               => {
+    #         problem       => $inputs_ref->{problemJWT},
+    #         session       => $pg_obj->{sessionJWT},
+    #         answer        => $pg_obj->{answerJWT}
+    #     },
+    # };
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
 	# HACK: remove flags->{problemRandomize} if it exists -- cannot include CODE refs
-    delete $json_rh->{flags}{problemRandomize}
-      if $json_rh->{flags}{problemRandomize};
+    delete $return_object->{flags}{problemRandomize}
+      if $return_object->{flags}{problemRandomize};
     # similar things happen with compoundProblem -- delete CODE refs
-    delete $json_rh->{flags}{compoundProblem}{grader}
-      if $json_rh->{flags}{compoundProblem}{grader};
+    delete $return_object->{flags}{compoundProblem}{grader}
+      if $return_object->{flags}{compoundProblem}{grader};
 
 
-    $json_rh->{tags} = WeBWorK::Utils::Tags->new('', $problem->source) if ( $inputs_ref->{includeTags} );
+    $return_object->{tags} = WeBWorK::Utils::Tags->new('', $problem->source) if ( $inputs_ref->{includeTags} );
+    $return_object->{inputs_ref} = $inputs_ref;
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
-    my $json  = $coder->encode($json_rh);
+    my $json  = $coder->encode($return_object);
     return $json;
 }
 
@@ -208,25 +209,11 @@ sub process_problem {
     }
     $error_flag = 1 if $return_object->{errors};
 
-    ##################################################
-    # Create FormatRenderedProblems object
-    ##################################################
-
-    my $formatter = RenderApp::Controller::FormatRenderedProblem->new(
-      return_object   => $return_object,
-      sourceFilePath  => $inputs_ref->{sourceFilePath},
-      url             => $inputs_ref->{baseURL},
-      form_action_url => $inputs_ref->{formURL},
-      maketext        => sub {return @_},
-      inputs_ref      => $inputs_ref,
-      problem_seed    => $inputs_ref->{problemSeed},
-    );
-
     #######################################################################
     # End processing of the pg file
     #######################################################################
 
-    return $error_flag, $formatter, $error_string;
+    return $return_object, $error_flag, $error_string;
 }
 
 ###########################################
@@ -242,9 +229,6 @@ sub standaloneRenderer {
     my $processAnswers = $inputs_ref->{processAnswers} // 1;
     print "NOT PROCESSING ANSWERS" unless $processAnswers == 1;
 
-    # Attempt to match old parameters.
-    my $isInstructor = $inputs_ref->{isInstructor} // ($inputs_ref->{permissionLevel} // 0) >= 10;
-
 	my $pg = WeBWorK::PG->new(
         sourceFilePath       => $inputs_ref->{sourceFilePath} // '',
         r_source             => $problemFile,
@@ -254,11 +238,11 @@ sub standaloneRenderer {
 		showSolutions        => $inputs_ref->{showSolutions},
 		problemNumber        => $inputs_ref->{problemNumber},          # ever even relevant?
 		num_of_correct_ans   => $inputs_ref->{numCorrect} || 0,
-		num_of_incorrect_ans => $inputs_ref->{numIncorrect} // 1000,
+		num_of_incorrect_ans => $inputs_ref->{numIncorrect} || 0,
 		displayMode          => $inputs_ref->{displayMode},
 		useMathQuill         => !defined $inputs_ref->{entryAssist} || $inputs_ref->{entryAssist} eq 'MathQuill',
 		answerPrefix         => $inputs_ref->{answerPrefix},
-		isInstructor         => $isInstructor,
+		isInstructor         => $inputs_ref->{isInstructor},
 		forceScaffoldsOpen   => $inputs_ref->{forceScaffoldsOpen},
 		psvn                 => $inputs_ref->{psvn},
 		problemUUID          => $inputs_ref->{problemUUID},
@@ -268,7 +252,7 @@ sub standaloneRenderer {
 		templateDirectory    => "$ENV{RENDER_ROOT}/",
 		debuggingOptions     => {
 			show_resource_info          => $inputs_ref->{show_resource_info},
-			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $isInstructor,
+			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $inputs_ref->{isInstructor},
 			show_pg_info                => $inputs_ref->{show_pg_info},
 			show_answer_hash_info       => $inputs_ref->{show_answer_hash_info},
 			show_answer_group_info      => $inputs_ref->{show_answer_group_info}
@@ -293,8 +277,8 @@ sub standaloneRenderer {
         post_header_text        => $pg->{post_header_text},
         answers                 => $pg->{answers},
         errors                  => $pg->{errors},
-        WARNINGS                => $pg->{warnings},
-        PG_ANSWERS_HASH         => $pg->{pgcore}->{PG_ANSWERS_HASH},
+        pg_warnings             => $pg->{warnings},
+        # PG_ANSWERS_HASH         => $pg->{pgcore}->{PG_ANSWERS_HASH},
         problem_result          => $pg->{result},
         problem_state           => $pg->{state},
         flags                   => $pg->{flags},
@@ -332,10 +316,10 @@ sub generateJWTs {
     # my %correctKeys = qw(correct_value value correct_formula formula correct_ans ans);
     # my %messageKeys = qw(ans_message answer error_message error);
     # my @resultKeys  = qw(score weight);
-    my %answers     = %{unbless($pg->{answers})};
+    my %answers = %{unbless($pg->{answers})};
 
     # once the correct answers are shown, this setting is permanent
-    $sessionHash->{showCorrectAnswers}    = 1 if $inputs_ref->{showCorrectAnswers};
+    $sessionHash->{showCorrectAnswers} = 1 if $inputs_ref->{showCorrectAnswers} && !$inputs_ref->{isInstructor};
 
     # store the current answer/response state for each entry
     foreach my $ans (keys %{$pg->{answers}}) {
@@ -351,7 +335,7 @@ sub generateJWTs {
         # $scoreHash->{$ans}{message} = { map {exists $answers{$ans}{$_} ? ($messageKeys{$_} => $answers{$ans}{$_}) : ()} keys %messageKeys };
         # $scoreHash->{$ans}{result}  = { map {exists $answers{$ans}{$_} ? ($_ => $answers{$ans}{$_}) : ()} @resultKeys };
     }
-    $scoreHash->{answers}   = unbless($pg->{answers});
+    $scoreHash->{answers} = unbless($pg->{answers});
 
     # update the number of correct/incorrect submissions if answers were 'submitted'
     # but don't update either if the problem was already correct
@@ -379,8 +363,6 @@ sub generateJWTs {
 
     # Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
     my $answerJWT = encode_jwt(payload=>$responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
-    warn("answerJWT claims: ".encode_json($scoreHash));
-
     return ($sessionJWT, $answerJWT);
 }
 

@@ -29,7 +29,7 @@ sub pg_file ($c) {
 }
 
 sub public_file($c) {
-    $c->reply_with_file_if_readable($c->app->home->child('public', $c->stash('fail')));
+    $c->reply_with_file_if_readable($c->app->home->child('public', $c->stash('static')));
 }
 
 1;

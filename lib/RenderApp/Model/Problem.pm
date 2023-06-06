@@ -9,7 +9,7 @@ use Mojo::JSON qw( encode_json );
 use Mojo::Base -async_await;
 use Time::HiRes qw( time );
 use MIME::Base64 qw( decode_base64 );
-use RenderApp::Controller::RenderProblem;
+use WeBWorK::RenderProblem;
 
 ##### Problem params: #####
 # = random_seed      (set randomization for rendering)
@@ -68,7 +68,7 @@ sub _init {
     # sourcecode takes precedence over reading from file path
     if ( $problem_contents =~ /\S/ ) {
         $self->source($problem_contents);
-        $self->{code_origin} = 'pg source (' . $self->path( $read_path, 'force' ) .')';
+        $self->{code_origin} = 'pg source (' . ($self->path( $read_path, 'force' ) || 'no path provided') .')';
         # set read_path without failing for !-e
         # this supports images in problems via editor
     } else {
@@ -222,7 +222,7 @@ sub render {
     my $inputs_ref = shift;
     $self->{action} = 'render';
     my $renderPromise = Mojo::IOLoop->subprocess->run_p( sub {
-        return RenderApp::Controller::RenderProblem::process_pg_file( $self, $inputs_ref );
+        return WeBWorK::RenderProblem::process_pg_file( $self, $inputs_ref );
     })->catch(sub {
         $self->{exception} = Mojo::Exception->new(shift)->trace;
         $self->{_error} = "500 Render failed: " . $self->{exception}->message;
