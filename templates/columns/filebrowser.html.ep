@@ -1,5 +1,5 @@
-%= stylesheet '/filebrowser.css'
-%= javascript '/filebrowser.js'
+%= stylesheet '/css/filebrowser.css'
+%= javascript '/js/filebrowser.js'
 
 <div class='header'>
     Current directory path: </br>

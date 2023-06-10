@@ -1,4 +1,4 @@
-%= javascript '/iframeResizer.min.js'
+%= javascript '/node_modules/iframe-resizer/js/iframeResizer.min.js'
 %= stylesheet begin
 .pgfile-header {
     max-height: 30%;

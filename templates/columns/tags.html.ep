@@ -1,4 +1,4 @@
-%= stylesheet '/tags.css'
+%= stylesheet '/css/tags.css'
 
 % my $taxo = '[]';
 % if (open(TAXONOMY, "<:encoding(utf8)", $c->app->home->child('tmp/tagging-taxonomy.json') ) {
@@ -87,4 +87,4 @@
 %= javascript begin
 taxo = <%== $taxo %>;
 %= end
-%= javascript '/tags.js'
+%= javascript '/js/tags.js'

@@ -251,7 +251,7 @@ sub formatRenderedProblem {
 		showPreviewButton        => $inputs_ref->{showPreviewButton}        // '',
 		showCheckAnswersButton   => $inputs_ref->{showCheckAnswersButton}   // '',
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton} // '0',
-		showFooter               => $inputs_ref->{showFooter}               // '',
+		showFooter               => $inputs_ref->{showFooter}               // '0',
 		pretty_print             => \&pretty_print,
 	);
 

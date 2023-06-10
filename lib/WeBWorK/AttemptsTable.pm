@@ -19,7 +19,7 @@
 
 =head1 SYNPOSIS
 
-	my $tbl = WeBWorK::HTML::AttemptsTable->new(
+	my $tbl = WeBWorK::AttemptsTable->new(
 		$answers,
 		answersSubmitted       => 1,
 		answerOrder            => $pg->{flags}{ANSWER_ENTRY_ORDER},
@@ -46,7 +46,7 @@ answer to a WeBWorK problem.  It is used in Problem.pm, OpaqueServer.pm, standAl
 
 =head2 new
 
-	my $tbl = WeBWorK::HTML::AttemptsTable->new(
+	my $tbl = WeBWorK::AttemptsTable->new(
 		$answers,
 		answersSubmitted       => 1,
 		answerOrder            => $pg->{flags}{ANSWER_ENTRY_ORDER},
@@ -143,7 +143,7 @@ use WeBWorK::Utils 'wwRound';
 sub new ($class, $rh_answers, $c, %options) {
 	$class = ref $class || $class;
 	ref($rh_answers) =~ /HASH/     or die 'The first entry to AttemptsTable must be a hash of answers';
-	$c->isa('Mojolicious::Controller') or die 'The second entry to AttemptsTable must be a WeBWorK::Controller';
+	$c->isa('Mojolicious::Controller') or die 'The second entry to AttemptsTable must be a Mojolicious::Controller';
 	my $self = bless {
 		answers             => $rh_answers,
 		c                   => $c,

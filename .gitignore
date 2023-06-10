@@ -9,8 +9,12 @@ private/
 tmp/*
 !tmp/.gitkeep
 logs/*.log
+
 node_modules
-node_modules/*
+public/**/*.min.js
+public/**/*.min.css
+public/static-assets.json
+
 *.o
 *.pm.tdy
 *.bs

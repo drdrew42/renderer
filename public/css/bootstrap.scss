@@ -35,8 +35,6 @@ $link-hover-decoration: underline;
 $breadcrumb-divider-color: #495057;
 $breadcrumb-active-color: #495057;
 
-@import "./theme-colors";
-
 // Include the remainder of bootstrap's scss configuration
 @import "../node_modules/bootstrap/scss/variables";
 @import "../node_modules/bootstrap/scss/maps";
@@ -82,13 +80,6 @@ $breadcrumb-active-color: #495057;
 // Utilities
 @import "../node_modules/bootstrap/scss/utilities/api";
 
-// WeBWorK specific colors
-:root {
-	--ww-logo-background-color: #{$ww-logo-background-color};
-	--ww-primary-foreground-color: #{color-contrast($primary)};
-	--ww-achievement-level-color: #{$ww-achievement-level-color};
-}
-
 // Overrides
 a:not(.btn):focus {
 	color: $link-hover-color;
@@ -96,5 +87,3 @@ a:not(.btn):focus {
 	outline-color: $link-hover-color;
 	outline-width: 1px;
 }
-
-@import "theme-overrides";

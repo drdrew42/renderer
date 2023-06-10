@@ -1,4 +1,4 @@
-%= stylesheet '/opl-flex.css'
+%= stylesheet '/css/opl-flex.css'
 
 <div class='container'>
     <div class='left'>

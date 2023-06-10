@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css?family=Montserrat:400" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    %= stylesheet '/navbar.css'
+    %= stylesheet '/css/navbar.css'
   </head>
   <body>
+    <script>
+      window.addEventListener('message', event => console.log(event.data));
+    </script>
     <div class="topnav" id="myTopnav">
       <div class="dropdown" id="template-select-dropdown">
         <button class="dropbtn" id="template-select">Template
@@ -20,6 +23,7 @@
           <a href="#" class="dropdown-item" id="classic">Classic <i class="fa fa-check" aria-hidden="true"></i></a>
           <a href="#" class="dropdown-item" id="simple">Simple <i class="fa fa-check" aria-hidden="true"></i></a>
           <a href="#" class="dropdown-item" id="standard">Standard <i class="fa fa-check" aria-hidden="true"></i></a>
+          <a href="#" class="dropdown-item" id="jwe_secure">LibreTexts <i class="fa fa-check" aria-hidden="true"></i></a>
         </div>
       </div>
       <div class="search-container" >
@@ -33,6 +37,6 @@
       </div>
     </div>
     <%= content %>
-    %= javascript '/navbar.js'
+    %= javascript '/js/navbar.js'
   </body>
 </html>

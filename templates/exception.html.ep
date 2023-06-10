@@ -1,17 +1,16 @@
-%= stylesheet $ENV{baseURL} . '/typing-sim.css'
-%= stylesheet $ENV{baseURL} . '/crt-display.css'
+%= stylesheet $ENV{baseURL} . '/css/typing-sim.css'
+%= stylesheet $ENV{baseURL} . '/css/crt-display.css'
 %= javascript begin
 window.onload = function() {
-    var i = 0;
-    var tag = document.getElementById('error-block');
-    var text = tag.getAttribute('text');
-    var speed = 150;
+    let i = 0;
+    const tag = document.getElementById('error-block');
+    const text = tag.getAttribute('text');
 
     function typeWriter() {
         if (i <= text.length) {
             i++;
             tag.innerHTML = text.slice(0 ,i);
-            setTimeout(typeWriter, speed);
+            setTimeout(typeWriter, Math.floor(Math.random()*150) + 50);
         }
     }
 
@@ -20,6 +19,7 @@ window.onload = function() {
 % end
 
 % my $message = $c->stash('message') // $c->stash('exception')->message;
+% $message =~ s!$ENV{RENDER_ROOT}/!!g;
 <body class='crt'>
     <div class='typewriter'>
         <h1 id='error-block' text="<%=$message%>">></h1>
