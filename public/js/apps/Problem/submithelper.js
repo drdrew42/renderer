@@ -10,4 +10,4 @@
 			button.classList.add("btn-clicked");
 		})
 	})
-})
+})();
