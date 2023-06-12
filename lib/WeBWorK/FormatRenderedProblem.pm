@@ -164,10 +164,10 @@ sub formatRenderedProblem {
 			showAnswerNumbers   => $showAnswerNumbers,
 			showAttemptAnswers  => 0,
 			showAttemptPreviews => 1,
-			showAttemptResults  => $showPartialCorrectAnswers,
+			showAttemptResults  => $showPartialCorrectAnswers && !$previewMode,
 			showCorrectAnswers  => $showCorrectMode,
 			showMessages        => $showMessages,
-			showSummary         => $showSummary,
+			showSummary         => $showSummary && !$previewMode,
 			mtRef               => WeBWorK::Localize::getLoc($formLanguage),
 			summary             => $problemResult->{summary} // '',    # can be set by problem grader
 		);
@@ -246,11 +246,11 @@ sub formatRenderedProblem {
 		problemText              => $problemText,
 		extra_header_text        => $inputs_ref->{extra_header_text} // '',
 		answerTemplate           => $answerTemplate,
-		showScoreSummary         => $submitMode && !$renderErrorOccurred && $problemResult,
+		showScoreSummary         => $submitMode && !$renderErrorOccurred && !$previewMode && $problemResult,
 		answerhashXML            => $answerhashXML,
 		showPreviewButton        => $inputs_ref->{showPreviewButton}        // '',
 		showCheckAnswersButton   => $inputs_ref->{showCheckAnswersButton}   // '',
-		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton} // '0',
+		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton} // $inputs_ref->{isInstructor} ? '' : '0',
 		showFooter               => $inputs_ref->{showFooter}               // '0',
 		pretty_print             => \&pretty_print,
 	);
