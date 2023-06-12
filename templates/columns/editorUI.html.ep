@@ -5,7 +5,6 @@
 %= stylesheet '/node_modules/codemirror/lib/codemirror.css'
 %= javascript '/node_modules/codemirror/lib/codemirror.js'
 %= javascript '/js/apps/PGCodeMirror/PG.js'
-%= javascript '/js/apps/PGCodeMirror/PGaddons.js'
 
   <div id='edit-header' class='header'>
     <b>Editing problem:</b><br>
