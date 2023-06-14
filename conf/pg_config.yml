@@ -40,6 +40,7 @@ directories:
   #  (in this order) by loadMacros when it looks for a .pl macro file.
   macrosPath:
     - .
+    - $render_root/private/macros
     - $pg_root/macros
     - $pg_root/macros/answers
     - $pg_root/macros/capa
@@ -181,9 +182,6 @@ options:
 
   # This is the operations file to use for mathview, each contains a different locale.
   mathViewLocale: mv_locale_us.js
-
-  # Set to 1 to show the WirisEditor preview system.
-  useWirisEditor: 0
 
   # Catch translation warnings internally.
   catchWarnings: 1

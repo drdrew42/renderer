@@ -55,7 +55,7 @@ RUN cp render_app.conf.dist render_app.conf
 
 RUN cp conf/pg_config.yml lib/PG/conf/pg_config.yml
 
-RUN npm install
+RUN cd public/ && npm install && cd ..
 
 RUN cd lib/PG/htdocs && npm install && cd ../../..
 

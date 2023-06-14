@@ -80,7 +80,7 @@ sub process_pg_file {
 
     # just make sure we have the fundamentals covered...
     $inputs_ref->{displayMode}    ||= 'MathJax';
-    $inputs_ref->{outputFormat}   ||= 'static';
+    $inputs_ref->{outputFormat}   ||= $inputs_ref->{outputformat} || 'default';
     $inputs_ref->{language}       ||= 'en';
     $inputs_ref->{isInstructor}   //= ($inputs_ref->{permissionLevel} // 0) >= 10;
     # HACK: required for problemRandomize.pl
@@ -235,7 +235,7 @@ sub standaloneRenderer {
 		problemSeed          => $inputs_ref->{problemSeed},
 		processAnswers       => $processAnswers,
 		showHints            => $inputs_ref->{showHints},              # default is to showHint (set in PG.pm)
-		showSolutions        => $inputs_ref->{showSolutions},
+		showSolutions        => $inputs_ref->{showSolutions} // $inputs_ref->{isInstructor} ? 1 : 0,
 		problemNumber        => $inputs_ref->{problemNumber},          # ever even relevant?
 		num_of_correct_ans   => $inputs_ref->{numCorrect} || 0,
 		num_of_incorrect_ans => $inputs_ref->{numIncorrect} || 0,
@@ -356,7 +356,7 @@ sub generateJWTs {
       iss        => $ENV{SITE_HOST},
       aud        => $inputs_ref->{JWTanswerURL},
       score      => $scoreHash,
-      problemJWT => $inputs_ref->{problemJWT},
+    #   problemJWT => $inputs_ref->{problemJWT},
       sessionJWT => $sessionJWT,
       platform   => 'standaloneRenderer'
     };

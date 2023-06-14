@@ -49,8 +49,8 @@ sub formatRenderedProblem {
 		$renderErrorOccurred                = 1;
 	}
 
-	my $SITE_URL        = $ENV{baseURL};
-	my $FORM_ACTION_URL = $ENV{formURL}; 
+	my $SITE_URL        = $inputs_ref->{baseURL};
+	my $FORM_ACTION_URL = $inputs_ref->{formURL}; 
 
 	my $displayMode = $inputs_ref->{displayMode} // 'MathJax';
 
@@ -106,8 +106,7 @@ sub formatRenderedProblem {
 	# Get the requested format. (outputFormat or outputformat)
 	# override to static mode if showCorrectAnswers has been set
 	my $formatName = $inputs_ref->{showCorrectAnswers} && !$inputs_ref->{isInstructor}
-		? 'static'
-		: $inputs_ref->{outputFormat} // $inputs_ref->{outputformat} // 'default';
+		? 'static' : $inputs_ref->{outputFormat};
 
 	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
 	my @extra_js_files;
@@ -248,8 +247,8 @@ sub formatRenderedProblem {
 		answerTemplate           => $answerTemplate,
 		showScoreSummary         => $submitMode && !$renderErrorOccurred && !$previewMode && $problemResult,
 		answerhashXML            => $answerhashXML,
-		showPreviewButton        => $inputs_ref->{showPreviewButton}        // '',
-		showCheckAnswersButton   => $inputs_ref->{showCheckAnswersButton}   // '',
+		showPreviewButton        => $inputs_ref->{hidePreviewButton}        ? '' : 0,
+		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton}   ? '' : 0,
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton} // $inputs_ref->{isInstructor} ? '' : '0',
 		showFooter               => $inputs_ref->{showFooter}               // '0',
 		pretty_print             => \&pretty_print,
