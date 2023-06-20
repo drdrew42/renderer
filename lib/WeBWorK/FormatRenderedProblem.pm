@@ -49,8 +49,8 @@ sub formatRenderedProblem {
 		$renderErrorOccurred                = 1;
 	}
 
-	my $SITE_URL        = $inputs_ref->{baseURL};
-	my $FORM_ACTION_URL = $inputs_ref->{formURL}; 
+	my $SITE_URL        = $inputs_ref->{baseURL} || $main::basehref;
+	my $FORM_ACTION_URL = $inputs_ref->{formURL} || $main::formURL; 
 
 	my $displayMode = $inputs_ref->{displayMode} // 'MathJax';
 
@@ -98,8 +98,8 @@ sub formatRenderedProblem {
 		[ "js/apps/MathJaxConfig/mathjax-config.js",                           { defer => undef } ],
 		[ 'node_modules/mathjax/es5/tex-svg.js',                               { defer => undef, id => 'MathJax-script' } ],
 		[ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js',            { defer => undef } ],
-		[ "js/apps/Problem/problem.js",                                                { defer => undef } ],
-		[ "js/apps/Problem/submithelper.js",                                           { defer => undef } ],
+		[ "js/apps/Problem/problem.js",                                        { defer => undef } ],
+		[ "js/apps/Problem/submithelper.js",                                   { defer => undef } ],
 		[ "js/apps/CSSMessage/css-message.js",                                 { defer => undef } ],
 	);
 
@@ -206,7 +206,7 @@ sub formatRenderedProblem {
 		# $output->{input}      = $ws->{input};
 
 		# The following could be constructed from the above, but this is a convenience
-		$output->{answerTemplate}  = $answerTemplate if ($answerTemplate);
+		$output->{answerTemplate}  = $answerTemplate->to_string if ($answerTemplate);
 		$output->{lang}            = $PROBLEM_LANG_AND_DIR{lang};
 		$output->{dir}             = $PROBLEM_LANG_AND_DIR{dir};
 		$output->{extra_css_files} = \@extra_css_files;

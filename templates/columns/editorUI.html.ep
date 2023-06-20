@@ -1,10 +1,10 @@
-%= stylesheet '/node_modules/codemirror/theme/monokai.css'
-%= stylesheet '/node_modules/codemirror/theme/rubyblue.css'
-%= stylesheet '/node_modules/codemirror/theme/material-palenight.css'
-%= stylesheet '/node_modules/codemirror/theme/tomorrow-night-eighties.css'
-%= stylesheet '/node_modules/codemirror/lib/codemirror.css'
-%= javascript '/node_modules/codemirror/lib/codemirror.js'
-%= javascript '/js/apps/PGCodeMirror/PG.js'
+%= stylesheet 'node_modules/codemirror/theme/monokai.css'
+%= stylesheet 'node_modules/codemirror/theme/rubyblue.css'
+%= stylesheet 'node_modules/codemirror/theme/material-palenight.css'
+%= stylesheet 'node_modules/codemirror/theme/tomorrow-night-eighties.css'
+%= stylesheet 'node_modules/codemirror/lib/codemirror.css'
+%= javascript 'node_modules/codemirror/lib/codemirror.js'
+%= javascript 'js/apps/PGCodeMirror/PG.js'
 
   <div id='edit-header' class='header'>
     <b>Editing problem:</b><br>
@@ -15,9 +15,9 @@
   </div>
 
 %= javascript 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js'
-%= javascript '/node_modules/codemirror/addon/selection/active-line.js'
-%= javascript '/node_modules/codemirror/addon/edit/matchbrackets.js'
-%= javascript '/node_modules/codemirror/addon/edit/closebrackets.js'
+%= javascript 'node_modules/codemirror/addon/selection/active-line.js'
+%= javascript 'node_modules/codemirror/addon/edit/matchbrackets.js'
+%= javascript 'node_modules/codemirror/addon/edit/closebrackets.js'
 %= javascript begin
 $(function(){
   cm = new CodeMirror.fromTextArea(

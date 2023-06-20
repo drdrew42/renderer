@@ -9,7 +9,7 @@
 		WeBWorK using host: <%= $SITE_URL %>,
 		format: <%= $formatName %>,
 	</title>
-	<link href="<%= "$SITE_URL/images/favicon.ico" %>" rel="shortcut icon">
+	<link href="<%= "images/favicon.ico" %>" rel="shortcut icon">
 	% # Add third party css and javascript as well as css and javascript requested by the problem.
 	% for (@$third_party_css) {
 		%= stylesheet $_
@@ -55,7 +55,7 @@
 					% }
 					% if ($formatName ne 'static') {
 						<div class="submit-buttons-container col-12 mb-2">
-							% # Submit buttons (all are shown by default)
+							% # Submit buttons (preview and submit are shown by default)
 							% if ($showPreviewButton ne '0') {
 								<%= submit_button $lh->maketext('Preview My Answers'),
 									name => 'previewAnswers', id => 'previewAnswers_id', class => 'btn btn-primary mb-1' %>

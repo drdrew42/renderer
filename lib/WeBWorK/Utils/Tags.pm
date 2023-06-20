@@ -249,7 +249,6 @@ sub new {
 
   if ($source) {
     @lines = split "\n", $source;
-    $name = "";
   } else {
     if ( $name !~ /pg$/ && $name !~ /\.pg\.[-a-zA-Z0-9_.@]*\.tmp$/ ) {
       warn "Not a pg file";    #print caused trouble with XMLRPC
@@ -263,7 +262,7 @@ sub new {
   }
 
   my $lineno = 0;
-  $self->{file} = "$name";
+  $self->{file} = $name;
 
   # Initialize some values
   for my $tagname ( BASIC ) {
@@ -526,7 +525,7 @@ sub write {
       next;
     }
     next if istagline($line);
-    print $fh $line;
+    print $fh $line unless $lineno < $self->{lasttagline};
   }
 
   $fh->close();

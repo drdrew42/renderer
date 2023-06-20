@@ -111,8 +111,6 @@ async sub problem {
 
   my $file_path = $inputs_ref->{sourceFilePath};
   my $random_seed = $inputs_ref->{problemSeed};
-  $inputs_ref->{baseURL} ||= $ENV{baseURL};
-  $inputs_ref->{formURL} ||= $ENV{formURL};
 
   my $problem_contents;
   if ( $inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ /Mojo::Promise/ ) {

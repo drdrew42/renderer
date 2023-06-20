@@ -1,7 +1,7 @@
 {
   secrets => ['abracadabra'],
   baseURL => '',
-  formURL => '/render-api',
+  formURL => '',
   problemJWTsecret => 'shared',
   webworkJWTsecret => 'private',
   SITE_HOST => 'http://localhost:3000',

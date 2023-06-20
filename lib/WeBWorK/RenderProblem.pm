@@ -143,7 +143,7 @@ sub process_pg_file {
       if $return_object->{flags}{compoundProblem}{grader};
 
 
-    $return_object->{tags} = WeBWorK::Utils::Tags->new('', $problem->source) if ( $inputs_ref->{includeTags} );
+    $return_object->{tags} = WeBWorK::Utils::Tags->new($inputs_ref->{sourceFilePath}, $problem->source) if ( $inputs_ref->{includeTags} );
     $return_object->{inputs_ref} = $inputs_ref;
     my $coder = JSON::XS->new->ascii->pretty->allow_unknown->convert_blessed;
     my $json  = $coder->encode($return_object);
@@ -250,6 +250,8 @@ sub standaloneRenderer {
 		language_subroutine  => WeBWorK::Localize::getLoc($inputs_ref->{language} // 'en'),
 		inputs_ref           => {%$inputs_ref},  # Copy the inputs ref so the original can be relied on after rendering.
 		templateDirectory    => "$ENV{RENDER_ROOT}/",
+        htmlURL              => 'pg_files/',
+        tempURL              => 'pg_files/tmp/',
 		debuggingOptions     => {
 			show_resource_info          => $inputs_ref->{show_resource_info},
 			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $inputs_ref->{isInstructor},

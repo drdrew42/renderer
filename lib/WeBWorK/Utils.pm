@@ -64,7 +64,7 @@ sub getThirdPartyAssetURL {
 					. substr($dependencies->{$_}, 1) . '/'
 					. ($1 =~ s/(?:\.min)?\.(js|css)$/.min.$1/gr);
 			} else {
-				return "$baseURL/$file?version=" . ($dependencies->{$_} =~ s/#/@/gr);
+				return Mojo::URL->new("${baseURL}$file")->query(version => $dependencies->{$_} =~ s/#/@/gr);
 			}
 		}
 	}
@@ -122,7 +122,7 @@ sub getAssetURL {
 		return $wwFile if $wwFile;
 
 		my $pgFile =
-			getThirdPartyAssetURL($file, $thirdPartyPGDependencies, '/pg_files', 1);
+			getThirdPartyAssetURL($file, $thirdPartyPGDependencies, 'pg_files/', 1);
 		return $pgFile if $pgFile;
 	}
 
@@ -134,21 +134,21 @@ sub getAssetURL {
 		: undef;
 	
 	# First check to see if this is a file in the webwork htdocs location with a rtl variant.
-	return "/$staticWWAssets->{$rtlfile}"
+	return "$staticWWAssets->{$rtlfile}"
 		if defined $rtlfile && defined $staticWWAssets->{$rtlfile};
 
 	# Next check to see if this is a file in the webwork htdocs location.
-	return "/$staticWWAssets->{$file}" if defined $staticWWAssets->{$file};
+	return "$staticWWAssets->{$file}" if defined $staticWWAssets->{$file};
 
 	# Now check to see if this is a file in the pg htdocs location with a rtl variant.
-	return "/pg_files/$staticPGAssets->{$rtlfile}" if defined $rtlfile && defined $staticPGAssets->{$rtlfile};
+	return "pg_files/$staticPGAssets->{$rtlfile}" if defined $rtlfile && defined $staticPGAssets->{$rtlfile};
 
 	# Next check to see if this is a file in the pg htdocs location.
-	return "/pg_files/$staticPGAssets->{$file}" if defined $staticPGAssets->{$file};
+	return "pg_files/$staticPGAssets->{$file}" if defined $staticPGAssets->{$file};
 
 	# If the file was not found in the lists, then just use the given file and assume its path is relative to the
 	# render app public folder.
-	return "/$file";
+	return "$file";
 }
 
 1;

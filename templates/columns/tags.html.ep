@@ -1,10 +1,10 @@
-%= stylesheet '/css/tags.css'
+%= stylesheet 'css/tags.css'
 
-% my $taxo = '[]';
-% if (open(TAXONOMY, "<:encoding(utf8)", $c->app->home->child('tmp/tagging-taxonomy.json') ) {
+% my $taxo = '';
+% if ( open(TAXONOMY, "<:encoding(utf8)", $c->app->home->child('tmp/tagging-taxonomy.json')) ) {
 %     $taxo = join("", <TAXONOMY>);
 %     close TAXONOMY;
-% }
+% } else { die "Could not open Taxonomy!"; }
 
 <div class='content'>
     %= form_for 'render-api/tags' => ( method => 'POST', id => 'problem-tags' ) => begin
@@ -87,4 +87,4 @@
 %= javascript begin
 taxo = <%== $taxo %>;
 %= end
-%= javascript '/js/tags.js'
+%= javascript 'js/tags.js'

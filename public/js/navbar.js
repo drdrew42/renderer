@@ -40,18 +40,9 @@ problemiframe.addEventListener("load", () => {
 });
 
 savebutton.addEventListener("click", (event) => {
-	const writeurl = "/render-api/can";
+	const writeurl = "render-api/can";
 
 	let formData = new FormData();
-
-	//  // Version tracking steps to replace window.btoa with code supporting Unicode text
-	//  encoder = new TextEncoder();
-	//  let text16 = cm.getValue();
-	//  let text8array = encoder.encode(text16);
-	//  console.log( text8array );
-	//  let textbase64 = Base64.fromUint8Array( text8array );
-	//  console.log( textbase64 );
-	//  formData.set("problemSource", textbase64 );
 
 	encoder = new TextEncoder();
 	formData.set(
@@ -92,7 +83,7 @@ savebutton.addEventListener("click", (event) => {
 
 loadbutton.addEventListener("click", (event) => {
 	event.preventDefault();
-	const sourceurl = "/render-api/tap";
+	const sourceurl = "render-api/tap";
 
 	let formData = new FormData();
 	formData.set(
@@ -128,7 +119,7 @@ loadbutton.addEventListener("click", (event) => {
 renderbutton.addEventListener("click", (event) => {
 	event.preventDefault();
 	document.getElementById("rendered-problem").srcdoc = "Loading...";
-	const renderurl = "/render-api";
+	const renderurl = "render-api";
 
 	const selectedformat = document.querySelector(".dropdown-item.selected");
 	let outputFormat;
@@ -149,15 +140,6 @@ renderbutton.addEventListener("click", (event) => {
 	);
 	formData.set("problemSeed", document.getElementById("problemSeed").value);
 	formData.set("outputFormat", outputFormat);
-
-	//  // Version tracking steps to replace window.btoa with code supporting Unicode text
-	//  encoder = new TextEncoder();
-	//  let text16 = cm.getValue();
-	//  let text8array = encoder.encode(text16);
-	//  console.log( text8array );
-	//  let textbase64 = Base64.fromUint8Array( text8array );
-	//  console.log( textbase64 );
-	//  formData.set("problemSource", textbase64 );
 
 	encoder = new TextEncoder();
 	formData.set(
@@ -272,7 +254,7 @@ function insertListener() {
 			.forEach((box) => {
 				formData.append(box, 1);
 			});
-		const submiturl = "/render-api";
+		const submiturl = "render-api";
 		const submit_params = {
 			body: formData,
 			method: "post",

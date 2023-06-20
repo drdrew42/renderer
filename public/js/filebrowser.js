@@ -18,7 +18,7 @@ function updateBrowser(formId, updateBackNav) {
             updateBackNav(option.text);
         };
     } else if (value.match(/\.pg$/)) {
-        target = '/render-api/';
+        target = 'render-api/';
         formData.set('sourceFilePath', value);
         formData.set('problemSeed', 1234);
         formData.set('outputFormat', 'static');
