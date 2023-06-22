@@ -1,3 +1,14 @@
+window.addEventListener('message', event => {
+	let message;
+	try {
+	  message = JSON.parse(event.data);
+	} 
+	catch (e) {
+	  return;
+	}
+	console.log(message);
+});
+
 const templateSelect = document.getElementById("template-select");
 const templateItems =
 	document

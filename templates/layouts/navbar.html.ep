@@ -8,9 +8,6 @@
     %= stylesheet 'css/navbar.css'
   </head>
   <body>
-    <script>
-      window.addEventListener('message', event => console.log(event.data));
-    </script>
     <div class="topnav" id="myTopnav">
       <div class="dropdown" id="template-select-dropdown">
         <button class="dropbtn" id="template-select">Template
