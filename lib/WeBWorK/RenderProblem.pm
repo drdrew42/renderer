@@ -38,7 +38,7 @@ our $UNIT_TESTS_ON = 0;
 # create log files :: expendable
 ##################################################
 
-my $path_to_log_file = "$ENV{RENDER_ROOT}/logs/standalone_results.log";
+my $path_to_log_file = "$ENV{RENDER_ROOT}/logs/resource_usage.log";
 
 eval {    # attempt to create log file
     local (*FH);
@@ -95,7 +95,7 @@ sub process_pg_file {
 
     my $pg_stop     = time;
     my $pg_duration = $pg_stop - $pg_start;
-    my $log_file_path  = $problem->path() || 'source provided without path';
+    my $log_file_path  = $inputs_ref->{sourceFilePath} || 'source provided without path';
     my $memory_use_end = get_current_process_memory();
     my $memory_use     = $memory_use_end - $memory_use_start;
     writeRenderLogEntry(
@@ -159,8 +159,20 @@ sub process_problem {
     my $inputs_ref = shift;
     my $source = $problem->{problem_contents};
     my $file_path = $inputs_ref->{sourceFilePath};
+    my ($raw_metadata_text, $problemUUID);
 
-    $inputs_ref->{problemUUID} = md5_hex(Encode::encode_utf8($source));
+    # standardize preprocessing so that hashes can be used for reverse lookup
+    if ($source =~ m|^(.*?)(&?DOCUMENT\s*\(?.*?\)?\s*;.*?&?ENDDOCUMENT\s*\(?\s*\)?\s*;?)(.*)$|s) {
+        $raw_metadata_text = $1;
+        my $body = $2;
+        $body =~ s|#.*$||g; # strip commments before hashing
+        $body =~ s|\s||gm; # strip whitespace before hashing
+        $problemUUID = md5_hex(Encode::encode_utf8($body));
+    } else {
+        $raw_metadata_text = 'no-document';
+        $problemUUID = 'no-document';
+    }
+    $inputs_ref->{problemUUID} = $problemUUID;
 
     # external dependencies on pg content is not recorded by PGalias
     # record the dependency separately -- TODO: incorporate into PG.pl or PGcore?
@@ -183,6 +195,7 @@ sub process_problem {
 
     # stash assets list in $return_object
     $return_object->{pgResources} = \@pgResources;
+    $return_object->{raw_metadata_text} = $raw_metadata_text;
 
     # generate sessionJWT to store session data and answerJWT to update grade store
     my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
@@ -235,7 +248,7 @@ sub standaloneRenderer {
 		problemSeed          => $inputs_ref->{problemSeed},
 		processAnswers       => $processAnswers,
 		showHints            => $inputs_ref->{showHints},              # default is to showHint (set in PG.pm)
-		showSolutions        => $inputs_ref->{showSolutions} // $inputs_ref->{isInstructor} ? 1 : 0,
+		showSolutions        => $inputs_ref->{showCorrectAnswers} // $inputs_ref->{showSolutions} // $inputs_ref->{isInstructor} ? 1 : 0,
 		problemNumber        => $inputs_ref->{problemNumber},          # ever even relevant?
 		num_of_correct_ans   => $inputs_ref->{numCorrect} || 0,
 		num_of_incorrect_ans => $inputs_ref->{numIncorrect} || 0,
@@ -308,26 +321,35 @@ sub get_current_process_memory {
 sub generateJWTs {
     my $pg = shift;
     my $inputs_ref = shift;
-    my $sessionHash = {'answersSubmitted' => 1, 'iss' =>$ENV{SITE_HOST}, problemJWT => $inputs_ref->{problemJWT}};
-    my $scoreHash = {};
+    my $sessionHash = {
+        iss =>$ENV{SITE_HOST}, 
+        answersSubmitted => 1,
+        sessionID => $inputs_ref->{sessionID},
+        problemUUID => $inputs_ref->{problemUUID},
+        problemJWT => $inputs_ref->{problemJWT},
+    };
+    my $scoreHash = { 
+        result => $pg->{problem_result}{score},
+        answers => unbless($pg->{answers}),
+    };
     
-    # TODO: sometimes student_ans causes JWT corruption in PHP - why?
     # proposed restructuring of the answerJWT -- prepare with LibreTexts
     # my %studentKeys = qw(student_value value student_formula formula student_ans answer original_student_ans original);
     # my %previewKeys = qw(preview_text_string text preview_latex_string latex);
     # my %correctKeys = qw(correct_value value correct_formula formula correct_ans ans);
     # my %messageKeys = qw(ans_message answer error_message error);
     # my @resultKeys  = qw(score weight);
-    my %answers = %{unbless($pg->{answers})};
 
     # once the correct answers are shown, this setting is permanent
-    $sessionHash->{showCorrectAnswers} = 1 if $inputs_ref->{showCorrectAnswers} && !$inputs_ref->{isInstructor};
+    if ($inputs_ref->{showCorrectAnswers} && !$inputs_ref->{isInstructor}) {
+        $sessionHash->{showCorrectAnswers} = 1;
+        $sessionHash->{isLocked} = 1;
+    }
 
     # store the current answer/response state for each entry
-    foreach my $ans (keys %{$pg->{answers}}) {
+    foreach my $ans (keys %{$scoreHash->{answers}}) {
         # TODO: Anything else we want to add to sessionHash?
         $sessionHash->{$ans}                  = $inputs_ref->{$ans};
-        $sessionHash->{ 'previous_' . $ans }  = $inputs_ref->{$ans};
         $sessionHash->{ 'MaThQuIlL_' . $ans } = $inputs_ref->{ 'MaThQuIlL_' . $ans } if ($inputs_ref->{ 'MaThQuIlL_' . $ans});
 
         # More restructuring -- confirm with LibreTexts
@@ -337,7 +359,6 @@ sub generateJWTs {
         # $scoreHash->{$ans}{message} = { map {exists $answers{$ans}{$_} ? ($messageKeys{$_} => $answers{$ans}{$_}) : ()} keys %messageKeys };
         # $scoreHash->{$ans}{result}  = { map {exists $answers{$ans}{$_} ? ($_ => $answers{$ans}{$_}) : ()} @resultKeys };
     }
-    $scoreHash->{answers} = unbless($pg->{answers});
 
     # update the number of correct/incorrect submissions if answers were 'submitted'
     # but don't update either if the problem was already correct
@@ -346,11 +367,7 @@ sub generateJWTs {
     $sessionHash->{numIncorrect} = (defined $inputs_ref->{submitAnswers} && $inputs_ref->{numCorrect} == 0) ?
         $pg->{problem_state}{num_of_incorrect_ans} : ($inputs_ref->{numIncorrect} // 0);
 
-    # include the final result of the combined scores
-    $scoreHash->{result} = $pg->{problem_result}{score};
-
-    # create and return the session JWT
-    # TODO swap to   alg => 'PBES2-HS512+A256KW', enc => 'A256GCM'
+    # create the session JWT
     my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
 
     # form answerJWT
@@ -358,7 +375,6 @@ sub generateJWTs {
       iss        => $ENV{SITE_HOST},
       aud        => $inputs_ref->{JWTanswerURL},
       score      => $scoreHash,
-    #   problemJWT => $inputs_ref->{problemJWT},
       sessionJWT => $sessionJWT,
       platform   => 'standaloneRenderer'
     };

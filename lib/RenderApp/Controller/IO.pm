@@ -55,19 +55,12 @@ async sub writer {
       };
     my $validatedInput = $c->validateRequest( { required => $required } );
     return unless $validatedInput;
-    my $source = Encode::decode("UTF-8",decode_base64( $validatedInput->{problemSource} ) );
-    my $file_path = $validatedInput->{writeFilePath};
-
-    if ( $source =~ /^\s*$/ ) {
-      doBadThings( $file_path );
-      return $c->render( text => $file_path );
-    }
 
     my $problem   = $c->newProblem(
         {
             log              => $c->log,
-            write_path       => $file_path,
-            problem_contents => $source
+            write_path       => $validatedInput->{writeFilePath},
+            problem_contents => $validatedInput->{problemSource}
         }
     );
 
@@ -618,13 +611,6 @@ sub validate {
     } else {
         return $v->output;
     }
-}
-
-sub doBadThings {
-  my $path = Mojo::File->new(shift);
-  $path->dirname->make_path;
-  $path->touch;
-  return;
 }
 
 1;

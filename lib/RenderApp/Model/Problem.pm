@@ -130,8 +130,10 @@ sub path {
         else {
             # TODO: consider steps in pipeline towards OPL
             # these problems are not in OPL or Contrib yet
-            # are we placing them in a folder relative to their user?
-            $self->{write_allowed} = $read_path =~ m!^private\/!;
+            
+            # do not require "private/" for non-OPL problems
+            $read_path =~ s|^((?!private/).*)|private/$1|;
+            $self->{write_allowed} = 1;
         }
         $self->{_error} = "404 I cannot find a problem with that file path."
           unless ( -e $read_path || $force );

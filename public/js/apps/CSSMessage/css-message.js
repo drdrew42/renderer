@@ -4,7 +4,7 @@ window.addEventListener('message', event => {
 		message = JSON.parse(event.data);
 	}
 	catch (e) {
-		console.warn('CSSMessage: message not JSON', event.data);
+		if (!event.data.startsWith('[iFrameSizer]')) console.warn('CSSMessage: message not JSON', event.data);
 		return;
 	}
 

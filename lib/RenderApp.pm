@@ -53,10 +53,36 @@ sub startup {
 		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'"
 			unless ($CORS_ORIGIN eq '*' || $CORS_ORIGIN =~ /^https?:\/\//);
 
+		warn "*** Using '*' for CORS_ORIGIN is insecure ***\n"
+			if ($CORS_ORIGIN eq '*');
+
 		$self->hook(before_dispatch => sub {
 			my $c = shift;
             $c->res->headers->header( 'Access-Control-Allow-Origin' => $CORS_ORIGIN );
 		});
+	}
+
+	if ($ENV{MOJO_MODE} && $ENV{MOJO_MODE} eq 'production') {
+		my $logPath = "$ENV{RENDER_ROOT}/logs/error.log";
+		print "Running in production mode, logging to $logPath\n";
+		$self->log(Mojo::Log->new(path => $logPath, level => ( $ENV{MOJO_LOG_LEVEL} || 'warn')));
+		if ($self->config('INTERACTION_LOG')) {
+			my $interactionLogPath = "$ENV{RENDER_ROOT}/logs/interactions.log";
+			print "Logging interactions to $interactionLogPath\n";
+			my $resultsLog = Mojo::Log->new(path => $interactionLogPath, level => 'info');
+			$resultsLog->format(sub {
+				my ($time, $level, @lines) = @_;
+				my $msg = join ", ", @lines;
+				return sprintf "%s, %s\n", $time, $msg;
+			});
+			# log to file if route is /render-api
+			$self->hook(after_render => sub {
+				my $c = shift;
+				return unless $c->req->url->path =~ m!/render-api$!;
+				# log timestamp, and from stash: sessionID, originIP, status, problemSeed and sourceFilePath
+				$resultsLog->info(map { $c->stash($_) // '' } qw(sessionID originIP userLevel score problemSeed sourceFilePath));
+			});
+		}
 	}
 
 	# Models
@@ -74,7 +100,7 @@ sub startup {
 
 	$r->any('/render-api')->to('render#problem');
 	$r->any('/health' => sub {shift->rendered(200)});
-	if ($self->mode eq 'development') {
+	if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE')) {
 		$r->any('/')->to('pages#twocolumn');
 		$r->any('/opl')->to('pages#oplUI');
 		$r->any('/die' => sub {die "what did you expect, flowers?"});
@@ -110,8 +136,8 @@ sub startup {
 
 sub sanitizeHostURLs {
 	$ENV{baseURL} = "/$ENV{baseURL}";
-	warn "*** Configuration error: baseURL should not end in a slash\n" if $ENV{baseURL} =~ s!/$!!;
-	warn "*** Configuration error: baseURL should begin with a slash\n" unless $ENV{baseURL} =~ s!^//!/!;
+	warn "*** Configuration error: baseURL should not end in a slash ***\n" if $ENV{baseURL} =~ s!/$!!;
+	warn "*** Configuration error: baseURL should begin with a slash ***\n" unless $ENV{baseURL} =~ s!^//!/!;
 
 	# set an absolute base href for iframe embedding
 	my $basehref = $ENV{baseURL} =~ m!/$! ? $ENV{baseURL} : "$ENV{baseURL}/";

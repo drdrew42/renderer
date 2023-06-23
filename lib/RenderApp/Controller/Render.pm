@@ -3,17 +3,23 @@ use Mojo::Base 'Mojolicious::Controller', -async_await;
 use Mojo::JSON qw(encode_json decode_json);
 use Crypt::JWT qw(encode_jwt decode_jwt);
 use MIME::Base64 qw(encode_base64);
+use Time::HiRes qw/time/;
 use WeBWorK::Form;
 
 sub parseRequest {
   my $c = shift;
   my %params = WeBWorK::Form->new_from_paramable($c->req)->Vars;
+  my $originIP = $c->req->headers->header('X-Forwarded-For') // '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
+  $originIP ||= $c->tx->remote_address || 'unknown-origin';
+
   if ($ENV{STRICT_JWT} && !( defined $params{problemJWT} || defined $params{sessionJWT} )) {
     $c->exception('Not allowed to request problems with raw data.', 403);
     return undef;
   }
 
-  delete $params{JWTanswerURL}; # may ONLY be set by a JWT...
+  # ensure that these params are only provided by trusted source
+  delete $params{JWTanswerURL};
+  delete $params{sessionID};
 
   # set session-specific info (previous attempts, correct/incorrect count)
   if (defined $params{sessionJWT}) {
@@ -61,6 +67,9 @@ sub parseRequest {
   } else {
       # if no JWT is provided, create one
       $params{aud} = $ENV{SITE_HOST};
+      $params{isInstructor} = 0 unless defined $params{isInstructor};
+      $params{originIP} = $originIP if $originIP;
+      $params{sessionID} ||= time;
       my $req_jwt = encode_jwt(
           payload => \%params,
           key     => $ENV{problemJWTsecret},
@@ -90,7 +99,8 @@ sub fetchRemoteSource_p {
     then(
       sub {
           my $tx = shift;
-          return $tx->result->body;
+          $c->log->error("fetchRemoteSource: Request to $url failed with error - " . $tx->result->message) unless $tx->is_success;
+          return $tx->is_success ? $tx->result->body : undef;
       })->
     catch(
       sub {
@@ -137,11 +147,21 @@ async sub problem {
   my $return_object = decode_json($ww_return_json);
 
   # if answerURL provided and this is a submit, then send the answerJWT
-  if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers} && !$inputs_ref->{showCorrectAnswers}) {
+  if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers} && !$inputs_ref->{isLocked}) {
     $return_object->{JWTanswerURLstatus} = await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});
   }
 
-  # format the response
+  # stash log info and format the response
+  $c->stash(
+    sessionID => $inputs_ref->{sessionID},
+    originIP => $inputs_ref->{originIP},
+    userLevel => $inputs_ref->{isInstructor} ? 'instructor' : 'student',
+    score => $inputs_ref->{answersSubmitted}
+      ? ($return_object->{problem_result}{score} // 'err') . ($inputs_ref->{showCorrectAnswers} ? "*" : "")
+      : 'init',
+    problemSeed => $inputs_ref->{problemSeed},
+    sourceFilePath => $inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL} || $inputs_ref->{problemSource},
+  );
   $c->format($return_object);
 }
 
@@ -253,13 +273,15 @@ sub checkOutputs {
 sub exception {
   my $c = shift;
   my $id = $c->logID;
-  my $message = "[$id] " . shift;
+  my $message = shift;
+  $message = "[$id] " . (ref $message eq 'ARRAY' ? join "\n", @$message : $message);
   my $status = shift;
   $c->log->error("($status) EXCEPTION: $message");
   return $c->respond_to(
     json => { json => {
         message => $message,
         status => $status,
+        @_
       }, status => $status},
     html => { template => 'exception', message => $message, status => $status }
   );

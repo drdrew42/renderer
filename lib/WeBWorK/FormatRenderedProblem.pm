@@ -254,11 +254,41 @@ sub formatRenderedProblem {
 		pretty_print             => \&pretty_print,
 	);
 
-	return $c->render(%template_params) if $formatName eq 'json' && !$inputs_ref->{send_pg_flags};
+	return $c->render(%template_params) if $formatName eq 'json';
 	$rh_result->{renderedHTML} = $c->render_to_string(%template_params)->to_string;
 	return $c->respond_to(
 		html => { text => $rh_result->{renderedHTML} },
-		json => { json => $rh_result });
+		json => { json => jsonResponse($rh_result, $inputs_ref, @extra_css_files, @third_party_css, @extra_js_files, @third_party_js) },
+    );
+}
+
+sub jsonResponse {
+	my ($rh_result, $inputs_ref, @extra_files) = @_;
+	return {
+		renderedHTML      => $rh_result->{renderedHTML},
+		answers           => $inputs_ref->{isInstructor} ? $rh_result->{answers} : (),
+		debug             => {
+			perl_warn     => $rh_result->{WARNINGS},
+			pg_warn       => $rh_result->{warning_messages},
+			debug         => $rh_result->{debug_messages},
+			internal      => $rh_result->{internal_debug_messages}
+		},
+		problem_result    => $rh_result->{problem_result},
+		problem_state     => $rh_result->{problem_state},
+		flags             => $rh_result->{flags},
+		tags			  => $rh_result->{tags},
+		resources         => {
+			regex         => $rh_result->{pgResources},
+			alias         => $rh_result->{resources},
+			assets        => [map {ref $_ eq 'HASH' ? "$_->{file}" : ref $_ eq 'ARRAY' ? "$_->[0]" : "$_"} @extra_files],
+		},
+		raw_metadata_text => $rh_result->{raw_metadata_text},
+		JWT               => {
+			problem       => $inputs_ref->{problemJWT},
+			session       => $rh_result->{sessionJWT},
+			answer        => $rh_result->{answerJWT}
+		},
+	};
 }
 
 # Nice output for debugging
