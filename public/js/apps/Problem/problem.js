@@ -113,4 +113,51 @@
 			});
 		}
 	});
+
+	const modal = document.getElementById('creditModal');
+	if (modal) {
+		const bsModal = new bootstrap.Modal(modal);
+		bsModal.show();
+		const creditForm = document.getElementById('creditForm');
+		creditForm.addEventListener('submit', (event) => {
+			event.preventDefault();
+			const formData = new FormData();
+
+			// get the sessionJWT from the document and add it to the form data
+			const sessionJWT = document.getElementsByName('sessionJWT').item(0).value;
+			formData.append('sessionJWT', sessionJWT);
+			// get the email from the form and add it to the form data
+			const email = document.getElementById('creditModalEmail').value;
+			formData.append('email', email);
+			const url = creditForm.action;
+			const options = {
+				method: 'POST',
+				body: formData,
+			};
+			fetch(url, options)
+				.then((response) => {
+					if (!response.ok) {
+						console.error(response.statusText);
+					}
+					bsModal.hide();
+				})
+				.catch((error) => {
+					console.error('Error:', error);
+					bsModal.hide();
+				});
+		});
+
+		// we also need to trigger the submit when the user clicks the button
+		// or when they hit enter in the input field
+		const creditButton = document.getElementById('creditModalSubmitBtn');
+		creditButton.addEventListener('click', (event) => {
+			creditForm.dispatchEvent(new Event('submit'));
+		});
+		const creditInput = document.getElementById('creditModalEmail');
+		creditInput.addEventListener('keyup', (event) => {
+			if (event.key === 'Enter') {
+				creditForm.dispatchEvent(new Event('submit'));
+			}
+		});
+	}
 })();

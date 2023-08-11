@@ -66,23 +66,6 @@ sub startup {
 		my $logPath = "$ENV{RENDER_ROOT}/logs/error.log";
 		print "Running in production mode, logging to $logPath\n";
 		$self->log(Mojo::Log->new(path => $logPath, level => ( $ENV{MOJO_LOG_LEVEL} || 'warn')));
-		if ($self->config('INTERACTION_LOG')) {
-			my $interactionLogPath = "$ENV{RENDER_ROOT}/logs/interactions.log";
-			print "Logging interactions to $interactionLogPath\n";
-			my $resultsLog = Mojo::Log->new(path => $interactionLogPath, level => 'info');
-			$resultsLog->format(sub {
-				my ($time, $level, @lines) = @_;
-				my $msg = join ", ", @lines;
-				return sprintf "%s, %s\n", $time, $msg;
-			});
-			# log to file if route is /render-api
-			$self->hook(after_render => sub {
-				my $c = shift;
-				return unless $c->req->url->path =~ m!/render-api$!;
-				# log timestamp, and from stash: sessionID, originIP, status, problemSeed and sourceFilePath
-				$resultsLog->info(map { $c->stash($_) // '' } qw(sessionID originIP userLevel score problemSeed sourceFilePath));
-			});
-		}
 	}
 
 	# Models
@@ -96,9 +79,23 @@ sub startup {
 	$self->helper(logID => sub { shift->req->request_id });
 	$self->helper(exception => sub { RenderApp::Controller::Render::exception(@_) });
 
+	if ($self->config('INTERACTION_LOG')) {
+		my $interactionLogPath = "$ENV{RENDER_ROOT}/logs/interactions.log";
+		print "Logging interactions to $interactionLogPath\n";
+		my $resultsLog = Mojo::Log->new(path => $interactionLogPath, level => 'info');
+		$resultsLog->format(sub {
+			my ($time, $level, @lines) = @_;
+			my $start = shift(@lines);
+			my $msg = join ", ", @lines;
+			return sprintf "%s, %s, %s\n", $start, $time - $start, $msg;
+		});
+		$self->helper(logAttempt => sub { shift; $resultsLog->info(@_); });
+	}
+
 	# Routes to controller
 
 	$r->any('/render-api')->to('render#problem');
+	$r->post('/creditRequest')->to('render#creditRequest');
 	$r->any('/health' => sub {shift->rendered(200)});
 	if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE')) {
 		$r->any('/')->to('pages#twocolumn');

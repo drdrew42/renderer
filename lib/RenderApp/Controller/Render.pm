@@ -68,7 +68,6 @@ sub parseRequest {
       # if no JWT is provided, create one
       $params{aud} = $ENV{SITE_HOST};
       $params{isInstructor} = 0 unless defined $params{isInstructor};
-      $params{originIP} = $originIP if $originIP;
       $params{sessionID} ||= time;
       my $req_jwt = encode_jwt(
           payload => \%params,
@@ -79,6 +78,7 @@ sub parseRequest {
       );
       $params{problemJWT} = $req_jwt;
   }
+  $params{originIP} = $originIP if $originIP;
   return \%params;
 }
 
@@ -151,18 +151,36 @@ async sub problem {
     $return_object->{JWTanswerURLstatus} = await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});
   }
 
-  # stash log info and format the response
-  $c->stash(
-    sessionID => $inputs_ref->{sessionID},
-    originIP => $inputs_ref->{originIP},
-    userLevel => $inputs_ref->{isInstructor} ? 'instructor' : 'student',
-    score => $inputs_ref->{answersSubmitted}
-      ? ($return_object->{problem_result}{score} // 'err') . ($inputs_ref->{showCorrectAnswers} ? "*" : "")
-      : 'init',
-    problemSeed => $inputs_ref->{problemSeed},
-    sourceFilePath => $inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL} || $inputs_ref->{problemSource},
-  );
+  my $displayScore = $inputs_ref->{previewAnswers} ? 'preview' : $return_object->{problem_result}{score};
+  $displayScore .= '*' if $inputs_ref->{showCorrectAnswers};
+  $displayScore //= 'err';
+
+  # log interaction and format the response
+  $c->logAttempt(
+    $inputs_ref->{sessionID},
+    $inputs_ref->{originIP},
+    $inputs_ref->{isInstructor} ? 'instructor' : 'student',
+    $inputs_ref->{answersSubmitted} ? $displayScore : 'init',
+    $inputs_ref->{problemSeed},
+    $inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL} || $inputs_ref->{problemSource},
+  ) if $c->app->config('INTERACTION_LOG');
   $c->format($return_object);
+}
+
+sub creditRequest {
+  my $c = shift;
+  my $inputs_ref = $c->parseRequest;
+
+  $c->logAttempt(
+    $inputs_ref->{sessionID},
+    $inputs_ref->{originIP},
+    $inputs_ref->{email},
+    'creditRequest',
+    $inputs_ref->{problemSeed},
+    $inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL} || $inputs_ref->{problemSource},
+  ) if $inputs_ref->{numCorrect} && $c->app->config('INTERACTION_LOG');
+
+  return $c->render(text => 'logged');
 }
 
 async sub sendAnswerJWT {

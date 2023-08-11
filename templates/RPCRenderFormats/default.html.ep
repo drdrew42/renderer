@@ -140,5 +140,32 @@
 			format: <%= $formatName %>
 		</div>
 	% }
+	% if ($rh_result->{problem_result}{score} == 1 && !$rh_result->{inputs_ref}{previewAnswers}) {
+		<div class="modal fade" id="creditModal" tabindex="-1" aria-labelledby="creditModalLabel" aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title" id="inputModalLabel">Well Done!</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body">
+						You have successfully completed this problem.</br></br>
+						If your instructor is offering credit for completion of DOT content, please enter your CityTech 
+						email address below.</br></br>
+						<form id="creditForm" action="<%= $SITE_URL %>creditRequest">
+							<div class="mb-3">
+								<label for="creditModalEmail" class="form-label">CityTech Email Address:</label>
+								<input type="email" class="form-control" id="creditModalEmail" required value="@mail.citytech.cuny.edu">
+							</div>
+						</form>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="button" class="btn btn-primary" id="creditModalSubmitBtn">Submit</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	% }
 </body>
 </html>
