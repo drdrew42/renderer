@@ -163,6 +163,7 @@ async sub problem {
     $inputs_ref->{answersSubmitted} ? $displayScore : 'init',
     $inputs_ref->{problemSeed},
     $inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL} || $inputs_ref->{problemSource},
+    $inputs_ref->{essay} ? '"'. $inputs_ref->{essay}=~s/"/\\"/gr .'"' : '""',
   ) if $c->app->config('INTERACTION_LOG');
   $c->format($return_object);
 }
