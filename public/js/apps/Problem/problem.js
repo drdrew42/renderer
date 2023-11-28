@@ -1,4 +1,5 @@
 (() => {
+	const frame = window.frameElement.id || window.frameElement.data.id;
 	// Activate the popovers in the results table.
 	document.querySelectorAll('.attemptResults .answer-preview[data-bs-toggle="popover"]')
 		.forEach((preview) => {
@@ -19,6 +20,7 @@
 		window.parent.postMessage(JSON.stringify({
 			type: 'webwork.interaction.attempt',
 			status: score,
+			frame: frame,
 		}), '*');
 	}
 
@@ -29,6 +31,7 @@
 				type: 'webwork.interaction.hint',
 				status: hint.classList[1],
 				id: hint.dataset.bsTarget,
+				frame: frame,
 			}), '*');
 		});
 	});
@@ -39,6 +42,7 @@
 				type: 'webwork.interaction.solution',
 				status: solution.classList[1],
 				id: solution.dataset.bsTarget,
+				frame: frame,
 			}), '*');
 		});
 	});
@@ -100,6 +104,7 @@
 			scheduleMessage({
 				type: 'webwork.interaction.focus',
 				id: id.replace('mq-answer-', ''),
+				frame: frame,
 			});
 		}
 	});
@@ -110,6 +115,7 @@
 			scheduleMessage({
 				type: 'webwork.interaction.blur',
 				id: id.replace('mq-answer-', ''),
+				frame: frame,
 			});
 		}
 	});
