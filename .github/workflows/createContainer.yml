@@ -3,7 +3,7 @@ name: Github Packages Release
 on:
   push:
     branches:
-    - master
+    - main
     - development
     tags:
     - v*
