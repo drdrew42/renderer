@@ -1,19 +1,19 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-# Translators:
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: webwork2\n"
+"Project-Id-Version: PACKAGE VERSION\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2025-06-21 12:21-0700\n"
-"Last-Translator: \n"
-"Language: en_US\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: templates/RPCRenderFormats/default.json.ep:36
 msgid "Check Answers"
@@ -23,13 +23,11 @@ msgstr ""
 msgid "PG warning messages"
 msgstr ""
 
-#: templates/RPCRenderFormats/default.html.ep:60
-#: templates/RPCRenderFormats/default.json.ep:34
+#: templates/RPCRenderFormats/default.html.ep:60 templates/RPCRenderFormats/default.json.ep:34
 msgid "Preview My Answers"
 msgstr ""
 
-#: templates/RPCRenderFormats/default.html.ep:68
-#: templates/RPCRenderFormats/default.json.ep:38
+#: templates/RPCRenderFormats/default.html.ep:68 templates/RPCRenderFormats/default.json.ep:38
 msgid "Show Correct Answers"
 msgstr ""
 
@@ -43,7 +41,6 @@ msgstr ""
 
 #. (% wwRound(0, $rh_result->{problem_result}{score} * 100)
 #. (wwRound(0, $rh_result->{problem_result}{score} * 100)
-#: templates/RPCRenderFormats/default.html.ep:42
-#: templates/RPCRenderFormats/default.json.ep:29
+#: templates/RPCRenderFormats/default.html.ep:42 templates/RPCRenderFormats/default.json.ep:29
 msgid "You received a score of %1 for this attempt."
 msgstr ""

@@ -16,12 +16,11 @@ sub render_ptx {
 
 	return Mojo::IOLoop->subprocess->run_p(sub {
 		my $pg = WeBWorK::PG->new(
-			showSolutions       => 1,
-			showHints           => 1,
-			processAnswers      => 1,
-			displayMode         => 'PTX',
-			language_subroutine => WeBWorK::PG::Localize::getLoc('en'),
-			problemSeed         => $p->{problemSeed} // 1234,
+			showSolutions  => 1,
+			showHints      => 1,
+			processAnswers => 1,
+			displayMode    => 'PTX',
+			problemSeed    => $p->{problemSeed} // 1234,
 			$p->{problemUUID}    ? (problemUUID    => $p->{problemUUID})    : (),
 			$p->{sourceFilePath} ? (sourceFilePath => $p->{sourceFilePath}) : (),
 			$source              ? (r_source       => \$source)             : ()

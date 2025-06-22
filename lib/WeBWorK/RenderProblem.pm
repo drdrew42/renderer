@@ -16,8 +16,6 @@ use lib "$ENV{PG_ROOT}/lib";
 
 use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
-use WeBWorK::Localize;
-#use WeBWorK::FormatRenderedProblem;
 
 ##################################################
 # create log files :: expendable
@@ -223,7 +221,6 @@ sub standaloneRenderer {
 		psvn                    => $inputs_ref->{psvn},
 		problemUUID             => $inputs_ref->{problemUUID},
 		language                => $inputs_ref->{language} // 'en',
-		language_subroutine     => WeBWorK::Localize::getLoc($inputs_ref->{language} // 'en'),
 		templateDirectory       => "$ENV{RENDER_ROOT}/",
 		htmlURL                 => 'pg_files/',
 		tempURL                 => 'pg_files/tmp/',
