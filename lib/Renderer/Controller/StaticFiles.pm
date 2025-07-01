@@ -1,11 +1,24 @@
 package Renderer::Controller::StaticFiles;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
 
-use Mojo::File qw(path);
+use Mojo::File            qw(path);
+use File::Spec::Functions qw(canonpath);
+
+sub path_is_subdir ($path, $dir) {
+	return 0 unless $path =~ /^\//;
+
+	$path = canonpath($path);
+	return 0 if $path =~ m#(^\.\.$|^\.\./|/\.\./|/\.\.$)#;
+
+	$dir = canonpath($dir);
+	return 0 unless $path =~ m|^$dir|;
+
+	return 1;
+}
 
 sub reply_with_file_if_readable ($c, $directory, $file) {
 	my $filePath = $directory->child($file);
-	if (-r $filePath && $filePath->realpath =~ /^$directory/) {
+	if (-r $filePath && path_is_subdir($filePath, $directory)) {
 		return $c->reply->file($filePath);
 	} else {
 		return $c->render(data => 'File not found', status => 404);
