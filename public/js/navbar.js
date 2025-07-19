@@ -21,15 +21,26 @@ for (const element of templateItems) {
 	});
 }
 
-$(function () {
-	$('#hiddenSourceFilePath').text($('#sourceFilePath').val());
-	$('#sourceFilePath').width($('#hiddenSourceFilePath').width());
-}).on('input', function () {
-	$('#hiddenSourceFilePath').text($('#sourceFilePath').val());
-	$('#sourceFilePath').width($('#hiddenSourceFilePath').width() + 12);
-	const remaining =
-		document.querySelector('.topnav').offsetWidth - document.querySelector('#template-select').offsetWidth - 330;
-	$('#sourceFilePath').css('maxWidth', remaining);
+window.addEventListener('DOMContentLoaded', () => {
+	const sourceFilePath = document.getElementById('sourceFilePath');
+	const hiddenSourceFilePath = document.getElementById('hiddenSourceFilePath');
+	if (!sourceFilePath || !hiddenSourceFilePath) return;
+
+	const adjustSourceWidth = () => {
+		hiddenSourceFilePath.textContent = sourceFilePath.value;
+		hiddenSourceFilePath.style.display = 'inline';
+		sourceFilePath.style.width = `${hiddenSourceFilePath.offsetWidth + 12}px`;
+		hiddenSourceFilePath.style.display = 'none';
+
+		const remaining =
+			document.querySelector('.topnav').offsetWidth -
+			document.querySelector('#template-select').offsetWidth -
+			330;
+		sourceFilePath.style.maxWidth = `${remaining}px`;
+	};
+
+	sourceFilePath.addEventListener('input', adjustSourceWidth);
+	adjustSourceWidth();
 });
 
 let loadbutton = document.getElementById('load-problem');
