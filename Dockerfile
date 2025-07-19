@@ -51,7 +51,7 @@ RUN cpanm install Mojo::Base Statistics::R::IO::Rserve Date::Format Future::Asyn
 
 COPY . .
 
-RUN cp render_app.conf.dist render_app.conf
+RUN cp renderer.conf.dist renderer.conf
 
 RUN cp conf/pg_config.yml lib/PG/conf/pg_config.yml
 
@@ -63,4 +63,4 @@ EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
 
-CMD hypnotoad -f ./script/render_app
+CMD hypnotoad -f ./script/renderer

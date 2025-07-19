@@ -97,7 +97,7 @@ msgstr ""
 msgid "Note:"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:276
+#: Renderer/Controller/FormatRenderedProblem.pm:276
 msgid "Preview My Answers"
 msgstr ""
 
@@ -113,7 +113,7 @@ msgstr ""
 msgid "Set random seed to:"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:277
+#: Renderer/Controller/FormatRenderedProblem.pm:277
 msgid "Show correct answers"
 msgstr ""
 
@@ -129,7 +129,7 @@ msgstr ""
 msgid "Some answers will be graded later."
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:278
+#: Renderer/Controller/FormatRenderedProblem.pm:278
 msgid "Submit Answers"
 msgstr ""
 
@@ -182,11 +182,11 @@ msgid "Your score for this attempt is for this part only;"
 msgstr ""
 
 #. (wwRound(0, $problemResult->{score} * 100)
-#: RenderApp/Controller/FormatRenderedProblem.pm:215
+#: Renderer/Controller/FormatRenderedProblem.pm:215
 msgid "Your score on this attempt is %1"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:217
+#: Renderer/Controller/FormatRenderedProblem.pm:217
 msgid "Your score was not recorded."
 msgstr ""
 

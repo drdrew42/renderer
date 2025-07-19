@@ -1,4 +1,4 @@
-package RenderApp::Controller::Render;
+package Renderer::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller', -async_await;
 
 use Mojo::JSON  qw(encode_json decode_json);

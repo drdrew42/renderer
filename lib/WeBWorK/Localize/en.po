@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: webwork2\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2021-03-09 17:00-0600\n"
+"PO-Revision-Date: 2025-06-21 07:36-0700\n"
 "Last-Translator: \n"
 "Language: en_US\n"
 "MIME-Version: 1.0\n"
@@ -100,7 +100,7 @@ msgstr ""
 msgid "Note:"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:276
+#: Renderer/Controller/FormatRenderedProblem.pm:276
 msgid "Preview My Answers"
 msgstr ""
 
@@ -116,7 +116,7 @@ msgstr ""
 msgid "Set random seed to:"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:277
+#: Renderer/Controller/FormatRenderedProblem.pm:277
 msgid "Show correct answers"
 msgstr ""
 
@@ -132,7 +132,7 @@ msgstr ""
 msgid "Some answers will be graded later."
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:278
+#: Renderer/Controller/FormatRenderedProblem.pm:278
 msgid "Submit Answers"
 msgstr ""
 
@@ -185,11 +185,11 @@ msgid "Your score for this attempt is for this part only;"
 msgstr ""
 
 #. (wwRound(0, $problemResult->{score} * 100)
-#: RenderApp/Controller/FormatRenderedProblem.pm:215
+#: Renderer/Controller/FormatRenderedProblem.pm:215
 msgid "Your score on this attempt is %1"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:217
+#: Renderer/Controller/FormatRenderedProblem.pm:217
 msgid "Your score was not recorded."
 msgstr ""
 

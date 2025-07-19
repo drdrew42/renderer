@@ -1,4 +1,4 @@
-package RenderApp::Controller::StaticFiles;
+package Renderer::Controller::StaticFiles;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
 
 use Mojo::File qw(path);

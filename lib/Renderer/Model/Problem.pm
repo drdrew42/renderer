@@ -1,4 +1,4 @@
-package RenderApp::Model::Problem;
+package Renderer::Model::Problem;
 
 use strict;
 use warnings;

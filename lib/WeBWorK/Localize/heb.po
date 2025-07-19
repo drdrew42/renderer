@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: webwork2\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2021-08-12 17:00+0300\n"
+"PO-Revision-Date: 2025-06-21 07:36-0700\n"
 "Last-Translator: Nathan Wallach\n"
 "Language: he\n"
 "MIME-Version: 1.0\n"
@@ -102,7 +102,7 @@ msgstr "הודעה"
 msgid "Note:"
 msgstr "הערה:"
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:276
+#: Renderer/Controller/FormatRenderedProblem.pm:276
 msgid "Preview My Answers"
 msgstr "צפייה מוקדמת בתשובות שלי"
 
@@ -118,7 +118,7 @@ msgstr "תוצאות של הגשה זו"
 msgid "Set random seed to:"
 msgstr ""
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:277
+#: Renderer/Controller/FormatRenderedProblem.pm:277
 msgid "Show correct answers"
 msgstr "הראה תשובות נכונות"
 
@@ -134,7 +134,7 @@ msgstr "פתרון: "
 msgid "Some answers will be graded later."
 msgstr "חלק מהתשובות ינוקדו מאוחר יותר."
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:278
+#: Renderer/Controller/FormatRenderedProblem.pm:278
 msgid "Submit Answers"
 msgstr "שלח תשובות לבדיקה"
 
@@ -187,11 +187,11 @@ msgid "Your score for this attempt is for this part only;"
 msgstr ""
 
 #. (wwRound(0, $problemResult->{score} * 100)
-#: RenderApp/Controller/FormatRenderedProblem.pm:215
+#: Renderer/Controller/FormatRenderedProblem.pm:215
 msgid "Your score on this attempt is %1"
 msgstr "הציון שלך בהגשה זו הוא %1"
 
-#: RenderApp/Controller/FormatRenderedProblem.pm:217
+#: Renderer/Controller/FormatRenderedProblem.pm:217
 msgid "Your score was not recorded."
 msgstr "הציון שלך לא נשמר."
 

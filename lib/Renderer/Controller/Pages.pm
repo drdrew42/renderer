@@ -1,4 +1,4 @@
-package RenderApp::Controller::Pages;
+package Renderer::Controller::Pages;
 use Mojo::Base 'Mojolicious::Controller';
 
 sub twocolumn {

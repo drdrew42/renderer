@@ -36,7 +36,7 @@ A default configuration file is included in the container, but it can be overrid
 application root. This is necessary if, for example, you want to run the container in `production` mode.
 
 ```bash
-  --mount type=bind,source=/pathToYour/render_app.conf,target=/usr/app/render_app.conf \
+  --mount type=bind,source=/pathToYour/renderer.conf,target=/usr/app/renderer.conf \
 ```
 
 ## LOCAL INSTALL
@@ -48,7 +48,7 @@ If using a local install instead of docker:
 - Install Perl dependencies listed in Dockerfile (CPANMinus recommended)
 - clone webwork-open-problem-library into the provided stub ./webwork-open-problem-library
   - `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
-- copy `render_app.conf.dist` to `render_app.conf` and make any desired modifications
+- copy `renderer.conf.dist` to `renderer.conf` and make any desired modifications
 - copy `conf/pg_config.yml` to `lib/PG/pg_config.yml` and make any desired modifications
 - install third party JavaScript dependencies
   - `cd public/`
@@ -57,7 +57,7 @@ If using a local install instead of docker:
 - install PG JavaScript dependencies
   - `cd lib/PG/htdocs`
   - `npm ci`
-- start the app with `morbo ./script/render_app` or `morbo -l http://localhost:3000 ./script/render_app` if changing
+- start the app with `morbo ./script/renderer` or `morbo -l http://localhost:3000 ./script/renderer` if changing
   root url
 - access on `localhost:3000` by default or otherwise specified root url
 
@@ -111,12 +111,12 @@ The bare minimum of parameters that must be included are:
 
 ### Infrastructure Parameters
 
-The defaults for these parameters are set in `render_app.conf`, but these can be overridden on a per-request basis.
+The defaults for these parameters are set in `renderer.conf`, but these can be overridden on a per-request basis.
 
-| Key     | Type   | Default Value                               | Description                 | Notes |
-| ------- | ------ | ------------------------------------------- | --------------------------- | ----- |
-| baseURL | string | '/' (as set in `render_app.conf`)           | the URL for relative paths  |       |
-| formURL | string | '/render-api' (as set in `render_app.conf`) | the URL for form submission |       |
+| Key     | Type   | Default Value                             | Description                 | Notes |
+| ------- | ------ | ----------------------------------------- | --------------------------- | ----- |
+| baseURL | string | '/' (as set in `renderer.conf`)           | the URL for relative paths  |       |
+| formURL | string | '/render-api' (as set in `renderer.conf`) | the URL for form submission |       |
 
 ### Display Parameters
 

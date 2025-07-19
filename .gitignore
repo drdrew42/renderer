@@ -1,5 +1,5 @@
 *.DS_Store
-render_app.conf
+renderer.conf
 lib/.pls-tmp-*
 webwork-open-problem-library
 private

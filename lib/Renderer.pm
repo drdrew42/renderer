@@ -1,4 +1,4 @@
-package RenderApp;
+package Renderer;
 use Mojo::Base 'Mojolicious';
 
 BEGIN {
@@ -16,18 +16,17 @@ BEGIN {
 	$ENV{OPL_DIRECTORY} = "$ENV{RENDER_ROOT}/webwork-open-problem-library";
 
 	$ENV{MOJO_CONFIG} =
-		(-r "$ENV{RENDER_ROOT}/render_app.conf")
-		? "$ENV{RENDER_ROOT}/render_app.conf"
-		: "$ENV{RENDER_ROOT}/render_app.conf.dist";
+		(-r "$ENV{RENDER_ROOT}/renderer.conf")
+		? "$ENV{RENDER_ROOT}/renderer.conf"
+		: "$ENV{RENDER_ROOT}/renderer.conf.dist";
 	$ENV{MOJO_LOG_LEVEL} = 'debug';
 }
 
 use lib "$main::libname";
 print "using root directory: $ENV{RENDER_ROOT}\n";
 
-use RenderApp::Model::Problem;
-use RenderApp::Controller::IO;
-use WeBWorK::RenderProblem;
+use Renderer::Model::Problem;
+use Renderer::Controller::IO;
 use WeBWorK::FormatRenderedProblem;
 
 sub startup {
@@ -115,15 +114,15 @@ sub startup {
 	}
 
 	# Models
-	$self->helper(newProblem => sub { shift; RenderApp::Model::Problem->new(@_) });
+	$self->helper(newProblem => sub { shift; Renderer::Model::Problem->new(@_) });
 
 	# Helpers
 	$self->helper(format          => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
-	$self->helper(validateRequest => sub { RenderApp::Controller::IO::validate(@_) });
-	$self->helper(parseRequest    => sub { RenderApp::Controller::Render::parseRequest(@_) });
-	$self->helper(croak           => sub { RenderApp::Controller::Render::croak(@_) });
+	$self->helper(validateRequest => sub { Renderer::Controller::IO::validate(@_) });
+	$self->helper(parseRequest    => sub { Renderer::Controller::Render::parseRequest(@_) });
+	$self->helper(croak           => sub { Renderer::Controller::Render::croak(@_) });
 	$self->helper(logID           => sub { shift->req->request_id });
-	$self->helper(exception       => sub { RenderApp::Controller::Render::exception(@_) });
+	$self->helper(exception       => sub { Renderer(@_) });
 
 	# Routes
 	# baseURL sets the root at which the renderer is listening,

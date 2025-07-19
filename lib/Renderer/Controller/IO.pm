@@ -1,4 +1,4 @@
-package RenderApp::Controller::IO;
+package Renderer::Controller::IO;
 use Mojo::Base -async_await;
 use Mojo::Base 'Mojolicious::Controller';
 use File::Spec::Functions qw(splitdir);
