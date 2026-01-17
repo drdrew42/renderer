@@ -46,7 +46,7 @@
 						<%= hidden_field 'problem-result-score' => $rh_result->{problem_result}{score},
 							id => 'problem-result-score' %>
 					% }
-					%= hidden_field sessionJWT => $rh_result->{sessionJWT}
+					%= hidden_field sessionJWT => $rh_result->{sessionJWT}, id => 'sessionJWT'
 					% if ($rh_result->{JWTanswerURLstatus}) {
 						%= hidden_field JWTanswerURLstatus => $rh_result->{JWTanswerURLstatus}
 					% }

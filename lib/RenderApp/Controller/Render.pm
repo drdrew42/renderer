@@ -2,15 +2,17 @@
 package RenderApp::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller', -async_await;
 
+use Digest::MurmurHash3 qw( mumur128 );
 use Mojo::JSON qw(encode_json decode_json);
 use Crypt::JWT qw(encode_jwt decode_jwt);
-use Time::HiRes qw/time/;
+use Time::HiRes qw(time);
 
 use WeBWorK::PreTeXt;
 
 sub parseRequest {
-	my $c      = shift;
-	my %params = %{ $c->req->params->to_hash };
+	my $c       = shift;
+	my %params  = %{ $c->req->params->to_hash };
+	my @uploads = @{ $c->req->uploads };
 
 	my $originIP = $c->req->headers->header('X-Forwarded-For')
 		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
@@ -18,6 +20,27 @@ sub parseRequest {
 
 	if ($ENV{STRICT_JWT} && !(defined $params{problemJWT} || defined $params{sessionJWT})) {
 		return $c->exception('Not allowed to request problems with raw data.', 403);
+	}
+
+	## TODO: This really ought to be protected in some way?
+	if (@uploads && !$params{sourceFilePath} && $params{problemSource}) {
+		# compute an aggregate hash across the uploaded files
+		my $hash = 0;
+		for (@uploads) { $hash += murmur128($_->asset) }
+
+		# set a path for the assets using the (hopefully) unique hash
+		my $path = "$ENV{RENDER_ROOT}/private/$hash/";
+		unless (-e $path) {
+			for my $file (@uploads) {
+				my $name = $file->filename || $file->name;
+				$c->log->info("Upload ($name) received from '$originIP' -- moving to $path");
+				$file->move_to("$path/$name");
+			}
+		}
+
+		# set the sourceFilePath (unnecessary since we have raw source) to point
+		# at the same folder where the static assets are now stored...
+		$params{sourceFilePath} = "$path/taco.pg";
 	}
 
 	# protect against DOM manipulation

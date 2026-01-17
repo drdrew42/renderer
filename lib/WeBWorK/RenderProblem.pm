@@ -320,7 +320,7 @@ sub generateJWTs {
 
 	# store the current answer/response state for each entry
 	foreach my $ans (@{ $pg->{flags}{KEPT_EXTRA_ANSWERS} }) {
-		$sessionHash->{$ans} = $inputs_ref->{$ans};
+		$sessionHash->{$ans} = $inputs_ref->{$ans} if $inputs_ref->{$ans};
 
 # More restructuring -- confirm with LibreTexts
 # $scoreHash->{$ans}{student} = { map {exists $answers{$ans}{$_} ? ($studentKeys{$_} => $answers{$ans}{$_}) : ()} keys %studentKeys };
