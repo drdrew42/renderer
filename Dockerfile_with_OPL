@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 LABEL org.opencontainers.image.source=https://github.com/openwebwork/renderer
 
 WORKDIR /usr/app
@@ -41,7 +41,7 @@ RUN apt-get update \
     libdata-structure-util-perl \
     liblocale-maketext-lexicon-perl \
     libyaml-libyaml-perl \
-    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends --no-install-suggests nodejs \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
@@ -74,4 +74,4 @@ EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
 
-CMD hypnotoad -f ./script/render_app
+CMD ["hypnotoad", "-f", "./script/render_app"]
