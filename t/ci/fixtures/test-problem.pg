@@ -1,0 +1,15 @@
+DOCUMENT();
+
+loadMacros('PGstandard.pl', 'MathObjects.pl', 'PGML.pl');
+
+Context("Numeric");
+
+$answer = Real('pi');
+
+BEGIN_PGML
+Enter a value for [`\pi`].
+
+[_____]{$answer}
+END_PGML
+
+ENDDOCUMENT();

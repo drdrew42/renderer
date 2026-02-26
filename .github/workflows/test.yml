@@ -1,0 +1,69 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Docker image
+        run: docker build -t renderer-test .
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name renderer-test \
+            -p 3000:3000 \
+            -e MOJO_MODE=development \
+            -v "${{ github.workspace }}/t/ci/fixtures:/usr/app/private/test:ro" \
+            renderer-test \
+            morbo -l 'http://*:3000' ./script/renderer
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 5 http://localhost:3000/health >/dev/null 2>&1; then
+              echo "Renderer healthy after $((i * 2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Renderer failed to start"
+          docker logs renderer-test 2>&1 | tail -50
+          exit 1
+
+      - name: PG unit tests (informational)
+        continue-on-error: true
+        run: |
+          docker exec renderer-test bash -c \
+            'export PG_ROOT=/usr/app/lib/PG && cd $PG_ROOT && prove -lr \
+              t/macros t/contexts t/math_objects t/pg_problems t/units'
+
+      - name: Smoke tests
+        run: bash t/ci/01-smoke.sh
+
+      - name: Render parity tests
+        run: bash t/ci/02-render-parity.sh
+
+      - name: Answer cycle tests
+        run: bash t/ci/03-answer-cycle.sh
+
+      - name: Endpoint tests
+        run: bash t/ci/04-endpoints.sh
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop renderer-test 2>/dev/null || true
+          docker rm renderer-test 2>/dev/null || true
