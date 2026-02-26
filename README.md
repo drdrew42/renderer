@@ -5,7 +5,7 @@
 
 This is a PG Renderer derived from the WeBWorK2 codebase
 
-- [https://github.com/openwebwork/webwork2](https://github.com/openwebwork/webwork2)
+* [https://github.com/openwebwork/webwork2](https://github.com/openwebwork/webwork2)
 
 ## DOCKER CONTAINER INSTALL
 
@@ -33,7 +33,7 @@ If you have non-OPL content, it can be mounted as a volume at `/usr/app/private`
 ```
 
 A default configuration file is included in the container, but it can be overridden by mounting a replacement at the
-application root. This is necessary if, for example, you want to run the container in `production` mode.
+  application root. This is necessary if, for example, you want to run the container in `production` mode.
 
 ```bash
   --mount type=bind,source=/pathToYour/renderer.conf,target=/usr/app/renderer.conf \
@@ -43,69 +43,146 @@ application root. This is necessary if, for example, you want to run the contain
 
 If using a local install instead of docker:
 
-- Clone the renderer and its submodules: `git clone --recursive https://github.com/openwebwork/renderer`
-- Enter the project directory: `cd renderer`
-- Install Perl dependencies listed in Dockerfile (CPANMinus recommended)
-- clone webwork-open-problem-library into the provided stub ./webwork-open-problem-library
-  - `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
-- copy `renderer.conf.dist` to `renderer.conf` and make any desired modifications
-- copy `conf/pg_config.yml` to `lib/PG/pg_config.yml` and make any desired modifications
-- install third party JavaScript dependencies
-  - `cd public/`
-  - `npm ci`
-  - `cd ..`
-- install PG JavaScript dependencies
-  - `cd lib/PG/htdocs`
-  - `npm ci`
-- start the app with `morbo ./script/renderer` or `morbo -l http://localhost:3000 ./script/renderer` if changing
+* Clone the renderer and its submodules: `git clone --recursive https://github.com/openwebwork/renderer`
+* Enter the project directory: `cd renderer`
+* Install Perl dependencies listed in Dockerfile (CPANMinus recommended)
+* clone webwork-open-problem-library into the provided stub ./webwork-open-problem-library
+  * `git clone https://github.com/openwebwork/webwork-open-problem-library ./webwork-open-problem-library`
+* copy `renderer.conf.dist` to `renderer.conf` and make any desired modifications
+* copy `conf/pg_config.yml` to `lib/PG/pg_config.yml` and make any desired modifications
+* install third party JavaScript dependencies
+  * `cd public/`
+  * `npm ci`
+  * `cd ..`
+* install PG JavaScript dependencies
+  * `cd lib/PG/htdocs`
+  * `npm ci`
+* start the app with `morbo ./script/renderer` or `morbo -l http://localhost:3000 ./script/renderer` if changing
   root url
-- access on `localhost:3000` by default or otherwise specified root url
+* access on `localhost:3000` by default or otherwise specified root url
 
 ## Editor Interface
 
-- point your browser at [`localhost:3000`](http://localhost:3000/)
-- select an output format (see below)
-- specify a problem path (e.g. `Library/Rochester/setMAAtutorial/hello.pg`) and a problem seed (e.g. `1234`)
-- click on "Load" to load the problem source into the editor
-- render the contents of the editor (with or without edits) via "Render contents of editor"
-- click on "Save" to save your edits to the specified file path
+* point your browser at [`localhost:3000`](http://localhost:3000/)
+* select an output format (see below)
+* specify a problem path (e.g. `Library/Rochester/setMAAtutorial/hello.pg`) and a problem seed (e.g. `1234`)
+* click on "Load" to load the problem source into the editor
+* render the contents of the editor (with or without edits) via "Render contents of editor"
+* click on "Save" to save your edits to the specified file path
 
 ![image](https://user-images.githubusercontent.com/3385756/129100124-72270558-376d-4265-afe2-73b5c9a829af.png)
 
 ## Server Configuration
 
-Modification of `baseURL` may be necessary to separate multiple services running on `SITE_HOST`, and will be used to
-extend `SITE_HOST`. The result of this extension will serve as the root URL for accessing the renderer (and any
-supplementary assets it may need to provide in support of a rendered problem). If `baseURL` is an absolute URL, it will
-be used verbatim -- userful if the renderer is running behind a load balancer.
+Configuration lives in `renderer.conf` (copied from `renderer.conf.dist` during build). All key settings can also be overridden via environment variables, which take precedence over the config file — this is the recommended approach for Docker deployments.
 
-By default, `formURL` will further extend `baseURL`, and serve as the form-data target for user interactions with
-problems rendered by this service. If `formURL` is an absolute URL, it will be used verbatim -- useful if your
-implementation intends to sit in between the user and the renderer.
+### Configuration Reference
+
+| Setting | Env Override | Description |
+|---------|-------------|-------------|
+| `SITE_HOST` | `SITE_HOST` | Public-facing origin URL. Used as `<base href>` in rendered HTML and as issuer/audience in JWTs. Must match what the end user's browser sees. |
+| `baseURL` | `baseURL` | Path prefix when mounted at a subpath (e.g. `renderer` for `https://example.com/renderer/`). If set to an absolute URL, overrides `SITE_HOST` for asset references. Leave empty when hosting at root. |
+| `formURL` | `formURL` | Where answer forms POST to. Defaults to `{SITE_HOST}{baseURL}/render-api`. Set to an absolute URL for MITM deployments. |
+| `problemJWTsecret` | `problemJWTsecret` | Shared secret for encrypting render configuration JWTs. Must match any service that creates problem tokens. |
+| `webworkJWTsecret` | `webworkJWTsecret` | Shared secret for session state JWTs (attempt history, scores). |
+| `CORS_ORIGIN` | — | Allowed origin for CORS headers. Set to the embedding site's origin for iframe deployments. `*` is insecure. |
+| `STRICT_JWT` | `STRICT_JWT` | When `1`, rejects requests without a `problemJWT` or `sessionJWT`. Prevents raw-parameter API access. |
+| `FULL_APP_INSECURE` | — | Enables editor UI, OPL browser, and file management routes in production mode. Always available in development mode. |
+| `STATIC_EXPIRES` | — | `Cache-Control` max-age (seconds) for static assets under `/webwork2_files/`. |
+
+### Deployment Topologies
+
+The renderer was designed to support several integration patterns. The URL configuration (`SITE_HOST`, `baseURL`, `formURL`) and JWT architecture adapt to each.
+
+#### Standalone
+
+The renderer serves problems directly to the user's browser. Simplest setup.
+
+```
+  Browser  ←→  Renderer
+```
+
+```bash
+docker run -d -p 3000:3000 \
+  -e SITE_HOST=https://renderer.example.com \
+  renderer
+```
+
+`SITE_HOST` is the renderer's own public URL. `baseURL` and `formURL` are empty (defaults). The browser loads rendered HTML and submits answers directly to the renderer.
+
+#### MITM Proxy
+
+A middleware sits between the student and the renderer. The student's browser talks to the proxy, which forwards render requests and intercepts answer submissions.
+
+```
+  Browser  ←→  Proxy  ←→  Renderer
+```
+
+```bash
+docker run -d -p 3000:3000 \
+  -e SITE_HOST=http://localhost:3000 \
+  -e baseURL=https://proxy.example.com/webwork/ \
+  -e formURL=https://proxy.example.com/webwork/render-api \
+  renderer
+```
+
+- `baseURL` is absolute (the proxy's origin) — rendered HTML references assets through the proxy
+- `formURL` is absolute — answer forms POST to the proxy, not the renderer directly
+- The proxy forwards render requests to the renderer's internal address and relays responses
+
+#### Triangular / Iframe (e.g. LibreTexts)
+
+The LMS and renderer are separate services. The student's browser communicates with both: the LMS issues a JWT, the browser loads the renderer in an iframe using that JWT, and the renderer reports scores back to the LMS asynchronously.
+
+```
+        LMS (LibreTexts)
+       ↗ (1. get JWT)  ↖ (3. answerJWT callback)
+  Browser  ——————————→  Renderer (iframe)
+           (2. render + submit via JWT)
+```
+
+1. Student requests a problem from the LMS
+2. LMS issues a `problemJWT` containing the render config and a `JWTanswerURL` pointing back at the LMS grading endpoint
+3. Student's browser loads the renderer in an iframe, passing the `problemJWT`
+4. On answer submission, the renderer POSTs an `answerJWT` (containing score + sessionJWT) to the `JWTanswerURL` from inside the token
+5. LMS updates its gradebook; student can resume via `sessionJWT` if the iframe closes
+
+```bash
+docker run -d -p 3000:3000 \
+  -e SITE_HOST=https://renderer.example.com \
+  -e CORS_ORIGIN=https://lms.example.com \
+  -e STRICT_JWT=1 \
+  renderer
+```
+
+- `SITE_HOST` must match the iframe's `src` origin (what the browser sees)
+- `CORS_ORIGIN` is the LMS origin (the iframe's parent)
+- `STRICT_JWT=1` — only JWT-authenticated requests are accepted
+- `problemJWTsecret` must be shared between the LMS and renderer
+- `JWTanswerURL` is embedded in the JWT by the LMS, not configured on the renderer
 
 ## Renderer API
 
-Can be accessed by POST to `{SITE_HOST}{baseURL}{formURL}`.
+Can be accessed by POST to `{SITE_HOST}{baseURL}{formURL}`. 
 
 By default, `localhost:3000/render-api`.
 
 ### **REQUIRED PARAMETERS**
 
 The bare minimum of parameters that must be included are:
+* the code for the problem, so, **ONE** of the following (in order of precedence):
+  * `problemSource` (raw pg source code, _can_ be base64 encoded)
+  * `sourceFilePath` (relative to OPL `Library/`, `Contrib/`; or in `private/`)
+  * `problemSourceURL` (fetch the pg source from remote server)
+* a "seed" value for consistent randomization
+  * `problemSeed` (integer)
 
-- the code for the problem, so, **ONE** of the following (in order of precedence):
-  - `problemSource` (raw pg source code, _can_ be base64 encoded)
-  - `sourceFilePath` (relative to OPL `Library/`, `Contrib/`; or in `private/`)
-  - `problemSourceURL` (fetch the pg source from remote server)
-- a "seed" value for consistent randomization
-  - `problemSeed` (integer)
-
-| Key              | Type                             | Description                                                | Notes                                                                                                                                                                           |
-| ---------------- | -------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| problemSource    | string (possibly base64 encoded) | The source code of a problem to be rendered                | Takes precedence over `sourceFilePath`.                                                                                                                                         |
-| sourceFilePath   | string                           | The path to the file that contains the problem source code | Renderer will automatically adjust `Library/` and `Contrib/` relative to the webwork-open-problem-library root. Path may also begin with `private/` for local, non-OPL content. |
-| problemSourceURL | string                           | The URL from which to fetch the problem source code        | Takes precedence over `problemSource` and `sourceFilePath`. A request to this URL is expected to return valid pg source code in base64 encoding.                                |
-| problemSeed      | number                           | The seed that determines the randomization of a problem    |                                                                                                                                                                                 |
+| Key | Type | Description | Notes |
+| --- | ---- | ----------- | ----- |
+| problemSource | string (possibly base64 encoded) | The source code of a problem to be rendered | Takes precedence over `sourceFilePath`. |
+| sourceFilePath | string | The path to the file that contains the problem source code | Renderer will automatically adjust `Library/` and `Contrib/` relative to the webwork-open-problem-library root. Path may also begin with `private/` for local, non-OPL content. |
+| problemSourceURL | string | The URL from which to fetch the problem source code | Takes precedence over `problemSource` and `sourceFilePath`. A request to this URL is expected to return valid pg source code in base64 encoding. |
+| problemSeed | number | The seed that determines the randomization of a problem | |
 
 **ALL** other request parameters are optional.
 
@@ -113,10 +190,10 @@ The bare minimum of parameters that must be included are:
 
 The defaults for these parameters are set in `renderer.conf`, but these can be overridden on a per-request basis.
 
-| Key     | Type   | Default Value                             | Description                 | Notes |
-| ------- | ------ | ----------------------------------------- | --------------------------- | ----- |
-| baseURL | string | '/' (as set in `renderer.conf`)           | the URL for relative paths  |       |
-| formURL | string | '/render-api' (as set in `renderer.conf`) | the URL for form submission |       |
+| Key | Type | Default Value | Description | Notes |
+| --- | ---- | ------------- | ----------- | ----- |
+| baseURL | string | '/' (as set in `renderer.conf`) | the URL for relative paths | |
+| formURL | string | '/render-api' (as set in `renderer.conf`) | the URL for form submission | |
 
 ### Display Parameters
 
@@ -124,12 +201,12 @@ The defaults for these parameters are set in `renderer.conf`, but these can be o
 
 Parameters that control the structure and templating of the response.
 
-| Key          | Type   | Default Value | Description                                                   | Notes                                                                                                                   |
-| ------------ | ------ | ------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| language     | string | en            | Language to render the problem in (if supported)              | affects the translation of template strings, _not_ actual problem content                                               |
-| \_format     | string | 'html'        | Determine how the response is _structured_ ('html' or 'json') | usually 'html' if the user is directly interacting with the renderer, 'json' if your CMS sits between user and renderer |
-| outputFormat | string | 'default'     | Determines how the problem should be formatted                | 'default', 'static', 'PTX', 'raw', or                                                                                   |
-| displayMode  | string | 'MathJax'     | How to prepare math content for display                       | 'MathJax' or 'ptx'                                                                                                      |
+| Key | Type | Default Value | Description | Notes |
+| --- | ---- | ------------- | ----------- | ----- |
+| language | string | en | Language to render the problem in (if supported) | affects the translation of template strings, _not_ actual problem content |
+| _format | string | 'html' | Determine how the response is _structured_ ('html' or 'json') | usually 'html' if the user is directly interacting with the renderer, 'json' if your CMS sits between user and renderer |
+| outputFormat | string | 'default' | Determines how the problem should be formatted | 'default', 'static', 'PTX', 'raw', or  |
+| displayMode | string | 'MathJax' | How to prepare math content for display | 'MathJax' or 'ptx' |
 
 #### User Interactions
 
@@ -137,66 +214,56 @@ Control how the user is allowed to interact with the rendered problem.
 
 Requesting `outputFormat: 'static'` will prevent any buttons from being included in the rendered output, regardless of the following options.
 
-| Key                      | Type             | Default Value  | Description                                                                                  | Notes |
-| ------------------------ | ---------------- | -------------- | -------------------------------------------------------------------------------------------- | ----- |
-| hidePreviewButton        | number (boolean) | false          | "Preview My Answers" is enabled by default                                                   |       |
-| hideCheckAnswersButton   | number (boolean) | false          | "Submit Answers" is enabled by default                                                       |       |
-| showCorrectAnswersButton | number (boolean) | `isInstructor` | "Show Correct Answers" is disabled by default, enabled if `isInstructor` is true (see below) |       |
+| Key | Type | Default Value | Description | Notes |
+| --- | ---- | ------------- | ----------- | ----- |
+| hidePreviewButton | number (boolean) | false | "Preview My Answers" is enabled by default | |
+| hideCheckAnswersButton | number (boolean) | false | "Submit Answers" is enabled by default | |
+| showCorrectAnswersButton | number (boolean) | `isInstructor` | "Show Correct Answers" is disabled by default, enabled if `isInstructor` is true (see below) | |
 
 #### Content
 
 Control what is shown to the user: hints, solutions, attempt results, scores, etc.
 
-| Key               | Type             | Default Value  | Description                                                                     | Notes                                                                             |
-| ----------------- | ---------------- | -------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| permissionLevel   | number           | 0              | **DEPRECATED.** Use `isInstructor` instead.                                     |                                                                                   |
-| isInstructor      | number (boolean) | 0              | Is the user viewing the problem an instructor or not.                           | Used by PG to determine if scaffolds can be allowed to be open among other things |
-| showHints         | number (boolean) | 1              | Whether or not to show hints                                                    |                                                                                   |
-| showSolutions     | number (boolean) | `isInstructor` | Whether or not to show the solutions                                            |                                                                                   |
-| hideAttemptsTable | number (boolean) | 0              | Hide the table of answer previews/results/messages                              | If you have a replacement for flagging the submitted entries as correct/incorrect |
-| showSummary       | number (boolean) | 1              | Determines whether or not to show a summary of the attempt underneath the table | Only relevant if the Attempts Table is shown `hideAttemptsTable: false` (default) |
-| showComments      | number (boolean) | 0              | Renders author comment field at the end of the problem                          |                                                                                   |
-| showFooter        | number (boolean) | 0              | Show version information and WeBWorK copyright footer                           |                                                                                   |
-| includeTags       | number (boolean) | 0              | Includes problem tags in the returned JSON                                      | Only relevant when requesting `_format: 'json'`                                   |
+| Key | Type | Default Value | Description | Notes |
+| --- | ---- | ------------- | ----------- | ----- |
+| permissionLevel | number | 0 | **DEPRECATED.** Use `isInstructor` instead. |
+| isInstructor | number (boolean) | 0 | Is the user viewing the problem an instructor or not. | Used by PG to determine if scaffolds can be allowed to be open among other things |
+| showHints | number (boolean) | 1 | Whether or not to show hints | |
+| showSolutions | number (boolean) | `isInstructor` | Whether or not to show the solutions | |
+| hideAttemptsTable | number (boolean) | 0 | Hide the table of answer previews/results/messages | If you have a replacement for flagging the submitted entries as correct/incorrect |
+| showSummary | number (boolean) | 1 | Determines whether or not to show a summary of the attempt underneath the table | Only relevant if the Attempts Table is shown `hideAttemptsTable: false` (default) |
+| showComments | number (boolean) | 0 | Renders author comment field at the end of the problem | |
+| showFooter | number (boolean) | 0 | Show version information and WeBWorK copyright footer | |
+| includeTags | number (boolean) | 0 | Includes problem tags in the returned JSON | Only relevant when requesting `_format: 'json'` |
 
 ## Using JWTs
 
 There are three JWT structures that the Renderer uses, each containing its predecessor:
-
-- problemJWT
-- sessionJWT
-- answerJWT
+* problemJWT
+* sessionJWT
+* answerJWT
 
 ### ProblemJWT
 
-This JWT encapsulates the request parameters described above, under the API heading. Any value set in the JWT cannot be
-overridden by form-data. For example, if the problemJWT includes `isInstructor: 0`, then any subsequent interaction with
-the problem rendered by this JWT cannot override this setting by including `isInstructor: 1` in the form-data.
+This JWT encapsulates the request parameters described above, under the API heading. Any value set in the JWT cannot be overridden by form-data. For example, if the problemJWT includes `isInstructor: 0`, then any subsequent interaction with the problem rendered by this JWT cannot override this setting by including `isInstructor: 1` in the form-data. 
 
 ### SessionJWT
 
 This JWT encapsulates a user's attempt on a problem, including:
+* the text and LaTeX versions of each answer entry
+* count of incorrect attempts (stopping after a correct attempt, or after `showCorrectAnswers` is used)
+* the problemJWT
 
-- the text and LaTeX versions of each answer entry
-- count of incorrect attempts (stopping after a correct attempt, or after `showCorrectAnswers` is used)
-- the problemJWT
-
-If stored (see next), this JWT can be submitted as the sole request parameter, and the response will effectively restore
-the users current state of interaction with the problem (as of their last submission).
+If stored (see next), this JWT can be submitted as the sole request parameter, and the response will effectively restore the users current state of interaction with the problem (as of their last submission). 
 
 ### AnswerJWT
 
-If the initial problemJWT contains a value for `JWTanswerURL`, this JWT will be generated and sent to the specified URL.
-The answerJWT is the only content provided to the URL. The renderer is intended to to be user-agnostic. It is
-recommended that the JWTanswerURL specify the unique identifier for the user/problem combination. (e.g. `JWTanswerURL:
-'https://db.yoursite.org/grades-api/:user_problem_id'`)
+If the initial problemJWT contains a value for `JWTanswerURL`, this JWT will be generated and sent to the specified URL. The answerJWT is the only content provided to the URL. The renderer is intended to to be user-agnostic. It is recommended that the JWTanswerURL specify the unique identifier for the user/problem combination. (e.g. `JWTanswerURL: 'https://db.yoursite.org/grades-api/:user_problem_id'`)
 
 For security purposes, this parameter is only accepted when included as part of a JWT.
 
 This JWT encapsulates the status of the user's interaction with the problem.
+* score
+* sessionJWT
 
-- score
-- sessionJWT
-
-The goal here is to update the `JWTanswerURL` with the score and "state" for the user. If you have uses for additional
-information, please feel free to suggest as a GitHub Issue.
+The goal here is to update the `JWTanswerURL` with the score and "state" for the user. If you have uses for additional information, please feel free to suggest as a GitHub Issue. 
