@@ -46,6 +46,16 @@ sub startup {
 	print "Renderer is based at $main::basehref\n";
 	print "Problem attempts will be sent to $main::formURL\n";
 
+	# Handle optional Strict-Transport-Security header
+	if (my $HSTS_HEADER = $self->config('HSTS_HEADER')) {
+		$self->hook(before_dispatch => sub {
+			my $c = shift;
+			$c->res->headers->header(
+				'Strict-Transport-Security' => $HSTS_HEADER
+			       );
+		});
+	}
+
 	# Handle optional CORS settings
 	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
 		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'"
