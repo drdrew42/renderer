@@ -186,7 +186,6 @@ sub formatRenderedProblem {
 		$output->{inputs_ref} = $inputs_ref;
 
 		# The following could be constructed from the above, but this is a convenience
-		# $output->{answerTemplate}  = $answerTemplate->to_string if ($answerTemplate);
 		$output->{resultSummary}   = $resultSummary->to_string if $resultSummary;
 		$output->{lang}            = $PROBLEM_LANG_AND_DIR{lang};
 		$output->{dir}             = $PROBLEM_LANG_AND_DIR{dir};
