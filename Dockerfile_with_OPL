@@ -41,7 +41,7 @@ RUN apt-get update \
     libdata-structure-util-perl \
     liblocale-maketext-lexicon-perl \
     libyaml-libyaml-perl \
-    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends --no-install-suggests nodejs \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/* /tmp/*
