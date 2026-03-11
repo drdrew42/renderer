@@ -296,6 +296,8 @@ sub generateJWTs {
 		problemUUID      => $inputs_ref->{problemUUID},
 		problemJWT       => $inputs_ref->{problemJWT},
 	};
+	# Content-addressed mode: carry pg_hash through session for cache hits on follow-ups
+	$sessionHash->{pg_hash} = $inputs_ref->{pg_hash} if $inputs_ref->{pg_hash};
 	my $scoreHash = {
 		result  => $pg->{problem_result}{score},
 		answers => unbless($pg->{answers}),

@@ -6,6 +6,7 @@ use Crypt::JWT  qw(encode_jwt decode_jwt);
 use Time::HiRes qw/time/;
 
 use WeBWorK::PreTeXt;
+use Renderer::ContentCache;
 
 sub parseRequest {
 	my $c      = shift;
@@ -97,8 +98,115 @@ sub parseRequest {
 sub fetchRemoteSource_p {
 	my $c   = shift;
 	my $url = shift;
+	my $pg_hash_hint = shift;    # optional: from JWT or url_index
 
-	# tell the library who originated the request for pg source
+	# Content-addressed mode: check disk cache first
+	if ($ENV{CONTENT_ADDRESSED}) {
+		# Try to resolve pg_hash from hint or url_index
+		my $pg_hash = $pg_hash_hint || Renderer::ContentCache::pg_hash_for_url($url);
+
+		if ($pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
+			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
+			if ($cached_source) {
+				$c->log->info("ContentCache HIT: $pg_hash (zero network)");
+				return Mojo::Promise->resolve($cached_source, $pg_hash);
+			}
+		}
+
+		# Cache miss — fetch with conditional GET
+		return _fetch_content_addressed_p($c, $url, $pg_hash);
+	}
+
+	# Legacy mode: unchanged behavior
+	return _fetch_legacy_p($c, $url)->then(sub { return (shift, undef) });
+}
+
+# Content-addressed fetch: conditional GET, stage problem + macros on 200.
+# Returns promise resolving to ($raw_source, $pg_hash).
+sub _fetch_content_addressed_p {
+	my ($c, $url, $pg_hash) = @_;
+
+	my $req_origin   = $c->req->headers->origin   || 'no origin';
+	my $req_referrer = $c->req->headers->referrer || 'no referrer';
+	my $header       = {
+		Accept    => 'application/json;charset=utf-8',
+		Requester => $req_origin,
+		Referrer  => $req_referrer,
+	};
+	$header->{'If-None-Match'} = $pg_hash if $pg_hash;
+
+	return $c->ua->max_redirects(5)->request_timeout(10)->get_p($url => $header)->then(sub {
+		my $tx  = shift;
+		my $res = $tx->result;
+
+		# 304 Not Modified — use cached source
+		if ($res->code == 304 && $pg_hash) {
+			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
+			if ($cached_source) {
+				$c->log->info("ContentCache 304: $pg_hash");
+				return ($cached_source, $pg_hash);
+			}
+			# Shouldn't happen, but fall through to error
+			$c->log->warn("ContentCache 304 but disk miss for $pg_hash — re-fetching");
+		}
+
+		unless ($res->is_success) {
+			$c->log->error("fetchRemoteSource: Request to $url failed - " . $res->message);
+			return (undef, undef);
+		}
+
+		# Parse enriched JSON response
+		my $obj;
+		eval { $obj = decode_json($res->body); 1; } or do {
+			$c->log->error('fetchRemoteSource: Failed to parse JSON', $res->body);
+			return (undef, undef);
+		};
+
+		my $raw_source   = $obj->{raw_source};
+		my $fetched_hash = $obj->{pg_hash} || $res->headers->header('ETag');
+
+		unless ($raw_source && $fetched_hash) {
+			$c->log->warn("ContentCache: response missing raw_source or pg_hash");
+			return ($raw_source, undef);
+		}
+
+		# Stage macros first (they must exist before problem symlinks)
+		my @macros_to_link;
+		for my $macro (@{ $obj->{macros} // [] }) {
+			next unless $macro->{hash} && $macro->{source_type} && $macro->{source_type} eq 'custom';
+			push @macros_to_link, { name => $macro->{name}, hash => $macro->{hash} };
+
+			# Fetch each custom macro by its URL if not already cached
+			unless (-f "$ENV{RENDER_ROOT}/private/macros/$macro->{hash}") {
+				if ($macro->{url}) {
+					my $macro_tx = $c->ua->get($macro->{url});
+					if ($macro_tx->result->is_success) {
+						Renderer::ContentCache::stage_macro($macro->{hash}, $macro_tx->result->body);
+					} else {
+						$c->log->warn("ContentCache: failed to fetch macro $macro->{name}");
+					}
+				}
+			}
+		}
+
+		# Stage the problem
+		Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
+		Renderer::ContentCache::save_url_index($url, $fetched_hash);
+		$c->log->info("ContentCache STAGED: $fetched_hash from $url");
+
+		return ($raw_source, $fetched_hash);
+	})->catch(sub {
+		my $err = shift;
+		$c->stash(message => $err);
+		$c->log->error("Problem source: Request to $url failed with error - $err");
+		return (undef, undef);
+	});
+}
+
+# Legacy fetch: returns promise resolving to $raw_source only.
+sub _fetch_legacy_p {
+	my ($c, $url) = @_;
+
 	my $req_origin   = $c->req->headers->origin   || 'no origin';
 	my $req_referrer = $c->req->headers->referrer || 'no referrer';
 	my $header       = {
@@ -134,7 +242,7 @@ async sub problem {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 
-	$inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL})
+	$inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash})
 		if $inputs_ref->{problemSourceURL};
 
 	my $file_path   = $inputs_ref->{sourceFilePath};
@@ -142,12 +250,18 @@ async sub problem {
 
 	my $problem_contents;
 	if ($inputs_ref->{problemSource} && $inputs_ref->{problemSource} =~ /Mojo::Promise/) {
-		$problem_contents = await $inputs_ref->{problemSource};
-		$file_path        = $inputs_ref->{problemSourceURL};
+		my $pg_hash;
+		($problem_contents, $pg_hash) = await $inputs_ref->{problemSource};
+		$file_path = $inputs_ref->{problemSourceURL};
 		if ($problem_contents) {
-			$c->log->info("Problem source fetched from $inputs_ref->{problemSourceURL}");
-			# $c->stash($problem_contents->{filename} => $problem_contents->{url});
-			# $problem_contents = $problem_contents->{raw_source};
+			# Content-addressed mode: route through cache directory
+			if ($pg_hash) {
+				$file_path = Renderer::ContentCache::problem_path($pg_hash);
+				$inputs_ref->{sourceFilePath} = $file_path;
+				$inputs_ref->{pg_hash}        = $pg_hash;
+			} else {
+				$c->log->info("Problem source fetched from $inputs_ref->{problemSourceURL}");
+			}
 		} else {
 			return $c->exception('Failed to retrieve problem source.', 500);
 		}
