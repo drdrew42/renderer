@@ -1,12 +1,13 @@
 package Renderer::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller', -async_await;
 
-use Mojo::JSON  qw(encode_json decode_json);
-use Crypt::JWT  qw(encode_jwt decode_jwt);
-use Time::HiRes qw/time/;
+use Mojo::JSON   qw(encode_json decode_json);
+use Crypt::JWT   qw(encode_jwt decode_jwt);
+use Time::HiRes  qw(time);
 
 use WeBWorK::PreTeXt;
 use Renderer::ContentCache;
+use Renderer::Telemetry;
 
 sub parseRequest {
 	my $c      = shift;
@@ -109,6 +110,7 @@ sub fetchRemoteSource_p {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
 				$c->log->info("ContentCache HIT: $pg_hash (zero network)");
+				$c->stash(_cache_status => 'hit');
 				return Mojo::Promise->resolve($cached_source, $pg_hash);
 			}
 		}
@@ -144,6 +146,7 @@ sub _fetch_content_addressed_p {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
 				$c->log->info("ContentCache 304: $pg_hash");
+				$c->stash(_cache_status => 'miss_304');
 				return ($cached_source, $pg_hash);
 			}
 			# Shouldn't happen, but fall through to error
@@ -193,6 +196,7 @@ sub _fetch_content_addressed_p {
 		Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
 		Renderer::ContentCache::save_url_index($url, $fetched_hash);
 		$c->log->info("ContentCache STAGED: $fetched_hash from $url");
+		$c->stash(_cache_status => 'miss_200');
 
 		return ($raw_source, $fetched_hash);
 	})->catch(sub {
@@ -237,13 +241,77 @@ sub _fetch_legacy_p {
 	});
 }
 
+sub resolveSourceFilePath_p {
+	my ($c, $file_path, $pg_hash_hint) = @_;
+
+	# Normalize: strip leading private/ if present (Problem.pm adds it)
+	my $normalized = $file_path;
+	$normalized =~ s!^private/!!;
+
+	# 1. Disk check — graceful transition while volume is still mounted
+	my $disk_path = "$ENV{RENDER_ROOT}/private/$normalized";
+	if (-f $disk_path) {
+		$c->log->info("sourceFilePath disk HIT: $normalized");
+		$c->stash(_cache_status => 'disk');
+		return Mojo::Promise->resolve(undef, undef, "private/$normalized");
+	}
+
+	# 2. Path index + cache — zero network
+	my $pg_hash = $pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized);
+	if ($pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
+		my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
+		if ($cached_source) {
+			$c->log->info("ContentCache PATH HIT: $pg_hash (zero network)");
+			$c->stash(_cache_status => 'hit');
+			return Mojo::Promise->resolve($cached_source, $pg_hash, undef);
+		}
+	}
+
+	# 3. OPL lookup — construct URL and delegate to existing fetch flow
+	my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
+	my $opl_url  = "$opl_base/api/problems/path/$normalized";
+
+	$c->log->info("sourceFilePath OPL lookup: $opl_url");
+
+	return _fetch_content_addressed_p($c, $opl_url, $pg_hash)->then(sub {
+		my ($source, $fetched_hash) = @_;
+		if ($source && $fetched_hash) {
+			Renderer::ContentCache::save_path_index($normalized, $fetched_hash);
+		}
+		return ($source, $fetched_hash, undef);
+	});
+}
+
 async sub problem {
 	my $c          = shift;
+	my $render_start = time;
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 
 	$inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash})
 		if $inputs_ref->{problemSourceURL};
+
+	# Content-addressed sourceFilePath resolution
+	if ($ENV{CONTENT_ADDRESSED}
+		&& !$inputs_ref->{problemSourceURL}
+		&& !$inputs_ref->{problemSource}
+		&& $inputs_ref->{sourceFilePath}
+		&& $inputs_ref->{sourceFilePath} !~ m!^(Library|Contrib)/!)
+	{
+		my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
+			$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}
+		);
+		if ($disk_path) {
+			# Legacy disk — let Problem.pm handle normally
+			$inputs_ref->{sourceFilePath} = $disk_path;
+		} elsif ($source && $pg_hash) {
+			$inputs_ref->{problemSource}  = $source;
+			$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);
+			$inputs_ref->{pg_hash}        = $pg_hash;
+		} else {
+			return $c->exception("Cannot resolve sourceFilePath: $inputs_ref->{sourceFilePath}", 404);
+		}
+	}
 
 	my $file_path   = $inputs_ref->{sourceFilePath};
 	my $random_seed = $inputs_ref->{problemSeed};
@@ -318,6 +386,38 @@ async sub problem {
 			$inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL} || $inputs_ref->{problemSource},
 			$inputs_ref->{essay} ? '"' . $inputs_ref->{essay} =~ s/"/\\"/gr . '"' : '""',
 		);
+	}
+
+	# ─── Telemetry ──────────────────────────────────────────────────────────
+	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{pg_hash} && !$inputs_ref->{isInstructor}) {
+		my $render_ms = int((time - $render_start) * 1000);
+
+		Renderer::Telemetry::record_render(
+			pg_hash      => $inputs_ref->{pg_hash},
+			outcome      => $problem->success() ? (@{ $return_object->{warning_messages} // [] } ? 'warning' : 'success') : 'error',
+			warnings     => scalar(@{ $return_object->{warning_messages} // [] }),
+			render_ms    => $render_ms,
+			cache_status => $c->stash('_cache_status') // 'unknown',
+		);
+
+		if ($inputs_ref->{submitAnswers}) {
+			Renderer::Telemetry::record_interaction(
+				pg_hash => $inputs_ref->{pg_hash},
+				action  => 'submit',
+				score   => $return_object->{problem_result}{score},
+				attempt => ($inputs_ref->{numIncorrect} // 0) + 1,
+			);
+		} elsif ($inputs_ref->{previewAnswers}) {
+			Renderer::Telemetry::record_interaction(
+				pg_hash => $inputs_ref->{pg_hash},
+				action  => 'preview',
+			);
+		} elsif ($inputs_ref->{showCorrectAnswers}) {
+			Renderer::Telemetry::record_interaction(
+				pg_hash => $inputs_ref->{pg_hash},
+				action  => 'show_answers',
+			);
+		}
 	}
 
 	return $c->format($return_object);

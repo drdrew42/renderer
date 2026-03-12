@@ -98,12 +98,40 @@ sub read_problem {
 	return $source;
 }
 
+# Return the pg_hash associated with a file path, or undef if unknown.
+sub pg_hash_for_path {
+	my ($file_path) = @_;
+	my $index_file = _path_index_path($file_path);
+	return unless -f $index_file;
+	open my $fh, '<', $index_file or return;
+	chomp(my $hash = <$fh>);
+	close $fh;
+	return $hash;
+}
+
+# Record the mapping from file path → pg_hash.
+sub save_path_index {
+	my ($file_path, $pg_hash) = @_;
+	my $index_file = _path_index_path($file_path);
+	make_path(File::Spec->catdir($PRIVATE, '.path_index'));
+	open my $fh, '>', $index_file or warn "ContentCache: cannot write path_index: $!" && return;
+	print $fh $pg_hash;
+	close $fh;
+	return 1;
+}
+
 # --- private helpers ---
 
 sub _url_index_path {
 	my ($url) = @_;
 	my $url_hash = sha256_hex($url);
 	return File::Spec->catfile($PRIVATE, '.url_index', $url_hash);
+}
+
+sub _path_index_path {
+	my ($file_path) = @_;
+	my $path_hash = sha256_hex($file_path);
+	return File::Spec->catfile($PRIVATE, '.path_index', $path_hash);
 }
 
 sub _problem_dir {
