@@ -295,8 +295,7 @@ async sub problem {
 	if ($ENV{CONTENT_ADDRESSED}
 		&& !$inputs_ref->{problemSourceURL}
 		&& !$inputs_ref->{problemSource}
-		&& $inputs_ref->{sourceFilePath}
-		&& $inputs_ref->{sourceFilePath} !~ m!^(Library|Contrib)/!)
+		&& $inputs_ref->{sourceFilePath})
 	{
 		my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
 			$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}

@@ -104,7 +104,13 @@ sub startup {
 
 	$r->any('/render-api')->to('render#problem');
 	$r->any('/render-ptx')->to('render#render_ptx');
-	$r->any('/health' => sub { shift->rendered(200) });
+	$r->any('/health' => sub ($c) {
+		my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
+		$c->render(json => {
+			status  => $ok ? 'ok' : 'error',
+			service => 'Renderer',
+		}, status => $ok ? 200 : 503);
+	});
 
 	# Enable problem editor & OPL browser -- NOT recommended for production environment!
 	supplementalRoutes($r) if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE'));
