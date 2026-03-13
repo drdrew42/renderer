@@ -27,6 +27,7 @@ print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Renderer::Model::Problem;
 use Renderer::Controller::IO;
+use Renderer::Identity;
 use Renderer::Telemetry;
 use WeBWorK::FormatRenderedProblem;
 
@@ -107,6 +108,13 @@ sub startup {
 
 	# Enable problem editor & OPL browser -- NOT recommended for production environment!
 	supplementalRoutes($r) if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE'));
+
+	# Ed25519 identity for telemetry signing (persisted in private/.identity/)
+	if (Renderer::Identity::init()) {
+		$self->log->info("Identity: fingerprint " . Renderer::Identity::fingerprint());
+	} else {
+		$self->log->warn("Identity: no keypair — telemetry will be unsigned");
+	}
 
 	# Telemetry batch reporter (fires only when OPL_API_URL is set)
 	Renderer::Telemetry::init($self);

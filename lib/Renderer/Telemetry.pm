@@ -5,7 +5,9 @@ use warnings;
 
 use Time::HiRes qw(time);
 use Mojo::IOLoop;
-
+use Mojo::JSON qw(encode_json);
+use MIME::Base64 qw(encode_base64);
+use Renderer::Identity;
 
 # Process-global event buffer. Hypnotoad workers rotate every ~100-200 requests,
 # so this never grows unbounded. Events are lost on worker death — that's fine,
@@ -33,12 +35,24 @@ sub init {
 }
 
 # Drain buffer and POST to OPL. Fire-and-forget.
+# Signs payload with Ed25519 identity if available.
 sub flush {
 	return unless $APP && $OPL_URL;
 	my $events = drain();
 	return unless @$events;
 
-	$APP->ua->post_p($OPL_URL => json => { events => $events })->then(sub {
+	my $body = encode_json({ events => $events });
+	my %headers = ('Content-Type' => 'application/json');
+
+	if (Renderer::Identity::has_identity()) {
+		my $sig = Renderer::Identity::sign($body);
+		if ($sig) {
+			$headers{'X-Telemetry-PublicKey'}  = Renderer::Identity::public_key_b64();
+			$headers{'X-Telemetry-Signature'}  = encode_base64($sig, '');
+		}
+	}
+
+	$APP->ua->post_p($OPL_URL => \%headers => $body)->then(sub {
 		my $tx = shift;
 		my $code = $tx->res->code // 0;
 		if ($code == 200) {
