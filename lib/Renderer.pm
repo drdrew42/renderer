@@ -27,6 +27,7 @@ print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Renderer::Model::Problem;
 use Renderer::Controller::IO;
+use Renderer::Telemetry;
 use WeBWorK::FormatRenderedProblem;
 
 sub startup {
@@ -106,6 +107,9 @@ sub startup {
 
 	# Enable problem editor & OPL browser -- NOT recommended for production environment!
 	supplementalRoutes($r) if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE'));
+
+	# Telemetry batch reporter (fires only when OPL_API_URL is set)
+	Renderer::Telemetry::init($self);
 
 	# Static file routes
 	$r->any('/pg_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
