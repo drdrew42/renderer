@@ -1,6 +1,5 @@
 package Renderer::Controller::IO;
-use Mojo::Base -async_await;
-use Mojo::Base 'Mojolicious::Controller';
+use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 use File::Spec::Functions qw(splitdir);
 use File::Find            qw(find);
 use MIME::Base64          qw(decode_base64);
@@ -24,8 +23,7 @@ our $regex = {
 	privateOnly => qr/^private\/(?!\.\.\/)/,
 };
 
-sub raw {
-	my $c        = shift;
+sub raw ($c) {
 	my $required = [];
 	push @$required,
 		{
@@ -44,8 +42,7 @@ sub raw {
 	$c->render(text => $problem->{problem_contents});
 }
 
-async sub writer {
-	my $c        = shift;
+async sub writer ($c) {
 	my $required = [];
 	push @$required,
 		{
@@ -74,8 +71,7 @@ async sub writer {
 		: $c->exception($problem->{_message}, $problem->{status});
 }
 
-sub upload {
-	my $c = shift;
+sub upload ($c) {
 
 	# check size
 	return $c->render(text => 'File exceeded size cap.', status => 431)
@@ -110,8 +106,7 @@ sub upload {
 	return $c->render(text => 'File successfully uploaded', status => 200);
 }
 
-sub remove {
-	my $c        = shift;
+sub remove ($c) {
 	my $required = [];
 	push @$required,
 		{
@@ -140,8 +135,7 @@ sub remove {
 	return $c->render(text => 'Path deleted');
 }
 
-sub clone {
-	my $c        = shift;
+sub clone ($c) {
 	my $required = [];
 	push @$required,
 		{
@@ -195,8 +189,7 @@ sub clone {
 	return $c->render(text => 'clone successful');
 }
 
-async sub catalog {
-	my $c        = shift;
+async sub catalog ($c) {
 	my $required = [];
 	my $optional = [];
 	push @$required, { field => 'basePath', };
@@ -232,8 +225,7 @@ async sub catalog {
 	$c->render(json => $results, status => $status);
 }
 
-sub depthSearch_p {
-	my ($root_path, $depth) = @_;
+sub depthSearch_p ($root_path, $depth) {
 
 	my $promise = Mojo::IOLoop->subprocess->run_p(sub {
 		# skip any hidden folders
@@ -263,8 +255,7 @@ sub depthSearch_p {
 	return $promise;
 }
 
-async sub search {
-	my $c = shift;
+async sub search ($c) {
 
 	my $required = [];
 	push @$required,
@@ -285,11 +276,9 @@ async sub search {
 	return $c->render(json => $results, status => $status);
 }
 
-sub rankedSearch_p {
-	my $sources_ref     = shift;
-	my @sources         = @$sources_ref;
-	my $targetArray_ref = shift;
-	my @targetArray     = @$targetArray_ref;
+sub rankedSearch_p ($sources_ref, $targetArray_ref) {
+	my @sources     = @$sources_ref;
+	my @targetArray = @$targetArray_ref;
 	my $searchPromise   = Mojo::IOLoop->subprocess->run_p(sub {
 		local $File::Find::skip_pattern = qr/^\./;    #skip any hidden folders
 		my %found;
@@ -328,8 +317,7 @@ sub rankedSearch_p {
 	return $searchPromise;
 }
 
-async sub findNewVersion {
-	my $c        = shift;
+async sub findNewVersion ($c) {
 	my $required = [];
 	my $optional = [];
 	push @$required,
@@ -413,8 +401,7 @@ async sub findNewVersion {
 	}
 }
 
-async sub findUniqueSeeds {
-	my $c        = shift;
+async sub findUniqueSeeds ($c) {
 	my $required = [];
 	my $optional = [];
 	push @$required,
@@ -487,9 +474,7 @@ async sub findUniqueSeeds {
 	}
 }
 
-sub _isNewVersion {
-	my $newProblem    = shift;
-	my $avoidProblems = shift;
+sub _isNewVersion ($newProblem, $avoidProblems) {
 	my $isNew         = 0;
 
 	return 1 unless (keys %$avoidProblems);
@@ -509,8 +494,7 @@ sub _isNewVersion {
 	return $isNew;
 }
 
-async sub setTags {
-	my $c            = shift;
+async sub setTags ($c) {
 	my $incomingTags = $c->req->params->to_hash;
 
 	# if DESCRIPTION is only one line, params will not instantiate DESCRIPTION as an array...
@@ -540,9 +524,7 @@ async sub setTags {
 	return $c->render(json => $return_object, status => 200);
 }
 
-sub validate {
-	my $c        = shift;
-	my $options  = shift;
+sub validate ($c, $options) {
 	my $required = $options->{required} // [];
 	my $optional = $options->{optional} // [];
 

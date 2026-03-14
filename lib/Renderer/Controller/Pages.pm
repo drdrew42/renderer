@@ -1,13 +1,11 @@
 package Renderer::Controller::Pages;
-use Mojo::Base 'Mojolicious::Controller';
+use Mojo::Base 'Mojolicious::Controller', -signatures;
 
-sub twocolumn {
-	my $c = shift;
+sub twocolumn ($c) {
 	$c->render(template => 'pages/twocolumn');
 }
 
-sub oplUI {
-	my $c = shift;
+sub oplUI ($c) {
 	$c->render(template => 'pages/oplUI');
 }
 

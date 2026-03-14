@@ -6,7 +6,7 @@ use warnings;
 use Mojo::File;
 use Mojo::IOLoop;
 use Mojo::JSON qw( encode_json );
-use Mojo::Base -async_await;
+use Mojo::Base -async_await, -signatures;
 use Time::HiRes  qw( time );
 use MIME::Base64 qw( decode_base64 );
 use WeBWorK::RenderProblem;
@@ -40,8 +40,7 @@ our $codes = {
 	500 => 'Internal Server Error',
 };
 
-sub new {
-	my $class       = shift;
+sub new ($class, @args) {
 	my $problem_ref = {
 		_error      => '',
 		action      => '',
@@ -49,12 +48,11 @@ sub new {
 	};
 	bless $problem_ref, $class;
 	$problem_ref->{start} = time;
-	$problem_ref->_init(@_);
+	$problem_ref->_init(@args);
 	return $problem_ref;
 }
 
-sub _init {
-	my ($self, $args) = @_;
+sub _init ($self, $args) {
 	$self->{log} = $args->{log} if $args->{log};
 
 	my $read_path        = $args->{read_path}        || '';
@@ -83,10 +81,9 @@ sub _init {
 	$self->{log}->info("CREATED: Problem created from $path_info with $seed_info");
 }
 
-sub source {
-	my $self = shift;
-	if (scalar(@_) == 1) {
-		my $contents = shift;
+sub source ($self, @rest) {
+	if (@rest == 1) {
+		my $contents = $rest[0];
 
 		# recognize and decode base64 if necessary
 		$contents = Encode::decode("UTF-8", decode_base64($contents))
@@ -99,10 +96,9 @@ sub source {
 	return $self->{problem_contents};
 }
 
-sub seed {
-	my $self = shift;
-	if (scalar(@_) == 1) {
-		my $random_seed = shift;
+sub seed ($self, @rest) {
+	if (@rest == 1) {
+		my $random_seed = $rest[0];
 		$self->{_error} = "400 You must provide a positive integer for the random seed.\n"
 			unless $random_seed =~ m!^\d+$!;
 		$self->{random_seed} = $random_seed;
@@ -110,11 +106,10 @@ sub seed {
 	return $self->{random_seed};
 }
 
-sub path {
-	my $self = shift;
-	if (scalar(@_) >= 1) {
-		my $read_path = shift;
-		my $force     = shift if @_;
+sub path ($self, @rest) {
+	if (@rest >= 1) {
+		my $read_path = $rest[0];
+		my $force     = $rest[1];
 		$read_path =~ s!\s+|\.\./!!g;    # prevent backtracking and whitespace
 		my $opl_root = $ENV{OPL_DIRECTORY};
 		if ($read_path =~ m!^Library/!) {
@@ -139,10 +134,9 @@ sub path {
 	return $self->{read_path};
 }
 
-sub target {
-	my $self = shift;
-	if (scalar(@_) == 1) {
-		my $write_path = shift;
+sub target ($self, @rest) {
+	if (@rest == 1) {
+		my $write_path = $rest[0];
 		$write_path =~ s!\s+|\.\./!!g;    # prevent backtracking and whitespace
 		my $opl_root = $ENV{OPL_DIRECTORY};
 		if ($write_path =~ m!^Library/!) {
@@ -159,8 +153,7 @@ sub target {
 }
 
 # RETURNS PROMISE
-sub save {
-	my $self       = shift;
+sub save ($self) {
 	my $success    = 0;
 	my $write_path = ($self->{write_path} =~ /\S/) ? $self->{write_path} : $self->{read_path};
 
@@ -194,8 +187,7 @@ sub save {
 	return $savePromise;
 }
 
-sub load {
-	my $self      = shift;
+sub load ($self) {
 	my $success   = 0;
 	my $read_path = $self->{read_path};
 	if (-r $read_path) {
@@ -208,8 +200,7 @@ sub load {
 }
 
 # RETURNS PROMISE
-sub render {
-	my ($self, $inputs_ref) = @_;
+sub render ($self, $inputs_ref) {
 
 	$self->{action} = 'render';
 	my $renderPromise = Mojo::IOLoop->subprocess->run_p(sub {
@@ -221,8 +212,7 @@ sub render {
 	return $renderPromise;
 }
 
-sub success {
-	my $self = shift;
+sub success ($self) {
 	$self->{log}->error($self->{exception}) if ($self->{log} && $self->{exception});
 	my $report = ($self->{_error} =~ /\S/) ? $self->{_error} : 'NO ERRORS';
 	return 1 unless $self->{_error} =~ /\S/;
@@ -233,8 +223,7 @@ sub success {
 	return 0;
 }
 
-sub DESTROY {
-	my $self     = shift;
+sub DESTROY ($self) {
 	my $duration = time - $self->{start};
 	my $logmsg   = 'TRASH: [' . sprintf("%.1f", $duration * 1000) . 'ms] ';
 	$logmsg .= $self->{action} . ' from ';

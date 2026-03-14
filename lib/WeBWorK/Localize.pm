@@ -1,5 +1,5 @@
 package WeBWorK::Localize;
-use Mojo::Base 'Locale::Maketext', -strict;
+use Mojo::Base 'Locale::Maketext', -strict, -signatures;
 
 use Locale::Maketext::Lexicon;
 use Mojo::File;
@@ -11,15 +11,13 @@ Locale::Maketext::Lexicon->import({
 	_encoding   => undef,
 });
 
-sub getLangHandle {
-	my $lang = shift;
+sub getLangHandle ($lang) {
 	return WeBWorK::Localize->get_handle($lang);
 }
 
 # This is like [quant] but it doesn't write the number.
 #  usage: [quant,_1,<singular>,<plural>,<optional zero>]
-sub plural {
-	my ($handle, $num, @forms) = @_;
+sub plural ($handle, $num, @forms) {
 
 	return ''        if @forms == 0;
 	return $forms[2] if @forms > 2 and $num == 0;
@@ -30,8 +28,7 @@ sub plural {
 
 # This is like [quant] but it also has -1 case.
 #  usage: [negquant,_1,<neg case>,<singular>,<plural>,<optional zero>]
-sub negquant {
-	my ($handle, $num, @forms) = @_;
+sub negquant ($handle, $num, @forms) {
 
 	return $num if @forms == 0;
 

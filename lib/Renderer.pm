@@ -31,8 +31,7 @@ use Renderer::Identity;
 use Renderer::Telemetry;
 use WeBWorK::FormatRenderedProblem;
 
-sub startup {
-	my $self = shift;
+sub startup ($self) {
 
 	# Merge environment variables with config file
 	$self->plugin('Config');
@@ -132,8 +131,7 @@ sub startup {
 	$r->any('/*static')->to('StaticFiles#public_file');
 }
 
-sub supplementalRoutes {
-	my $r = shift;
+sub supplementalRoutes ($r) {
 
 	# UI
 	$r->any('/')->to('pages#twocolumn');
@@ -162,8 +160,7 @@ sub supplementalRoutes {
 	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
 }
 
-sub timeout {
-	my $c  = shift;
+sub timeout ($c) {
 	my $tx = $c->render_later->tx;
 	Mojo::IOLoop->timer(
 		2 => sub {

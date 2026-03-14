@@ -1,5 +1,5 @@
 package Renderer::Controller::Render;
-use Mojo::Base 'Mojolicious::Controller', -async_await;
+use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 use Mojo::JSON   qw(encode_json decode_json);
 use Crypt::JWT   qw(encode_jwt decode_jwt);
@@ -9,8 +9,7 @@ use WeBWorK::PreTeXt;
 use Renderer::ContentCache;
 use Renderer::Telemetry;
 
-sub parseRequest {
-	my $c      = shift;
+sub parseRequest ($c) {
 	my %params = %{ $c->req->params->to_hash };
 
 	my $originIP = $c->req->headers->header('X-Forwarded-For')
@@ -96,10 +95,7 @@ sub parseRequest {
 	return \%params;
 }
 
-sub fetchRemoteSource_p {
-	my $c   = shift;
-	my $url = shift;
-	my $pg_hash_hint = shift;    # optional: from JWT or url_index
+sub fetchRemoteSource_p ($c, $url, $pg_hash_hint = undef) {
 
 	# Content-addressed mode: check disk cache first
 	if ($ENV{CONTENT_ADDRESSED}) {
@@ -125,8 +121,7 @@ sub fetchRemoteSource_p {
 
 # Content-addressed fetch: conditional GET, stage problem + macros on 200.
 # Returns promise resolving to ($raw_source, $pg_hash).
-sub _fetch_content_addressed_p {
-	my ($c, $url, $pg_hash) = @_;
+sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
 
 	my $req_origin   = $c->req->headers->origin   || 'no origin';
 	my $req_referrer = $c->req->headers->referrer || 'no referrer';
@@ -208,8 +203,7 @@ sub _fetch_content_addressed_p {
 }
 
 # Legacy fetch: returns promise resolving to $raw_source only.
-sub _fetch_legacy_p {
-	my ($c, $url) = @_;
+sub _fetch_legacy_p ($c, $url) {
 
 	my $req_origin   = $c->req->headers->origin   || 'no origin';
 	my $req_referrer = $c->req->headers->referrer || 'no referrer';
@@ -241,8 +235,7 @@ sub _fetch_legacy_p {
 	});
 }
 
-sub resolveSourceFilePath_p {
-	my ($c, $file_path, $pg_hash_hint) = @_;
+sub resolveSourceFilePath_p ($c, $file_path, $pg_hash_hint = undef) {
 
 	# Normalize: strip leading private/ if present (Problem.pm adds it)
 	my $normalized = $file_path;
@@ -282,8 +275,7 @@ sub resolveSourceFilePath_p {
 	});
 }
 
-async sub problem {
-	my $c          = shift;
+async sub problem ($c) {
 	my $render_start = time;
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
@@ -422,8 +414,7 @@ async sub problem {
 	return $c->format($return_object);
 }
 
-async sub render_ptx {
-	my $c = shift;
+async sub render_ptx ($c) {
 
 	$c->render_later;
 	my $res = await WeBWorK::PreTeXt::render_ptx($c->req->params->to_hash);
@@ -434,10 +425,7 @@ async sub render_ptx {
 	return $c->render(template => 'RPCRenderFormats/ptx', %$res);
 }
 
-async sub sendAnswerJWT {
-	my $c            = shift;
-	my $JWTanswerURL = shift;
-	my $answerJWT    = shift;
+async sub sendAnswerJWT ($c, $JWTanswerURL, $answerJWT) {
 
 	# default response hash
 	my $answerJWTresponse = {
@@ -477,19 +465,16 @@ async sub sendAnswerJWT {
 	return $answerJWTresponse;
 }
 
-sub exception {
-	my $c       = shift;
-	my $id      = $c->logID;
-	my $message = shift;
+sub exception ($c, $message, $status, @extra) {
+	my $id = $c->logID;
 	$message = "[$id] " . (ref $message eq 'ARRAY' ? join "\n", @$message : $message);
-	my $status = shift;
 	$c->log->error("($status) EXCEPTION: $message");
 	return $c->respond_to(
 		json => {
 			json => {
 				message => $message,
 				status  => $status,
-				@_
+				@extra
 			},
 			status => $status
 		},
@@ -497,11 +482,8 @@ sub exception {
 	);
 }
 
-sub croak {
-	my $c         = shift;
-	my $exception = shift;
+sub croak ($c, $exception, $depth) {
 	my $err_stack = $exception->message;
-	my $depth     = shift;
 
 	my @err = split("\n", $err_stack);
 	splice(@err, $depth, $#err) if ($depth <= scalar @err);
@@ -513,8 +495,7 @@ sub croak {
 	return;
 }
 
-sub jweFromRequest {
-	my $c          = shift;
+sub jweFromRequest ($c) {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 	$inputs_ref->{aud} = $ENV{SITE_HOST};
@@ -528,8 +509,7 @@ sub jweFromRequest {
 	return $c->render(text => $req_jwt);
 }
 
-sub jwtFromRequest {
-	my $c          = shift;
+sub jwtFromRequest ($c) {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 	$inputs_ref->{aud} = $ENV{SITE_HOST};
