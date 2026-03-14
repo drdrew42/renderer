@@ -44,26 +44,6 @@ sub isEndDescription {
 	return ($line =~ /ENDDESCRIPTION/) ? 1 : 0;
 }
 
-# sub kwtidy {
-#   my $s = shift;
-#   $s =~ s/\W//g;
-#   $s =~ s/_//g;
-#   $s = lc($s);
-#   return($s);
-# }
-
-# sub keywordcleaner {
-#   my $string = shift;
-#   my @spl1 = split /,/, $string;
-#   foreach my $keyword (@spl1) {
-#     # strip quotes and trim, then lowercase
-#     # $keyword =~ s/^\s*['"]\s*(.*?)\s*['"]\s*$/$1/;
-#     # $keyword = lc $keyword;
-#     $keyword = kwtidy($keyword);
-#   }
-# #  my @spl2 = map(kwtidy($_), @spl1);
-#   return(@spl1);
-# }
 my $quote        = qr/['"\x{2018}\x{2019}\x{91}\x{92}]/;
 my $space        = qr/[\s\x{85}]/;
 my $kwtidy_qr    = qr/^$space*$quote*$space*(.*?)$space*$quote*$space*$/;

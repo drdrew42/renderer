@@ -302,14 +302,6 @@ sub generateJWTs {
 		result  => $pg->{problem_result}{score},
 		answers => unbless($pg->{answers}),
 	};
-
-   # proposed restructuring of the answerJWT -- prepare with LibreTexts
-   # my %studentKeys = qw(student_value value student_formula formula student_ans answer original_student_ans original);
-   # my %previewKeys = qw(preview_text_string text preview_latex_string latex);
-   # my %correctKeys = qw(correct_value value correct_formula formula correct_ans ans);
-   # my %messageKeys = qw(ans_message answer error_message error);
-   # my @resultKeys  = qw(score weight);
-
 	# once the correct answers are shown, this setting is permanent
 	if ($inputs_ref->{showCorrectAnswers} && !$inputs_ref->{isInstructor}) {
 		$sessionHash->{showCorrectAnswers} = 1;
@@ -319,13 +311,6 @@ sub generateJWTs {
 	# store the current answer/response state for each entry
 	foreach my $ans (@{ $pg->{flags}{KEPT_EXTRA_ANSWERS} }) {
 		$sessionHash->{$ans} = $inputs_ref->{$ans};
-
-# More restructuring -- confirm with LibreTexts
-# $scoreHash->{$ans}{student} = { map {exists $answers{$ans}{$_} ? ($studentKeys{$_} => $answers{$ans}{$_}) : ()} keys %studentKeys };
-# $scoreHash->{$ans}{preview} = { map {exists $answers{$ans}{$_} ? ($previewKeys{$_} => $answers{$ans}{$_}) : ()} keys %previewKeys };
-# $scoreHash->{$ans}{correct} = { map {exists $answers{$ans}{$_} ? ($correctKeys{$_} => $answers{$ans}{$_}) : ()} keys %correctKeys };
-# $scoreHash->{$ans}{message} = { map {exists $answers{$ans}{$_} ? ($messageKeys{$_} => $answers{$ans}{$_}) : ()} keys %messageKeys };
-# $scoreHash->{$ans}{result}  = { map {exists $answers{$ans}{$_} ? ($_ => $answers{$ans}{$_}) : ()} @resultKeys };
 	}
 
 	# update the number of correct/incorrect submissions if answers were 'submitted'
@@ -354,47 +339,6 @@ sub generateJWTs {
 	# Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
 	my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 	return ($sessionJWT, $answerJWT);
-}
-
-sub pretty_print_rh {
-	shift if UNIVERSAL::isa($_[0] => __PACKAGE__);
-	my $rh     = shift;
-	my $indent = shift || 0;
-	my $out    = "";
-	my $type   = ref($rh);
-
-	if (defined($type) and $type) {
-		$out .= " type = $type; ";
-	} elsif (!defined($rh)) {
-		$out .= " type = UNDEFINED; ";
-	}
-	return $out . " " unless defined($rh);
-
-	if (ref($rh) =~ /HASH/) {
-		$out .= "{\n";
-		$indent++;
-		foreach my $key (sort keys %{$rh}) {
-			$out .= "  " x $indent . "$key => " . pretty_print_rh($rh->{$key}, $indent) . "\n";
-		}
-		$indent--;
-		$out .= "\n" . "  " x $indent . "}\n";
-
-	} elsif (ref($rh) =~ /ARRAY/ or "$rh" =~ /ARRAY/) {
-		$out .= " ( ";
-		foreach my $elem (@{$rh}) {
-			$out .= pretty_print_rh($elem, $indent);
-
-		}
-		$out .= " ) \n";
-	} elsif (ref($rh) =~ /SCALAR/) {
-		$out .= "scalar reference " . ${$rh};
-	} elsif (ref($rh) =~ /Base64/) {
-		$out .= "base64 reference " . $$rh;
-	} else {
-		$out .= $rh;
-	}
-
-	return $out . " ";
 }
 
 sub writeRenderLogEntry($) {

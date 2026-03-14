@@ -94,7 +94,7 @@ sub startup ($self) {
 	$self->helper(parseRequest    => sub { Renderer::Controller::Render::parseRequest(@_) });
 	$self->helper(croak           => sub { Renderer::Controller::Render::croak(@_) });
 	$self->helper(logID           => sub { shift->req->request_id });
-	$self->helper(exception       => sub { Renderer(@_) });
+	$self->helper(exception       => sub { Renderer::Controller::Render::exception(@_) });
 
 	# Routes
 	# baseURL sets the root at which the renderer is listening,

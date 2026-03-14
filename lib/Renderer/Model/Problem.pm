@@ -28,21 +28,11 @@ use WeBWorK::RenderProblem;
 # - save   (write problem_contents to file at write_path)
 # - load   (overwrite problem_contents with contents of file at read_path)
 ## Error handling
-# - success (checks for internal errors and sets error code and message)
-# - exception (renders JSON/HTML message w/ status & logs)
-
-our $codes = {
-	400 => 'Bad Request',
-	403 => 'Forbidden',
-	404 => 'Not Found',
-	405 => 'Method Not Allowed',
-	412 => 'Precondition Failed',
-	500 => 'Internal Server Error',
-};
+# - success (checks for internal errors, populates status and _message fields)
 
 sub new ($class, @args) {
 	my $problem_ref = {
-		_error      => '',
+		_error      => undef,
 		action      => '',
 		code_origin => '',
 	};
@@ -59,7 +49,7 @@ sub _init ($self, $args) {
 	my $write_path       = $args->{write_path}       || '';
 	my $problem_contents = $args->{problem_contents} || '';
 	my $random_seed      = $args->{random_seed}      || '';
-	$self->{_error} = "400 Cannot create problem without either path or contents!\n"
+	$self->{_error} = { status => 400, message => 'Cannot create problem without either path or contents!' }
 		unless ($problem_contents =~ /\S/ || $read_path =~ /\S/);
 
 	# sourcecode takes precedence over reading from file path
@@ -99,7 +89,7 @@ sub source ($self, @rest) {
 sub seed ($self, @rest) {
 	if (@rest == 1) {
 		my $random_seed = $rest[0];
-		$self->{_error} = "400 You must provide a positive integer for the random seed.\n"
+		$self->{_error} = { status => 400, message => 'You must provide a positive integer for the random seed.' }
 			unless $random_seed =~ m!^\d+$!;
 		$self->{random_seed} = $random_seed;
 	}
@@ -126,7 +116,7 @@ sub path ($self, @rest) {
 			$read_path =~ s|^((?!private/).*)|private/$1|;
 			$self->{write_allowed} = 1;
 		}
-		$self->{_error} = "404 I cannot find a problem with that file path."
+		$self->{_error} = { status => 404, message => 'I cannot find a problem with that file path.' }
 			unless (-e $read_path || $force);
 		# if we objectify an empty string, it becomes truth-y -- AVOID!
 		$self->{read_path} = Mojo::File->new($read_path) if $read_path;
@@ -159,19 +149,19 @@ sub save ($self) {
 
 	$self->{action} = 'save to ' . $self->{write_path};
 
-	$self->{_error} = "400 Nothing to write!"
+	$self->{_error} = { status => 400, message => 'Nothing to write!' }
 		unless ($self->{problem_contents} =~ m/\S/);
-	$self->{_error} = "412 No file paths specified."
+	$self->{_error} = { status => 412, message => 'No file paths specified.' }
 		unless ($write_path =~ m/\S/);
-	$self->{_error} = "403 You are not allowed to write to that path."
+	$self->{_error} = { status => 403, message => 'You are not allowed to write to that path.' }
 		unless $self->{write_allowed};
 
 	my $errs;
 	Mojo::File::make_path($self->{write_path}->dirname, { error => $errs })
 		if !(-e $write_path);
 	if ($errs) {
-		$self->log->warn(join("\n", @$errs))          if $errs;
-		$self->{_error} = "405 " . join("\n", @$errs) if $errs;
+		$self->log->warn(join("\n", @$errs))                                        if $errs;
+		$self->{_error} = { status => 405, message => join("\n", @$errs) } if $errs;
 	}
 
 	my $savePromise = Mojo::IOLoop->subprocess->run_p(sub {
@@ -180,7 +170,7 @@ sub save ($self) {
 		return $self->success();
 	})->catch(sub {
 		$self->{exception} = Mojo::Exception->new(shift)->trace;
-		$self->{_error}    = "500 Write failed: " . $self->{exception}->message;
+		$self->{_error}    = { status => 500, message => 'Write failed: ' . $self->{exception}->message };
 		return $self->success();
 	});
 
@@ -194,7 +184,7 @@ sub load ($self) {
 		$self->{problem_contents} = Encode::decode("UTF-8", $read_path->slurp);
 		$success = 1;
 	} else {
-		$self->{_error} = "404 Problem set with un-read-able read_path: $read_path";
+		$self->{_error} = { status => 404, message => "Problem set with un-read-able read_path: $read_path" };
 	}
 	return $success;
 }
@@ -207,19 +197,15 @@ sub render ($self, $inputs_ref) {
 		return WeBWorK::RenderProblem::process_pg_file($self, $inputs_ref);
 	})->catch(sub {
 		$self->{exception} = Mojo::Exception->new(shift)->trace;
-		$self->{_error}    = "500 Render failed: " . $self->{exception}->message;
+		$self->{_error}    = { status => 500, message => 'Render failed: ' . $self->{exception}->message };
 	});
 	return $renderPromise;
 }
 
 sub success ($self) {
-	$self->{log}->error($self->{exception}) if ($self->{log} && $self->{exception});
-	my $report = ($self->{_error} =~ /\S/) ? $self->{_error} : 'NO ERRORS';
-	return 1 unless $self->{_error} =~ /\S/;
-	my ($code, $mesg) = split(/ /, $self->{_error}, 2);
-	$self->{status}   = $code;
-	$self->{_error}   = $codes->{$code};
-	$self->{_message} = $mesg;
+	return 1 unless $self->{_error};
+	$self->{status}   = $self->{_error}{status};
+	$self->{_message} = $self->{_error}{message};
 	return 0;
 }
 
@@ -228,8 +214,8 @@ sub DESTROY ($self) {
 	my $logmsg   = 'TRASH: [' . sprintf("%.1f", $duration * 1000) . 'ms] ';
 	$logmsg .= $self->{action} . ' from ';
 	$logmsg .= $self->{code_origin};
-	if ($self->{_error} && $self->{_error} =~ /\S/) {
-		$self->{log}->error("$logmsg failed with error: " . $self->{_error});
+	if ($self->{_error}) {
+		$self->{log}->error("$logmsg failed with error: " . $self->{_error}{message});
 	} else {
 		$self->{log}->info("$logmsg succeeded.");
 	}

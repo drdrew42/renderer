@@ -54,9 +54,6 @@ sub formatRenderedProblem {
 	# or via a setting of $ce->{pg}{specialPGEnvironmentVars}{extra_css_files}
 	# which can be set in course.conf (the value should be an anonomous array).
 	my @cssFiles;
-	# if (ref($ce->{pg}{specialPGEnvironmentVars}{extra_css_files}) eq 'ARRAY') {
-	# 	push(@cssFiles, { file => $_, external => 0 }) for @{ $ce->{pg}{specialPGEnvironmentVars}{extra_css_files} };
-	# }
 	if (ref($rh_result->{flags}{extra_css_files}) eq 'ARRAY') {
 		push @cssFiles, @{ $rh_result->{flags}{extra_css_files} };
 	}
