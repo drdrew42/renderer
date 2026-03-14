@@ -14,8 +14,9 @@ BEGIN {
 
 use Test::Mojo;
 
+# Boot the app — Renderer.pm's BEGIN block auto-derives RENDER_ROOT.
+my $t = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
-die "RENDER_ROOT not set" unless $render_root;
 
 # Ensure required directories exist
 make_path("$render_root/private") unless -d "$render_root/private";
@@ -25,13 +26,19 @@ unless (-f "$render_root/logs/resource_usage.log") {
 	close $fh;
 }
 
-my $t = Test::Mojo->new('Renderer');
-
 # --- Baseline: inline problemSource ---
 
 subtest 'render inline problemSource' => sub {
+	my $pg_source = <<'PG';
+DOCUMENT();
+loadMacros("PGstandard.pl", "PGML.pl");
+BEGIN_PGML
+Hello world
+END_PGML
+ENDDOCUMENT();
+PG
 	$t->post_ok('/render-api' => form => {
-		problemSource => 'DOCUMENT(); loadMacros("PGstandard.pl","PGML.pl"); BEGIN_PGML Hello world END_PGML ENDDOCUMENT();',
+		problemSource => $pg_source,
 		outputFormat  => 'simple',
 		problemSeed   => 1234,
 	})
@@ -45,7 +52,14 @@ subtest 'render from content-addressed cache' => sub {
 	# Stage a problem in the cache
 	require Renderer::ContentCache;
 	my $pg_hash = 'test_render_api_cached_hash';
-	my $source  = 'DOCUMENT(); loadMacros("PGstandard.pl","PGML.pl"); BEGIN_PGML Cached problem END_PGML ENDDOCUMENT();';
+	my $source  = <<'PG';
+DOCUMENT();
+loadMacros("PGstandard.pl", "PGML.pl");
+BEGIN_PGML
+Cached problem
+END_PGML
+ENDDOCUMENT();
+PG
 	Renderer::ContentCache::stage_problem($pg_hash, $source);
 	Renderer::ContentCache::save_path_index('test/cached_problem.pg', $pg_hash);
 

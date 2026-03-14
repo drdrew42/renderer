@@ -1,5 +1,5 @@
 package Renderer;
-use Mojo::Base 'Mojolicious';
+use Mojo::Base 'Mojolicious', -signatures;
 
 BEGIN {
 	use Mojo::File;
