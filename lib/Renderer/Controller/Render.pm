@@ -4,9 +4,13 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 use Mojo::JSON   qw(encode_json decode_json);
 use Crypt::JWT   qw(encode_jwt decode_jwt);
 use Time::HiRes  qw(time);
+use Digest::SHA  qw(sha256_hex);
 
+use Crypt::Ed25519;
+use MIME::Base64 qw(decode_base64);
 use WeBWorK::PreTeXt;
 use Renderer::ContentCache;
+use Renderer::Registration;
 use Renderer::Telemetry;
 
 sub parseRequest ($c) {
@@ -28,6 +32,10 @@ sub parseRequest ($c) {
 
 	# TODO: ensure showCorrectAnswers does not appear without showCorrectAnswersButton
 	# showCorrectAnswersButton cannot be checked until after pulling in problemJWT
+
+	# Stash first-render flag for seed diversity telemetry (LT-010).
+	# A request without sessionJWT is the student's first view of this problem.
+	$c->stash(_is_first_render => !defined $params{sessionJWT} ? 1 : 0);
 
 	# ensure that these params are only provided by trusted source
 	for (qw(JWTanswerURL sessionID numCorrect numIncorrect)) {
@@ -382,13 +390,27 @@ async sub problem ($c) {
 	# ─── Telemetry ──────────────────────────────────────────────────────────
 	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{pg_hash} && !$inputs_ref->{isInstructor}) {
 		my $render_ms = int((time - $render_start) * 1000);
+		my $outcome   = $problem->success()
+			? (@{ $return_object->{warning_messages} // [] } ? 'warning' : 'success')
+			: 'error';
+		my $is_first  = $c->stash('_is_first_render');
+
+		# LT-010: compute html_hash on first successful render for seed diversity
+		my $html_hash;
+		if ($is_first && $outcome eq 'success' && defined $return_object->{text}) {
+			$html_hash = Renderer::Telemetry::content_hash(
+				$return_object->{text}, $return_object->{answers});
+		}
 
 		Renderer::Telemetry::record_render(
-			pg_hash      => $inputs_ref->{pg_hash},
-			outcome      => $problem->success() ? (@{ $return_object->{warning_messages} // [] } ? 'warning' : 'success') : 'error',
-			warnings     => scalar(@{ $return_object->{warning_messages} // [] }),
-			render_ms    => $render_ms,
-			cache_status => $c->stash('_cache_status') // 'unknown',
+			pg_hash        => $inputs_ref->{pg_hash},
+			outcome        => $outcome,
+			warnings       => scalar(@{ $return_object->{warning_messages} // [] }),
+			render_ms      => $render_ms,
+			cache_status   => $c->stash('_cache_status') // 'unknown',
+			is_first_render => $is_first,
+			seed           => $inputs_ref->{problemSeed},
+			html_hash      => $html_hash,
 		);
 
 		if ($inputs_ref->{submitAnswers}) {
@@ -412,6 +434,97 @@ async sub problem ($c) {
 	}
 
 	return $c->format($return_object);
+}
+
+# ─── LT-016: Callback endpoint ──────────────────────────────────────────
+# Accepts signed render requests from the OPL and returns html_hash.
+# POST /render-api/callback
+# Request: { pg_source, seed, pg_hash? } signed by OPL identity
+# Response: { html_hash, outcome, warnings }
+
+my $CALLBACK_SEMAPHORE = 0;
+my $CALLBACK_MAX_CONCURRENT = $ENV{CALLBACK_MAX_CONCURRENT} // 4;
+
+async sub callback ($c) {
+	# Verify OPL signature
+	unless (Renderer::Registration::has_opl_public_key()) {
+		return $c->render(json => { error => 'registration not completed' }, status => 503);
+	}
+
+	my $raw_body = $c->req->body;
+	my $sig_b64  = $c->req->headers->header('X-Telemetry-Signature');
+	unless ($sig_b64 && length($sig_b64)) {
+		return $c->render(json => { error => 'missing signature' }, status => 401);
+	}
+
+	my $sig = decode_base64($sig_b64);
+	my $opl_key = Renderer::Registration::opl_public_key();
+	my $valid = eval { Crypt::Ed25519::verify($raw_body, $opl_key, $sig); 1 } // 0;
+	unless ($valid) {
+		return $c->render(json => { error => 'invalid signature' }, status => 401);
+	}
+
+	# Parse request
+	my $req = $c->req->json;
+	unless ($req && defined $req->{pg_source} && defined $req->{seed}) {
+		return $c->render(json => { error => 'missing pg_source or seed' }, status => 400);
+	}
+
+	# Concurrency guard
+	if ($CALLBACK_SEMAPHORE >= $CALLBACK_MAX_CONCURRENT) {
+		return $c->render(json => { error => 'callback queue full' }, status => 429);
+	}
+	$CALLBACK_SEMAPHORE++;
+
+	# Build minimal inputs_ref and render via the full pipeline
+	$c->render_later;
+
+	my %inputs = (
+		problemSource => $req->{pg_source},
+		problemSeed   => $req->{seed} + 0,
+		outputFormat  => 'json',
+		isInstructor  => 0,
+	);
+
+	my $problem = eval {
+		$c->newProblem({
+			log              => $c->log,
+			read_path        => 'callback',
+			random_seed      => $inputs{problemSeed},
+			problem_contents => $inputs{problemSource},
+		});
+	};
+
+	unless ($problem && $problem->success()) {
+		$CALLBACK_SEMAPHORE--;
+		my $msg = $problem ? $problem->{_message} : $@;
+		return $c->render(json => { outcome => 'error', warnings => 0, error => "$msg" }, status => 200);
+	}
+
+	my $ww_return_json = eval { await $problem->render(\%inputs) };
+	$CALLBACK_SEMAPHORE--;
+
+	unless ($problem->success()) {
+		return $c->render(json => { outcome => 'error', warnings => 0, error => $problem->{_message} }, status => 200);
+	}
+
+	my $return_object;
+	eval { $return_object = decode_json($ww_return_json); 1; } or do {
+		return $c->render(json => { outcome => 'error', warnings => 0, error => 'JSON decode failed' }, status => 200);
+	};
+
+	my $warnings = scalar(@{ $return_object->{warning_messages} // [] });
+	my $outcome  = $warnings ? 'warning' : 'success';
+
+	# Compute html_hash using the same normalization as telemetry
+	my $html_hash = Renderer::Telemetry::content_hash(
+		$return_object->{text}, $return_object->{answers});
+
+	return $c->render(json => {
+		html_hash => $html_hash,
+		outcome   => $outcome,
+		warnings  => $warnings,
+	});
 }
 
 async sub render_ptx ($c) {

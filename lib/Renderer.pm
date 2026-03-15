@@ -29,6 +29,7 @@ use Renderer::Model::Problem;
 use Renderer::Controller::IO;
 use Renderer::Identity;
 use Renderer::Telemetry;
+use Renderer::Registration;
 use WeBWorK::FormatRenderedProblem;
 
 sub startup ($self) {
@@ -102,6 +103,7 @@ sub startup ($self) {
 	my $r = $self->routes->under($ENV{baseURL});
 
 	$r->any('/render-api')->to('render#problem');
+	$r->post('/render-api/callback')->to('render#callback');
 	$r->any('/render-ptx')->to('render#render_ptx');
 	$r->any('/health' => sub ($c) {
 		my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
@@ -123,6 +125,9 @@ sub startup ($self) {
 
 	# Telemetry batch reporter (fires only when OPL_API_URL is set)
 	Renderer::Telemetry::init($self);
+
+	# Explicit OPL registration with callback URL (LT-016)
+	Renderer::Registration::init($self);
 
 	# Static file routes
 	$r->any('/pg_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');

@@ -7,6 +7,7 @@ use Time::HiRes qw(time);
 use Mojo::IOLoop;
 use Mojo::JSON qw(encode_json);
 use MIME::Base64 qw(encode_base64);
+use Digest::SHA qw(sha256_hex);
 use Renderer::Identity;
 
 # Process-global event buffer. Hypnotoad workers rotate every ~100-200 requests,
@@ -128,6 +129,91 @@ sub drain {
 
 # Current buffer size (for threshold-based flushing).
 sub pending { return scalar @BUFFER }
+
+# Compute a content-addressable hash of a rendered problem.
+# Combines normalized HTML text with sorted correct answers to produce
+# a hash that is stable across renderer/OPL deployments but sensitive
+# to seed-driven content differences.
+#
+# Args: $text (rendered HTML body), $answers (hashref of answer evaluators)
+# Returns: "sha256:..." string, or undef if no hashable content.
+sub content_hash {
+	my ($text, $answers) = @_;
+
+	my $normalized = normalize_for_hash($text);
+	return undef unless length $normalized;
+
+	# Append sorted correct answers — captures mathematical differences
+	# that the visible text alone might miss (or vice versa for pool-selection
+	# problems where answers are sparse but question text varies).
+	my $answer_suffix = '';
+	if ($answers && ref $answers eq 'HASH' && keys %$answers) {
+		my @correct = map {
+			$answers->{$_}{correct_ans} // ''
+		} sort keys %$answers;
+		$answer_suffix = "\x00" . join("\x00", @correct);
+	}
+
+	return 'sha256:' . sha256_hex($normalized . $answer_suffix);
+}
+
+# Normalize rendered HTML for content-addressable hashing.
+# Strips deployment-specific values so that structurally identical renders
+# from different renderer/OPL hosts produce the same normalized output.
+#
+# What gets stripped:
+#   - src="..." on <img>, <script>, <iframe> (URLs are host-dependent;
+#     image content isn't available to us, only the URL)
+#   - action="..." on <form> (renderer-specific submit target)
+#   - SITE_HOST hostname (renderer's own address)
+#   - baseURL prefix (renderer path mounting)
+#   - Whitespace runs outside <pre>/<code> blocks
+#
+# What's preserved:
+#   - Tag structure (an <img> existing vs not is structural)
+#   - alt, width, height, class, id and other non-URL attributes
+#   - All text content, math markup, answer blank structure
+#   - Content inside <pre>/<code> blocks (verbatim)
+sub normalize_for_hash {
+	my ($html) = @_;
+	return '' unless defined $html && length $html;
+
+	# 1. Strip src="..." from <img>, <script>, <iframe>
+	#    Keeps the tag and all other attributes intact.
+	$html =~ s/(<(?:img|script|iframe)\b[^>]*?)\s+src\s*=\s*(?:"[^"]*"|'[^']*')/$1/gi;
+
+	# 2. Strip action="..." from <form>
+	$html =~ s/(<form\b[^>]*?)\s+action\s*=\s*(?:"[^"]*"|'[^']*')/$1/gi;
+
+	# 3. Replace SITE_HOST with placeholder (renderer-specific hostname)
+	my $site_host = $ENV{SITE_HOST} // '';
+	$html =~ s/\Q$site_host\E/__SITE_HOST__/g if length $site_host;
+
+	# 4. Strip baseURL prefix from remaining paths
+	my $base_url = $ENV{baseURL} // '';
+	$html =~ s/\Q$base_url\E//g if length $base_url;
+
+	# 5. Collapse whitespace runs outside <pre> and <code> blocks.
+	my $result = '';
+	my $in_pre = 0;
+	for my $segment (split /(<\/?(?:pre|code)[^>]*>)/i, $html) {
+		if ($segment =~ m{^<(pre|code)}i) {
+			$in_pre++;
+			$result .= $segment;
+		} elsif ($segment =~ m{^</(pre|code)}i) {
+			$in_pre-- if $in_pre > 0;
+			$result .= $segment;
+		} elsif ($in_pre) {
+			$result .= $segment;
+		} else {
+			my $collapsed = $segment;
+			$collapsed =~ s/\s+/ /g;
+			$result .= $collapsed;
+		}
+	}
+
+	return $result;
+}
 
 sub _maybe_flush {
 	flush() if $APP && pending() >= $FLUSH_THRESHOLD;
