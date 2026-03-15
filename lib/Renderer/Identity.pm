@@ -6,6 +6,7 @@ use warnings;
 use Crypt::Ed25519;
 use Digest::SHA qw(sha256_hex);
 use MIME::Base64 qw(encode_base64 decode_base64);
+use Encode qw(encode);
 use File::Spec;
 use File::Path qw(make_path);
 
@@ -54,7 +55,10 @@ sub init {
 sub sign {
 	my ($message) = @_;
 	return unless $PRIVATE_KEY && $PUBLIC_KEY;
-	return Crypt::Ed25519::sign($message, $PUBLIC_KEY, $PRIVATE_KEY);
+	# Encode to UTF-8 bytes — Ed25519 operates on byte strings,
+	# and Perl's internal wide characters cause "Wide character" errors.
+	my $bytes = encode('UTF-8', $message);
+	return Crypt::Ed25519::sign($bytes, $PUBLIC_KEY, $PRIVATE_KEY);
 }
 
 # Verify a signature given message, signature, and public key (all raw bytes).

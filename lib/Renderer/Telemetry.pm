@@ -8,6 +8,7 @@ use Mojo::IOLoop;
 use Mojo::JSON qw(encode_json);
 use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha256_hex);
+use Encode qw(encode);
 use Renderer::Identity;
 
 # Process-global event buffer. Hypnotoad workers rotate every ~100-200 requests,
@@ -154,7 +155,7 @@ sub content_hash {
 		$answer_suffix = "\x00" . join("\x00", @correct);
 	}
 
-	return 'sha256:' . sha256_hex($normalized . $answer_suffix);
+	return 'sha256:' . sha256_hex(encode('UTF-8', $normalized . $answer_suffix));
 }
 
 # Normalize rendered HTML for content-addressable hashing.
