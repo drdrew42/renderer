@@ -68,12 +68,14 @@ sub flush {
 }
 
 # Record a render event (every non-instructor request).
+# Optional seed diversity fields: seed, html_hash, is_first_render.
+# These are only emitted for first-render student requests on content-addressed problems.
 sub record_render {
 	my (%args) = @_;
 	return if $args{is_instructor};
 	return unless $args{pg_hash};
 
-	push @BUFFER, {
+	my %event = (
 		type         => 'render',
 		pg_hash      => $args{pg_hash},
 		outcome      => $args{outcome}      // 'success',
@@ -82,7 +84,19 @@ sub record_render {
 		pg_version   => $ENV{PG_VERSION}    // 'unknown',
 		cache_status => $args{cache_status} // 'unknown',
 		timestamp    => _iso8601(),
-	};
+	);
+
+	# Seed diversity: only on first-render, successful, student requests
+	if ($args{is_first_render}
+		&& defined $args{seed}
+		&& defined $args{html_hash}
+		&& ($event{outcome} eq 'success'))
+	{
+		$event{seed}      = $args{seed} + 0;
+		$event{html_hash} = $args{html_hash};
+	}
+
+	push @BUFFER, \%event;
 	_maybe_flush();
 }
 
