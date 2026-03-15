@@ -19,12 +19,13 @@ BEGIN {
 		(-r "$ENV{RENDER_ROOT}/renderer.conf")
 		? "$ENV{RENDER_ROOT}/renderer.conf"
 		: "$ENV{RENDER_ROOT}/renderer.conf.dist";
-	$ENV{MOJO_LOG_LEVEL} = 'debug';
+	$ENV{MOJO_LOG_LEVEL} = $ENV{MOJO_LOG_LEVEL} || 'debug';
 }
 
 use lib "$main::libname";
 print "using root directory: $ENV{RENDER_ROOT}\n";
 
+use Mojo::JSON;
 use Renderer::Model::Problem;
 use Renderer::Controller::IO;
 use Renderer::Identity;
@@ -63,15 +64,37 @@ sub startup ($self) {
 		);
 	}
 
-	# Logging
+	# Logging — Hypnotoad sets MOJO_MODE=production implicitly.
+	# In containers, LOG_TO_STDERR=1 keeps logs on stderr for Docker/Promtail/CloudWatch.
+	# Without LOG_TO_STDERR, production mode logs to file.
+	my $level = $ENV{MOJO_LOG_LEVEL} || 'warn';
 	if ($ENV{MOJO_MODE} && $ENV{MOJO_MODE} eq 'production') {
-		my $logPath = "$ENV{RENDER_ROOT}/logs/error.log";
-		print "[LOGS] Running in production mode, logging to $logPath\n";
-		$self->log(Mojo::Log->new(
-			path  => $logPath,
-			level => ($ENV{MOJO_LOG_LEVEL} || 'warn')
-		));
+		if ($ENV{LOG_TO_STDERR}) {
+			$self->log(Mojo::Log->new(level => $level));
+		} else {
+			my $logPath = "$ENV{RENDER_ROOT}/logs/error.log";
+			$self->log(Mojo::Log->new(path => $logPath, level => $level));
+		}
 	}
+
+	# Structured JSON logging for Loki/CloudWatch Insights queryability.
+	# LOG_FORMAT=json enables; plaintext otherwise (Mojo default).
+	if ($ENV{LOG_FORMAT} && $ENV{LOG_FORMAT} eq 'json') {
+		$self->log->format(sub {
+			my ($time, $level, @lines) = @_;
+			Mojo::JSON::encode_json({
+				timestamp => Mojo::Date->new($time)->to_datetime,
+				level     => $level,
+				pid       => $$,
+				service   => 'renderer',
+				message   => join(' ', @lines),
+			}) . "\n";
+		});
+	}
+
+	$self->log->info("Renderer logging to "
+		. ($ENV{LOG_TO_STDERR} ? 'stderr' : 'file')
+		. " (level: $level, format: " . ($ENV{LOG_FORMAT} // 'plain') . ")");
 
 	if ($self->config('INTERACTION_LOG')) {
 		my $interactionLogPath = "$ENV{RENDER_ROOT}/logs/interactions.log";
