@@ -43,6 +43,16 @@ sub startup ($self) {
 		$ENV{$_} //= $self->config($_);
 	}
 
+	# Hypnotoad tuning from environment (Fargate vCPU count differs from bare metal).
+	# Env vars override config file values; unset vars leave config defaults intact.
+	my $hyp = $self->config->{hypnotoad} //= {};
+	$hyp->{workers}          = $ENV{HYPNOTOAD_WORKERS}          + 0 if $ENV{HYPNOTOAD_WORKERS};
+	$hyp->{accepts}          = $ENV{HYPNOTOAD_ACCEPTS}          + 0 if $ENV{HYPNOTOAD_ACCEPTS};
+	$hyp->{requests}         = $ENV{HYPNOTOAD_REQUESTS}         + 0 if $ENV{HYPNOTOAD_REQUESTS};
+	$hyp->{spare}            = $ENV{HYPNOTOAD_SPARE}            + 0 if $ENV{HYPNOTOAD_SPARE};
+	$hyp->{clients}          = $ENV{HYPNOTOAD_CLIENTS}          + 0 if $ENV{HYPNOTOAD_CLIENTS};
+	$hyp->{graceful_timeout} = $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT} + 0 if $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT};
+
 	sanitizeHostURLs();
 
 	print "Renderer is based at $main::basehref\n";

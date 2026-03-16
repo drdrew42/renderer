@@ -14,7 +14,14 @@ my $PRIVATE_KEY;
 my $PUBLIC_KEY;
 my $FINGERPRINT;
 
-# Load or generate Ed25519 keypair from private/.identity/.
+# Load Ed25519 keypair. Resolution order:
+#   1. Environment variables (IDENTITY_PUBLIC_KEY_B64 + IDENTITY_PRIVATE_KEY_B64)
+#      — for ECS Fargate with Secrets Manager injection
+#   2. Key files on disk (private/.identity/ed25519.{key,pub})
+#      — for Docker/bare-metal with persistent volumes
+#   3. Generate new keypair and write to disk
+#      — first boot on any platform
+#
 # Returns 1 on success, 0 on failure (telemetry will be unsigned).
 sub init {
 	my ($private_dir) = @_;
@@ -23,7 +30,21 @@ sub init {
 	my $key_file     = File::Spec->catfile($identity_dir, 'ed25519.key');
 	my $pub_file     = File::Spec->catfile($identity_dir, 'ed25519.pub');
 
-	if (-f $key_file && -f $pub_file) {
+	# 1. Environment variables (base64-encoded raw keys from Secrets Manager)
+	if ($ENV{IDENTITY_PUBLIC_KEY_B64} && $ENV{IDENTITY_PRIVATE_KEY_B64}) {
+		$PUBLIC_KEY  = decode_base64($ENV{IDENTITY_PUBLIC_KEY_B64});
+		$PRIVATE_KEY = decode_base64($ENV{IDENTITY_PRIVATE_KEY_B64});
+		unless ($PUBLIC_KEY && $PRIVATE_KEY && length($PUBLIC_KEY) == 32 && length($PRIVATE_KEY) == 64) {
+			warn "Identity: env var keypair invalid (pub=" . length($PUBLIC_KEY // '') . "B, priv=" . length($PRIVATE_KEY // '') . "B), falling through\n";
+			undef $PUBLIC_KEY;
+			undef $PRIVATE_KEY;
+		} else {
+			warn "Identity: loaded keypair from environment\n";
+		}
+	}
+
+	# 2. Key files on disk
+	if (!$PRIVATE_KEY && -f $key_file && -f $pub_file) {
 		$PRIVATE_KEY = _slurp($key_file);
 		$PUBLIC_KEY  = _slurp($pub_file);
 		unless ($PRIVATE_KEY && $PUBLIC_KEY && length($PUBLIC_KEY) == 32 && length($PRIVATE_KEY) == 64) {
@@ -33,6 +54,7 @@ sub init {
 		}
 	}
 
+	# 3. Generate new keypair
 	unless ($PRIVATE_KEY) {
 		eval {
 			make_path($identity_dir);
@@ -40,6 +62,10 @@ sub init {
 			_spew($key_file, $PRIVATE_KEY);
 			chmod 0600, $key_file;
 			_spew($pub_file, $PUBLIC_KEY);
+			warn "Identity: generated new keypair\n";
+			warn "Identity: to share across fleet, store in Secrets Manager:\n";
+			warn "Identity:   public_key:  " . encode_base64($PUBLIC_KEY, '') . "\n";
+			warn "Identity:   private_key: " . encode_base64($PRIVATE_KEY, '') . "\n";
 		};
 		if ($@) {
 			warn "Identity: cannot generate keypair: $@\n";
