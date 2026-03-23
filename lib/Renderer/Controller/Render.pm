@@ -33,6 +33,11 @@ sub parseRequest ($c) {
 	# TODO: ensure showCorrectAnswers does not appear without showCorrectAnswersButton
 	# showCorrectAnswersButton cannot be checked until after pulling in problemJWT
 
+	# Normalize common lowercase query params to camelCase before JWT processing.
+	$params{outputFormat}  //= delete $params{outputformat}  if exists $params{outputformat};
+	$params{displayMode}   //= delete $params{displaymode}   if exists $params{displaymode};
+	$params{problemSeed}   //= delete $params{problemseed}   if exists $params{problemseed};
+
 	# Stash first-render flag for seed diversity telemetry (LT-010).
 	# A request without sessionJWT is the student's first view of this problem.
 	$c->stash(_is_first_render => !defined $params{sessionJWT} ? 1 : 0);

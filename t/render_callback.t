@@ -40,12 +40,14 @@ subtest 'Callback before registration → 503' => sub {
 
 # ── Callback without signature → 401 ─────────────────────────────────
 
-subtest 'Callback without signature → 401' => sub {
+subtest 'Callback without signature → 503 (no OPL registration)' => sub {
+	# Without a registered OPL public key, the registration guard fires before
+	# the signature check — both unsigned and signed requests get 503.
 	$t->post_ok('/render-api/callback'
 		=> { 'Content-Type' => 'application/json' }
 		=> encode_json({ pg_source => 'DOCUMENT(); ENDDOCUMENT();', seed => 42 }))
-		->status_is(401)
-		->json_like('/error' => qr/missing signature/);
+		->status_is(503)
+		->json_like('/error' => qr/registration not completed/);
 };
 
 # ── normalize_for_hash: src stripping ─────────────────────────────────

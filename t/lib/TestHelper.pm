@@ -24,6 +24,12 @@ sub temp_render_root {
 	open my $fh, '>', $log_file or die "Cannot create resource_usage.log: $!";
 	close $fh;
 
+	# Renderer.pm requires renderer.conf.dist to boot
+	my $conf_file = File::Spec->catfile($dir, 'renderer.conf.dist');
+	open my $cfh, '>', $conf_file or die "Cannot create renderer.conf.dist: $!";
+	print $cfh "{\n  secrets => ['test'],\n  STRICT_JWT => 0,\n};\n";
+	close $cfh;
+
 	return $dir;
 }
 
