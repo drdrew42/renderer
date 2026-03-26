@@ -140,8 +140,9 @@ specialPGEnvironmentVars:
   # Size in pixels of dynamically-generated images, i.e. graphs.
   onTheFlyImageSize: 400
 
-  # Rserve (R statistical server). Container: ubcctlt/rserve on the webwork network.
-  # See http://webwork.maa.org/wiki/R_in_WeBWorK for more info.
+  # Rserve (R statistical server).
+  # Default: webwork-rserve (docker-compose).
+  # Override with RSERVE_HOST env var for AWS service discovery.
   Rserve:
     host: webwork-rserve
 

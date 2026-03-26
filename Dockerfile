@@ -71,4 +71,9 @@ EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
 
-CMD hypnotoad -f ./script/renderer
+# RSERVE_HOST env var overrides pg_config.yml default (webwork-rserve) at startup.
+# Used for AWS service discovery hostnames (rserve.webwork.{env}.local).
+CMD if [ -n "$RSERVE_HOST" ]; then \
+      sed -i "s/host: webwork-rserve/host: $RSERVE_HOST/" lib/PG/conf/pg_config.yml; \
+    fi && \
+    hypnotoad -f ./script/renderer
