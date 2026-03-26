@@ -13,6 +13,14 @@ RUN apt-get update \
     make \
     curl \
     dvipng \
+    dvisvgm \
+    pdf2svg \
+    preview-latex-style \
+    texlive \
+    texlive-latex-extra \
+    texlive-plain-generic \
+    texlive-science \
+    texlive-xetex \
     openssl \
     libc-dev \
     cpanminus \
