@@ -202,6 +202,9 @@ sub standaloneRenderer {
 		sourceFilePath          => $inputs_ref->{sourceFilePath} // '',
 		r_source                => $problemFile,
 		problemSeed             => $inputs_ref->{problemSeed},
+		# Content-addressed custom macros: inject source via envir so PG's
+		# loadMacros() finds them without filesystem search (PGloadfiles.pm).
+		($inputs_ref->{injectedMacros} ? (injectedMacros => $inputs_ref->{injectedMacros}) : ()),
 		processAnswers          => $processAnswers,
 		showFeedback            => 1,
 		showAttemptResults      => $displayResults,                       # respects showPartialCorrectAnswers

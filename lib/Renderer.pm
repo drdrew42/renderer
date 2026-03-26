@@ -119,6 +119,14 @@ sub startup ($self) {
 		$self->helper(logAttempt => sub { shift; $resultsLog->info(@_); });
 	}
 
+	# Content cache sweep on startup — evict stale problem directories.
+	# Controlled by CACHE_TTL_HOURS env var (default 168 = 1 week).
+	if ($ENV{CONTENT_ADDRESSED}) {
+		require Renderer::ContentCache;
+		my $evicted = Renderer::ContentCache::sweep();
+		$self->log->info("ContentCache sweep: evicted $evicted stale problem(s)") if $evicted;
+	}
+
 	# Models
 	$self->helper(newProblem => sub { shift; Renderer::Model::Problem->new(@_) });
 

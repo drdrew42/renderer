@@ -8,6 +8,7 @@ use Digest::SHA  qw(sha256_hex);
 
 use Crypt::Ed25519;
 use MIME::Base64 qw(decode_base64);
+use File::Spec;
 use WeBWorK::PreTeXt;
 use Renderer::ContentCache;
 use Renderer::Registration;
@@ -41,6 +42,10 @@ sub parseRequest ($c) {
 	# Stash first-render flag for seed diversity telemetry (LT-010).
 	# A request without sessionJWT is the student's first view of this problem.
 	$c->stash(_is_first_render => !defined $params{sessionJWT} ? 1 : 0);
+
+	# Force-reload: skip content cache and re-fetch from OPL.
+	# Useful after macro updates or to diagnose cache issues.
+	$c->stash(_no_cache => $params{noCache} ? 1 : 0);
 
 	# ensure that these params are only provided by trusted source
 	for (qw(JWTanswerURL sessionID numCorrect numIncorrect)) {
@@ -110,12 +115,14 @@ sub parseRequest ($c) {
 
 sub fetchRemoteSource_p ($c, $url, $pg_hash_hint = undef) {
 
-	# Content-addressed mode: check disk cache first
+	# Content-addressed mode: check disk cache first (unless noCache)
 	if ($ENV{CONTENT_ADDRESSED}) {
+		my $no_cache = $c->stash('_no_cache');
+
 		# Try to resolve pg_hash from hint or url_index
 		my $pg_hash = $pg_hash_hint || Renderer::ContentCache::pg_hash_for_url($url);
 
-		if ($pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
+		if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
 				$c->log->info("ContentCache HIT: $pg_hash (zero network)");
@@ -124,8 +131,9 @@ sub fetchRemoteSource_p ($c, $url, $pg_hash_hint = undef) {
 			}
 		}
 
-		# Cache miss — fetch with conditional GET
-		return _fetch_content_addressed_p($c, $url, $pg_hash);
+		# Cache miss (or noCache forced) — fetch with conditional GET
+		$c->log->info("ContentCache BYPASS (noCache)") if $no_cache;
+		return _fetch_content_addressed_p($c, $url, $no_cache ? undef : $pg_hash);
 	}
 
 	# Legacy mode: unchanged behavior
@@ -184,20 +192,40 @@ sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
 		# Stage macros first (they must exist before problem symlinks)
 		my @macros_to_link;
 		for my $macro (@{ $obj->{macros} // [] }) {
-			next unless $macro->{hash} && $macro->{source_type} && $macro->{source_type} eq 'custom';
-			push @macros_to_link, { name => $macro->{name}, hash => $macro->{hash} };
+			next unless $macro->{hash} && $macro->{source_type}
+				&& ($macro->{source_type} eq 'custom' || $macro->{source_type} eq 'override');
 
-			# Fetch each custom macro by its URL if not already cached
-			unless (-f "$ENV{RENDER_ROOT}/private/macros/$macro->{hash}") {
+			my $cache_hash = $macro->{hash};
+
+			# Fetch macro if not already cached
+			unless (-f "$ENV{RENDER_ROOT}/private/macros/$cache_hash") {
 				if ($macro->{url}) {
-					my $macro_tx = $c->ua->get($macro->{url});
+					# Macro URL may be relative (/api/macros/...) — resolve against OPL base
+					my $macro_url = $macro->{url};
+					if ($macro_url =~ m{^/}) {
+						my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
+						$macro_url = $opl_base . $macro_url;
+					}
+					$c->log->info("Fetching macro $macro->{name}: $macro_url");
+					my $macro_tx = $c->ua->get($macro_url);
 					if ($macro_tx->result->is_success) {
-						Renderer::ContentCache::stage_macro($macro->{hash}, $macro_tx->result->body);
+						# If OPL redirected us, extract the canonical hash from the final URL
+						my $final_url = $macro_tx->req->url->to_string;
+						if ($final_url =~ m{/api/macros/(sha256:[0-9a-f]+)$}) {
+							my $redirected_hash = $1;
+							if ($redirected_hash ne $macro->{hash}) {
+								$c->log->info("Macro $macro->{name}: redirected $macro->{hash} → $redirected_hash");
+								$cache_hash = $redirected_hash;
+							}
+						}
+						Renderer::ContentCache::stage_macro($cache_hash, $macro_tx->result->body);
 					} else {
 						$c->log->warn("ContentCache: failed to fetch macro $macro->{name}");
 					}
 				}
 			}
+
+			push @macros_to_link, { name => $macro->{name}, hash => $cache_hash };
 		}
 
 		# Stage the problem
@@ -262,9 +290,10 @@ sub resolveSourceFilePath_p ($c, $file_path, $pg_hash_hint = undef) {
 		return Mojo::Promise->resolve(undef, undef, "private/$normalized");
 	}
 
-	# 2. Path index + cache — zero network
-	my $pg_hash = $pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized);
-	if ($pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
+	# 2. Path index + cache — zero network (unless noCache)
+	my $no_cache = $c->stash('_no_cache');
+	my $pg_hash = $no_cache ? undef : ($pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized));
+	if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
 		my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 		if ($cached_source) {
 			$c->log->info("ContentCache PATH HIT: $pg_hash (zero network)");
@@ -349,6 +378,16 @@ async sub problem ($c) {
 	});
 	unless ($problem->success()) {
 		return $c->exception($problem->{_message}, $problem->{status});
+	}
+
+	# Inject cached custom macro source into envir for PG's loadMacros().
+	# PGloadfiles.pm checks envir{injectedMacros}{$fileName} before searching disk.
+	if ($inputs_ref->{pg_hash}) {
+		my $injected = Renderer::ContentCache::get_injected_macros($inputs_ref->{pg_hash});
+		if (%$injected) {
+			$inputs_ref->{injectedMacros} = $injected;
+			$c->log->info("Injecting " . scalar(keys %$injected) . " macro(s) via envir for $inputs_ref->{pg_hash}");
+		}
 	}
 
 	$c->render_later;    # tell Mojo that this might take a while
@@ -469,9 +508,25 @@ async sub callback ($c) {
 		return $c->render(json => { error => 'invalid signature' }, status => 401);
 	}
 
-	# Parse request
+	# Parse request and dispatch by action
 	my $req = $c->req->json;
-	unless ($req && defined $req->{pg_source} && defined $req->{seed}) {
+	unless ($req) {
+		return $c->render(json => { error => 'missing JSON body' }, status => 400);
+	}
+
+	# Dispatch: invalidate_macro doesn't need the render pipeline
+	if (($req->{action} // '') eq 'invalidate_macro') {
+		my $hash = $req->{hash};
+		unless ($hash) {
+			return $c->render(json => { error => 'missing hash' }, status => 400);
+		}
+		my $deleted = eval { unlink File::Spec->catfile("$ENV{RENDER_ROOT}/private/macros", $hash) } // 0;
+		$c->log->info("Macro invalidated: $hash (deleted=$deleted)");
+		return $c->render(json => { invalidated => $hash, deleted => $deleted ? \1 : \0 });
+	}
+
+	# Default action: render (original callback behavior)
+	unless (defined $req->{pg_source} && defined $req->{seed}) {
 		return $c->render(json => { error => 'missing pg_source or seed' }, status => 400);
 	}
 

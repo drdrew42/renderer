@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Digest::SHA qw(sha256_hex);
-use File::Path  qw(make_path);
+use File::Path  qw(make_path remove_tree);
 use File::Spec;
 
 # Base directory for all content-addressed storage
@@ -117,6 +117,113 @@ sub save_path_index {
 	open my $fh, '>', $index_file or warn "ContentCache: cannot write path_index: $!" && return;
 	print $fh $pg_hash;
 	close $fh;
+	return 1;
+}
+
+# Build the injectedMacros hash for a cached problem.
+# Scans the problem directory for .pl symlinks pointing into macros/,
+# reads the macro source, and returns { macro_name => source_code }.
+# Returns empty hashref if no macros or problem not cached.
+sub get_injected_macros {
+	my ($pg_hash) = @_;
+	my $dir = _problem_dir($pg_hash);
+	return {} unless -d $dir;
+
+	my %injected;
+	opendir my $dh, $dir or return {};
+	while (my $entry = readdir $dh) {
+		next unless $entry =~ /\.pl$/i;
+		my $link_path = File::Spec->catfile($dir, $entry);
+		next unless -l $link_path;    # only symlinks (not regular .pl files)
+
+		# Resolve the symlink and read the macro source
+		my $target = readlink($link_path);
+		my $abs_target = File::Spec->rel2abs($target, $dir);
+		next unless -f $abs_target;
+
+		open my $fh, '<:encoding(UTF-8)', $abs_target or next;
+		local $/;
+		$injected{$entry} = <$fh>;
+		close $fh;
+	}
+	closedir $dh;
+
+	return \%injected;
+}
+
+# Evict problem directories older than $max_age_hours (by mtime).
+# Also sweeps stale url_index and path_index entries pointing to evicted hashes.
+# Returns the number of problem directories removed.
+sub sweep {
+	my (%opts) = @_;
+	my $max_age_hours = $opts{max_age_hours} // ($ENV{CACHE_TTL_HOURS} || 168);  # default 1 week
+	my $cutoff = time - ($max_age_hours * 3600);
+	my $evicted = 0;
+
+	my $problems_dir = File::Spec->catdir($PRIVATE, 'problems');
+	return 0 unless -d $problems_dir;
+
+	opendir my $dh, $problems_dir or return 0;
+	my @entries = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+	closedir $dh;
+
+	my %evicted_hashes;
+	for my $entry (@entries) {
+		my $dir = File::Spec->catdir($problems_dir, $entry);
+		next unless -d $dir;
+		my $mtime = (stat($dir))[9];
+		if ($mtime < $cutoff) {
+			remove_tree($dir);
+			$evicted_hashes{$entry} = 1;
+			$evicted++;
+		}
+	}
+
+	# Sweep index entries pointing to evicted hashes
+	if ($evicted) {
+		for my $index_dir ('.url_index', '.path_index') {
+			my $idx_path = File::Spec->catdir($PRIVATE, $index_dir);
+			next unless -d $idx_path;
+			opendir my $ih, $idx_path or next;
+			while (my $f = readdir $ih) {
+				next if $f eq '.' || $f eq '..';
+				my $file = File::Spec->catfile($idx_path, $f);
+				open my $fh, '<', $file or next;
+				chomp(my $hash = <$fh>);
+				close $fh;
+				unlink $file if $evicted_hashes{$hash};
+			}
+			closedir $ih;
+		}
+	}
+
+	return $evicted;
+}
+
+# Remove a single problem directory and its index entries.
+sub invalidate {
+	my ($pg_hash) = @_;
+	my $dir = _problem_dir($pg_hash);
+	return 0 unless -d $dir;
+
+	remove_tree($dir);
+
+	# Clean any index entries pointing to this hash
+	for my $index_dir ('.url_index', '.path_index') {
+		my $idx_path = File::Spec->catdir($PRIVATE, $index_dir);
+		next unless -d $idx_path;
+		opendir my $ih, $idx_path or next;
+		while (my $f = readdir $ih) {
+			next if $f eq '.' || $f eq '..';
+			my $file = File::Spec->catfile($idx_path, $f);
+			open my $fh, '<', $file or next;
+			chomp(my $hash = <$fh>);
+			close $fh;
+			unlink $file if $hash eq $pg_hash;
+		}
+		closedir $ih;
+	}
+
 	return 1;
 }
 
