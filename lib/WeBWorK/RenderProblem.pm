@@ -358,11 +358,11 @@ sub generateJWTs {
 	# update the number of correct/incorrect submissions if answers were 'submitted'
 	# but don't update either if the problem was already correct
 	$sessionHash->{numCorrect} =
-		(defined $inputs_ref->{submitAnswers} && $inputs_ref->{numCorrect} == 0)
+		(defined $inputs_ref->{submitAnswers} && ($inputs_ref->{numCorrect} // 0) == 0)
 		? $pg->{problem_state}{num_of_correct_ans}
 		: ($inputs_ref->{numCorrect} // 0);
 	$sessionHash->{numIncorrect} =
-		(defined $inputs_ref->{submitAnswers} && $inputs_ref->{numCorrect} == 0)
+		(defined $inputs_ref->{submitAnswers} && ($inputs_ref->{numCorrect} // 0) == 0)
 		? $pg->{problem_state}{num_of_incorrect_ans}
 		: ($inputs_ref->{numIncorrect} // 0);
 
