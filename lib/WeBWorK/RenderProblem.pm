@@ -146,9 +146,13 @@ sub process_problem {
 	$return_object->{pgResources}       = \@pgResources;
 	$return_object->{raw_metadata_text} = $raw_metadata_text if $inputs_ref->{includeTags};
 
-	# generate sessionJWT to store session data and answerJWT to update grade store
-	if ($inputs_ref->{previewAnswers}) {
-		# if this is a preview, leave session unmodified, and no answerJWT
+	# Generate sessionJWT + answerJWT for student interactions only.
+	# Instructors don't get session tracking or answer JWTs — their
+	# interactions are exploratory and should not produce telemetry.
+	if ($inputs_ref->{isInstructor}) {
+		# no-op: no session, no answer JWT
+	} elsif ($inputs_ref->{previewAnswers}) {
+		# preview: leave session unmodified, no answerJWT
 		$return_object->{sessionJWT} = $inputs_ref->{sessionJWT};
 	} elsif ($inputs_ref->{problemJWT}) {
 		my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
@@ -189,11 +193,23 @@ sub standaloneRenderer {
 
 	my $processAnswers = $inputs_ref->{processAnswers} // 1;
 
-	my $isPreview = defined($inputs_ref->{previewAnswers}) ? 1 : 0;
-	my $isSubmit  = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
-	my $showSolutions =
-		($inputs_ref->{isInstructor} ? 1 : 0) || $inputs_ref->{showCorrectAnswers} || $inputs_ref->{showSolutions};
-	my $showHints      = $showSolutions || $inputs_ref->{showHints};
+	my $isPreview    = defined($inputs_ref->{previewAnswers}) ? 1 : 0;
+	my $isSubmit     = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
+	my $isInstructor = $inputs_ref->{isInstructor} ? 1 : 0;
+
+	# Answers and solutions are a single unlock: showCorrectAnswers is the switch.
+	# When answers are shown, solutions are shown too (if the problem has them),
+	# unless showSolutions is explicitly 0 (e.g. instructor wants answers only).
+	# Hints are ungated passthrough — PG's $showHint threshold controls visibility.
+	#
+	# Session lifecycle (non-instructor only):
+	# - answerJWTs flow on every submit. The LMS owns due-date / scoring policy.
+	# - Session locks when: student scores 100% OR showCorrectAnswers is requested.
+	# - After lock: no answerJWT, no session updates. The interaction is over.
+	my $showCorrectAnswers = $inputs_ref->{showCorrectAnswers} ? 1 : 0;
+	my $showSolutions = $showCorrectAnswers
+		&& !(defined $inputs_ref->{showSolutions} && !$inputs_ref->{showSolutions});
+	my $showHints = $inputs_ref->{showHints} ? 1 : 0;
 	my $displayResults = $inputs_ref->{answersSubmitted} && !$isPreview;
 	my $forceResults   = $displayResults                 && $inputs_ref->{showPartialCorrectAnswers};
 
@@ -211,9 +227,9 @@ sub standaloneRenderer {
 		forceShowAttemptResults => $forceResults,                         # overrides showPartialCorrectAnswers
 		showAttemptAnswers      => $isPreview,                            # display string version of submitted answer
 		showAttemptPreviews     => 1,                                     # display LaTeX version of submitted answer
-		showHints               => $showHints,                            # default is to showHint (set in PG.pm)
+		showHints               => $showHints,
 		showSolutions           => $showSolutions,
-		showCorrectAnswers      => $inputs_ref->{showCorrectAnswers} ? 2 : 0,
+		showCorrectAnswers      => $showCorrectAnswers ? 2 : 0,
 		num_of_correct_ans      => $inputs_ref->{numCorrect}   || 0,
 		num_of_incorrect_ans    => $inputs_ref->{numIncorrect} || 0,
 		displayMode             => $inputs_ref->{displayMode},
@@ -287,8 +303,25 @@ sub get_current_process_memory {
 	return $info{$$}->rss;
 }
 
-# expects a pg/result_object and a ref to submitted formdata
-# generates a sessionJWT and an answerJWT
+# Generate sessionJWT (updated interaction state) and answerJWT (score report for LMS).
+#
+# The answerJWT is sent to the LMS answer URL on every student submission.
+# It contains: score, sessionJWT (opaque), isLocked, and platform.
+#
+# Three states:
+#   1. Normal submit:  isLocked=0 on entry, not triggered. answerJWT sent, isLocked: 0.
+#   2. Locking submit: isLocked=0 on entry, triggered this request (100% or
+#      showCorrectAnswers). Final answerJWT sent with isLocked: 1.
+#   3. Already locked:  isLocked=1 on entry. No answerJWT generated or sent.
+#
+# Security contract for LMS integrators:
+#   The renderer is stateless. It cannot prevent session replay attacks.
+#   LMS implementations MUST:
+#   - Verify that (numCorrect + numIncorrect) is strictly increasing on each
+#     answerJWT received. A stale or equal sum indicates a replayed session.
+#   - Once an answerJWT arrives with isLocked=1, reject all further answerJWT
+#     updates for that student+problem. isLocked is irreversible.
+#   - The answerJWT is a report, not a command. The LMS owns scoring policy.
 sub generateJWTs {
 	my $pg          = shift;
 	my $inputs_ref  = shift;
@@ -305,10 +338,16 @@ sub generateJWTs {
 		result  => $pg->{problem_result}{score},
 		answers => unbless($pg->{answers}),
 	};
-	# once the correct answers are shown, this setting is permanent
-	if ($inputs_ref->{showCorrectAnswers} && !$inputs_ref->{isInstructor}) {
-		$sessionHash->{showCorrectAnswers} = 1;
-		$sessionHash->{isLocked}           = 1;
+	# Lock the session when the interaction is over (non-instructor only):
+	# - Student requested correct answers (answers are now compromised), or
+	# - Student scored 100% (nothing left to accomplish).
+	# After lock: no further answerJWTs, no session updates.
+	if (!$inputs_ref->{isInstructor}) {
+		my $perfect = defined $pg->{problem_result}{score} && $pg->{problem_result}{score} >= 1;
+		if ($inputs_ref->{showCorrectAnswers} || $perfect) {
+			$sessionHash->{showCorrectAnswers} = 1 if $inputs_ref->{showCorrectAnswers};
+			$sessionHash->{isLocked} = 1;
+		}
 	}
 
 	# store the current answer/response state for each entry
@@ -330,16 +369,22 @@ sub generateJWTs {
 	# create the session JWT
 	my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
 
-	# form answerJWT
+	# Skip answerJWT when session was ALREADY locked on entry — this is a replay.
+	# But if the lock was just triggered THIS request, send the final answerJWT
+	# with isLocked=1 so the LMS knows to stop.
+	return ($sessionJWT, undef) if $inputs_ref->{isLocked};
+
+	# form answerJWT — this is the LMS-readable score report.
+	# isLocked signals the LMS to stop sending new interactions for this student+problem.
 	my $responseHash = {
 		iss        => $ENV{SITE_HOST},
 		aud        => $inputs_ref->{JWTanswerURL},
 		score      => $scoreHash,
 		sessionJWT => $sessionJWT,
+		isLocked   => $sessionHash->{isLocked} ? 1 : 0,
 		platform   => 'standaloneRenderer'
 	};
 
-	# Can instead use alg => 'PBES2-HS512+A256KW', enc => 'A256GCM' for JWE
 	my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 	return ($sessionJWT, $answerJWT);
 }

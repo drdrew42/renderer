@@ -31,9 +31,6 @@ sub parseRequest ($c) {
 		return $c->exception('Malformed request.', 400);
 	}
 
-	# TODO: ensure showCorrectAnswers does not appear without showCorrectAnswersButton
-	# showCorrectAnswersButton cannot be checked until after pulling in problemJWT
-
 	# Normalize common lowercase query params to camelCase before JWT processing.
 	$params{outputFormat}  //= delete $params{outputformat}  if exists $params{outputformat};
 	$params{displayMode}   //= delete $params{displaymode}   if exists $params{displaymode};
@@ -67,9 +64,15 @@ sub parseRequest ($c) {
 		} or do {
 			return $c->croak($@, 3);
 		};
-		# only supply key-values that are not already provided
-		# e.g. current responses vs. previously submitted responses
-		# except for problemJWT which must remain consistent with session
+
+		# Security-sensitive claims from the session always win over raw params.
+		# Prevents students from injecting isLocked=0 or isInstructor=1 via POST.
+		for (qw(isLocked isInstructor showCorrectAnswers answersSubmitted)) {
+			$params{$_} = $claims->{$_} if exists $claims->{$_};
+		}
+
+		# For all other claims, raw params win (e.g. current responses vs prior).
+		# problemJWT must come from session to maintain consistency.
 		delete $params{problemJWT};
 		foreach my $key (keys %$claims) {
 			$params{$key} //= $claims->{$key};
@@ -407,8 +410,10 @@ async sub problem ($c) {
 	};
 	$return_object->{inputs_ref} = $inputs_ref;
 
-	# if answerURL provided and this is a submit, then send the answerJWT
-	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers} && !$inputs_ref->{isLocked}) {
+	# If answerURL provided and this is a student submit, send the answerJWT.
+	# Instructors never produce answer JWTs — their interactions are exploratory.
+	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
+		&& !$inputs_ref->{isLocked} && !$inputs_ref->{isInstructor}) {
 		# can this be 'await'ed later?
 		$return_object->{JWTanswerURLstatus} =
 			await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});

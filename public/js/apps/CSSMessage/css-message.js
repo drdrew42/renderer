@@ -43,8 +43,8 @@ window.addEventListener('message', (event) => {
 	}
 
 	if (message.hasOwnProperty('showSolutions')) {
-		const elements = Array.from(window.document.querySelectorAll('.knowl[data-type="solution"]'));
-		const solutions = elements.map((el) => el.dataset.knowlContents);
+		const elements = Array.from(window.document.querySelectorAll('.solution .accordion-body'));
+		const solutions = elements.map((el) => el.innerHTML);
 		event.source.postMessage(
 			JSON.stringify({ type: 'webwork.content.solutions', solutions: solutions }),
 			event.origin
@@ -52,8 +52,8 @@ window.addEventListener('message', (event) => {
 	}
 
 	if (message.hasOwnProperty('showHints')) {
-		const elements = Array.from(window.document.querySelectorAll('.knowl[data-type="hint"]'));
-		const hints = elements.map((el) => el.dataset.knowlContents);
+		const elements = Array.from(window.document.querySelectorAll('.hint .accordion-body'));
+		const hints = elements.map((el) => el.innerHTML);
 		event.source.postMessage(JSON.stringify({ type: 'webwork.content.hints', hints: hints }), event.origin);
 	}
 });

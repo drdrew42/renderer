@@ -126,10 +126,6 @@ sub formatRenderedProblem {
 	my $problemResult    = $rh_result->{problem_result}    // {};
 	my $showSummary      = $inputs_ref->{showSummary}      // 1;
 	my $showScoreSummary = $inputs_ref->{showScoreSummary} // 0;
-	# my $showAnswerNumbers = $inputs_ref->{showAnswerNumbers} // 0;    # default no
-	# allow the request to hide the results table or messages
-	my $showTable    = $inputs_ref->{hideAttemptsTable} ? 0 : 1;
-	my $showMessages = $inputs_ref->{hideMessages}      ? 0 : 1;
 	# allow the request to override the display of partial correct answers
 	my $showPartialCorrectAnswers = $inputs_ref->{showPartialCorrectAnswers}
 		// $rh_result->{flags}{showPartialCorrectAnswers};
@@ -197,6 +193,44 @@ sub formatRenderedProblem {
 
 		# Convert to JSON and render.
 		return $c->render(data => encode_json($output));
+	}
+
+	# Debug format: focused diagnostic view for troubleshooting render issues.
+	# Returns JSON with permission decisions, macro injection, cache state, and PG warnings.
+	if ($formatName eq 'debug') {
+		my $debug = {
+			permissions => {
+				isInstructor       => $inputs_ref->{isInstructor} ? 1 : 0,
+				showCorrectAnswers => $inputs_ref->{showCorrectAnswers} ? 1 : 0,
+				showSolutions      => $rh_result->{flags}{showSolutions} // 0,
+				showHints          => $rh_result->{flags}{showHints} // 0,
+				isLocked           => $inputs_ref->{isLocked} ? 1 : 0,
+			},
+			problem => {
+				pg_hash        => $inputs_ref->{pg_hash} // '',
+				sourceFilePath => $inputs_ref->{sourceFilePath} // '',
+				problemSeed    => $inputs_ref->{problemSeed},
+				problemUUID    => $problemUUID,
+			},
+			macros => {
+				injected => $inputs_ref->{injectedMacros} ? [
+					map { { name => $_->{name}, hash => $_->{hash} } }
+						@{ $inputs_ref->{injectedMacros} }
+				] : [],
+			},
+			result => {
+				score    => $rh_result->{problem_result}{score} // undef,
+				errors   => $rh_result->{errors} // '',
+				warnings => $rh_result->{warning_messages} // [],
+				flags    => {
+					map { $_ => $rh_result->{flags}{$_} }
+						grep { defined $rh_result->{flags}{$_} }
+						qw(showPartialCorrectAnswers PROBLEM_GRADING_ATTEMPTED comment)
+				},
+			},
+			render_error => $renderErrorOccurred ? 1 : 0,
+		};
+		return $c->render(data => encode_json($debug));
 	}
 
 	# Setup and render the appropriate template in the templates/RPCRenderFormats folder depending on the outputformat.
