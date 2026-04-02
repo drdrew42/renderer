@@ -74,14 +74,92 @@ If using a local install instead of docker:
 
 ## Server Configuration
 
-Modification of `baseURL` may be necessary to separate multiple services running on `SITE_HOST`, and will be used to
-extend `SITE_HOST`. The result of this extension will serve as the root URL for accessing the renderer (and any
-supplementary assets it may need to provide in support of a rendered problem). If `baseURL` is an absolute URL, it will
-be used verbatim -- userful if the renderer is running behind a load balancer.
+Configuration lives in `renderer.conf` (copied from `renderer.conf.dist` during build). All key settings can also be overridden via environment variables, which take precedence over the config file — this is the recommended approach for Docker deployments.
 
-By default, `formURL` will further extend `baseURL`, and serve as the form-data target for user interactions with
-problems rendered by this service. If `formURL` is an absolute URL, it will be used verbatim -- useful if your
-implementation intends to sit in between the user and the renderer.
+### Configuration Reference
+
+| Setting | Env Override | Description |
+|---------|-------------|-------------|
+| `SITE_HOST` | `SITE_HOST` | Public-facing origin URL. Used as `<base href>` in rendered HTML and as issuer/audience in JWTs. Must match what the end user's browser sees. |
+| `baseURL` | `baseURL` | Path prefix when mounted at a subpath (e.g. `renderer` for `https://example.com/renderer/`). If set to an absolute URL, overrides `SITE_HOST` for asset references. Leave empty when hosting at root. |
+| `formURL` | `formURL` | Where answer forms POST to. Defaults to `{SITE_HOST}{baseURL}/render-api`. Set to an absolute URL for MITM deployments. |
+| `problemJWTsecret` | `problemJWTsecret` | Shared secret for encrypting render configuration JWTs. Must match any service that creates problem tokens. |
+| `webworkJWTsecret` | `webworkJWTsecret` | Shared secret for session state JWTs (attempt history, scores). |
+| `CORS_ORIGIN` | — | Allowed origin for CORS headers. Set to the embedding site's origin for iframe deployments. `*` is insecure. |
+| `STRICT_JWT` | `STRICT_JWT` | When `1`, rejects requests without a `problemJWT` or `sessionJWT`. Prevents raw-parameter API access. |
+| `FULL_APP_INSECURE` | — | Enables editor UI, OPL browser, and file management routes in production mode. Always available in development mode. |
+| `STATIC_EXPIRES` | — | `Cache-Control` max-age (seconds) for static assets under `/webwork2_files/`. |
+
+### Deployment Topologies
+
+The renderer was designed to support several integration patterns. The URL configuration (`SITE_HOST`, `baseURL`, `formURL`) and JWT architecture adapt to each.
+
+#### Standalone
+
+The renderer serves problems directly to the user's browser. Simplest setup.
+
+```
+  Browser  ←→  Renderer
+```
+
+```bash
+docker run -d -p 3000:3000 \
+  -e SITE_HOST=https://renderer.example.com \
+  renderer
+```
+
+`SITE_HOST` is the renderer's own public URL. `baseURL` and `formURL` are empty (defaults). The browser loads rendered HTML and submits answers directly to the renderer.
+
+#### MITM Proxy
+
+A middleware sits between the student and the renderer. The student's browser talks to the proxy, which forwards render requests and intercepts answer submissions.
+
+```
+  Browser  ←→  Proxy  ←→  Renderer
+```
+
+```bash
+docker run -d -p 3000:3000 \
+  -e SITE_HOST=http://localhost:3000 \
+  -e baseURL=https://proxy.example.com/webwork/ \
+  -e formURL=https://proxy.example.com/webwork/render-api \
+  renderer
+```
+
+- `baseURL` is absolute (the proxy's origin) — rendered HTML references assets through the proxy
+- `formURL` is absolute — answer forms POST to the proxy, not the renderer directly
+- The proxy forwards render requests to the renderer's internal address and relays responses
+
+#### Triangular / Iframe (e.g. LibreTexts)
+
+The LMS and renderer are separate services. The student's browser communicates with both: the LMS issues a JWT, the browser loads the renderer in an iframe using that JWT, and the renderer reports scores back to the LMS asynchronously.
+
+```
+        LMS (LibreTexts)
+       ↗ (1. get JWT)  ↖ (3. answerJWT callback)
+  Browser  ——————————→  Renderer (iframe)
+           (2. render + submit via JWT)
+```
+
+1. Student requests a problem from the LMS
+2. LMS issues a `problemJWT` containing the render config and a `JWTanswerURL` pointing back at the LMS grading endpoint
+3. Student's browser loads the renderer in an iframe, passing the `problemJWT`
+4. On answer submission, the renderer POSTs an `answerJWT` (containing score + sessionJWT) to the `JWTanswerURL` from inside the token
+5. LMS updates its gradebook; student can resume via `sessionJWT` if the iframe closes
+
+```bash
+docker run -d -p 3000:3000 \
+  -e SITE_HOST=https://renderer.example.com \
+  -e CORS_ORIGIN=https://lms.example.com \
+  -e STRICT_JWT=1 \
+  renderer
+```
+
+- `SITE_HOST` must match the iframe's `src` origin (what the browser sees)
+- `CORS_ORIGIN` is the LMS origin (the iframe's parent)
+- `STRICT_JWT=1` — only JWT-authenticated requests are accepted
+- `problemJWTsecret` must be shared between the LMS and renderer
+- `JWTanswerURL` is embedded in the JWT by the LMS, not configured on the renderer
 
 ## Renderer API
 

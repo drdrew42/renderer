@@ -17,3 +17,4 @@ public/static-assets.json
 *.bs
 *.pid
 .idea/
+CLAUDE.md

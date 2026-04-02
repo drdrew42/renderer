@@ -1,3 +1,44 @@
+# Version control
 .git
 .gitignore
+.gitattributes
+.gitmodules
+.github
+
+# Documentation & metadata
+README.md
+LICENSE.md
+CLAUDE.md
+docs/
+
+# Kubernetes manifests
+k8/
+
+# IDE & OS files
+.idea/
+*.swp
+*.swo
+*~
 **/.DS_Store
+
+# Build artifacts & temp files
+*.o
+*.bs
+*.pid
+*.pm.tdy
+logs/*
+tmp/*
+
+# Local data (mounted at runtime, not baked in)
+webwork-open-problem-library/
+private/
+
+# Node modules (npm install runs in Dockerfile)
+node_modules
+public/node_modules
+lib/PG/htdocs/node_modules
+
+# Generated assets (built in Dockerfile)
+public/**/*.min.js
+public/**/*.min.css
+public/static-assets.json

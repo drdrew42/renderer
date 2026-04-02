@@ -1,14 +1,63 @@
 {
+  # Secrets for Mojolicious signed cookies. Change in production.
   secrets => ['abracadabra'],
-  baseURL => '',
-  formURL => '',
-  problemJWTsecret => 'shared',
-  webworkJWTsecret => 'private',
+
+  # --- URL Configuration ---
+  # These three settings control how rendered HTML references assets and form targets.
+  # All three can be overridden via environment variables of the same name.
+
+  # SITE_HOST: The public-facing origin URL where this renderer is reachable.
+  # Used as <base href> in rendered HTML and as issuer/audience in JWTs.
+  # Must match what the end user's browser sees (important for iframe embeddings).
   SITE_HOST => 'http://localhost:3000',
+
+  # baseURL: Path prefix when the renderer is mounted at a subpath behind a reverse proxy
+  # (e.g. 'renderer' if reachable at https://example.com/renderer/).
+  # If set to an absolute URL (https://...), it overrides SITE_HOST for asset references —
+  # useful for MITM proxies that serve renderer assets from their own origin.
+  # Leave empty when hosting at the root of SITE_HOST.
+  baseURL => '',
+
+  # formURL: Where answer submission forms POST to.
+  # Defaults to {SITE_HOST}{baseURL}/render-api.
+  # Set to an absolute URL for MITM proxy deployments where a middleware
+  # intercepts submissions before forwarding to the renderer.
+  formURL => '',
+
+  # --- JWT Secrets ---
+  # problemJWT: encrypts render configuration. Shared between renderer and any service
+  # that creates problem tokens (e.g. an LMS integration).
+  problemJWTsecret => 'shared',
+
+  # webworkJWT: encrypts session state (attempt history, scores). Used internally
+  # by the renderer; shared with services that issue sessionJWTs.
+  webworkJWTsecret => 'private',
+
+  # --- Security & Access ---
+  # CORS_ORIGIN: Set to the embedding site's origin for iframe deployments.
+  # '*' is convenient for development but insecure in production.
   CORS_ORIGIN => '*',
+
+  # STRICT_JWT: When enabled, rejects any request that doesn't include a
+  # problemJWT or sessionJWT. Prevents raw-parameter access to the render API.
   STRICT_JWT => 0,
+
+  # FULL_APP_INSECURE: Enables the editor UI, OPL browser, file management routes,
+  # and supplemental API endpoints in production mode. These are always available
+  # in development mode. NOT recommended for public-facing deployments.
   FULL_APP_INSECURE => 0,
+
+  # --- Logging ---
+  # INTERACTION_LOG: When enabled, logs each render/submit interaction to
+  # logs/interactions.log with timing data.
   INTERACTION_LOG => 0,
+
+  # STATIC_EXPIRES: Cache-Control max-age (in seconds) for static assets
+  # served under /webwork2_files/. Problem-generated temp files are always
+  # marked as expired regardless of this setting.
+  STATIC_EXPIRES => 86400,
+
+  # --- Hypnotoad (production server) ---
   hypnotoad => {
     listen => ['http://*:3000'],
     accepts => 400,
