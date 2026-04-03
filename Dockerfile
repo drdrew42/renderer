@@ -56,7 +56,7 @@ RUN apt-get update \
     && rm -fr /var/lib/apt/lists/* /tmp/*
 
 COPY cpanfile .
-RUN cpanm --installdeps . \
+RUN cpanm --notest --installdeps . \
     && rm -fr ./cpanm /root/.cpanm /tmp/*
 
 COPY . .

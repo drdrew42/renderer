@@ -10,6 +10,6 @@ requires 'Statistics::R::IO::Rserve', '== 1.0002';
 requires 'Date::Format', '== 2.24';
 requires 'Future::AsyncAwait', '== 0.71';
 requires 'Crypt::JWT', '== 0.037';
-requires 'Crypt::Ed25519', '== 0.001';
+requires 'Crypt::Ed25519', '== 1.05';
 requires 'IO::Socket::SSL', '== 2.098';
 requires 'CGI::Cookie', '== 4.59';
