@@ -3,26 +3,24 @@
   secrets => ['abracadabra'],
 
   # --- URL Configuration ---
-  # These three settings control how rendered HTML references assets and form targets.
-  # All three can be overridden via environment variables of the same name.
+  # RENDERER_URL: The full public URL where this renderer is reachable.
+  # Used for <base href>, JWT issuer/audience, and form action URLs.
+  # Include path prefix if behind a reverse proxy at a subpath.
+  # Examples:
+  #   'https://render.example.com'           — direct, at root
+  #   'https://example.com/renderer'         — behind proxy at /renderer
+  RENDERER_URL => 'http://localhost:3000',
 
-  # SITE_HOST: The public-facing origin URL where this renderer is reachable.
-  # Used as <base href> in rendered HTML and as issuer/audience in JWTs.
-  # Must match what the end user's browser sees (important for iframe embeddings).
-  SITE_HOST => 'http://localhost:3000',
+  # FORM_ACTION: (Optional) Where answer submission forms POST to.
+  # Only needed for MITM deployments where a middleware intercepts submissions.
+  # Defaults to {RENDERER_URL}/render-api when empty.
+  FORM_ACTION => '',
 
-  # baseURL: Path prefix when the renderer is mounted at a subpath behind a reverse proxy
-  # (e.g. 'renderer' if reachable at https://example.com/renderer/).
-  # If set to an absolute URL (https://...), it overrides SITE_HOST for asset references —
-  # useful for MITM proxies that serve renderer assets from their own origin.
-  # Leave empty when hosting at the root of SITE_HOST.
-  baseURL => '',
-
-  # formURL: Where answer submission forms POST to.
-  # Defaults to {SITE_HOST}{baseURL}/render-api.
-  # Set to an absolute URL for MITM proxy deployments where a middleware
-  # intercepts submissions before forwarding to the renderer.
-  formURL => '',
+  # --- Legacy URL Configuration (deprecated, use RENDERER_URL instead) ---
+  # SITE_HOST + baseURL + formURL still work if RENDERER_URL is not set.
+  # SITE_HOST => 'http://localhost:3000',
+  # baseURL => '',
+  # formURL => '',
 
   # --- JWT Secrets ---
   # problemJWT: encrypts render configuration. Shared between renderer and any service
