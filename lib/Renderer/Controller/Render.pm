@@ -325,27 +325,40 @@ async sub problem ($c) {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 
+
 	$inputs_ref->{problemSource} = fetchRemoteSource_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash})
 		if $inputs_ref->{problemSourceURL};
 
 	# Content-addressed sourceFilePath resolution
 	if ($ENV{CONTENT_ADDRESSED}
 		&& !$inputs_ref->{problemSourceURL}
-		&& !$inputs_ref->{problemSource}
 		&& $inputs_ref->{sourceFilePath})
 	{
-		my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
-			$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}
-		);
-		if ($disk_path) {
-			# Legacy disk — let Problem.pm handle normally
-			$inputs_ref->{sourceFilePath} = $disk_path;
-		} elsif ($source && $pg_hash) {
-			$inputs_ref->{problemSource}  = $source;
-			$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);
-			$inputs_ref->{pg_hash}        = $pg_hash;
+		if ($inputs_ref->{problemSource}) {
+			# Editor preview: use the editor's source but resolve the path
+			# for macro dependencies (pg_hash → injectedMacros at render time).
+			my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
+				$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}
+			);
+			if ($pg_hash) {
+				$inputs_ref->{pg_hash} = $pg_hash;
+				$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);
+			}
+			# problemSource stays as-is (the editor's live edit)
 		} else {
-			return $c->exception("Cannot resolve sourceFilePath: $inputs_ref->{sourceFilePath}", 404);
+			# Normal content-addressed render: fetch source + macros from OPL.
+			my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
+				$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}
+			);
+			if ($disk_path) {
+				$inputs_ref->{sourceFilePath} = $disk_path;
+			} elsif ($source && $pg_hash) {
+				$inputs_ref->{problemSource}  = $source;
+				$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);
+				$inputs_ref->{pg_hash}        = $pg_hash;
+			} else {
+				return $c->exception("Cannot resolve sourceFilePath: $inputs_ref->{sourceFilePath}", 404);
+			}
 		}
 	}
 

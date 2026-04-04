@@ -39,8 +39,39 @@ sub startup ($self) {
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
 	$self->secrets($self->config('secrets'));
-	for (qw(problemJWTsecret webworkJWTsecret baseURL formURL SITE_HOST STRICT_JWT)) {
+	for (qw(problemJWTsecret webworkJWTsecret STRICT_JWT)) {
 		$ENV{$_} //= $self->config($_);
+	}
+
+	# --- URL configuration ---
+	# RENDERER_URL: the public URL where this renderer is reachable.
+	#   e.g. "https://render.lan.drdrew.us" or "https://cms.example.com/renderer"
+	#   Replaces the old SITE_HOST + baseURL pair.
+	# FORM_ACTION: (optional) only for MITM deployments where a middleware
+	#   intercepts form submissions. If empty, defaults to {RENDERER_URL}/render-api.
+	#
+	# Legacy support: SITE_HOST + baseURL still work if RENDERER_URL is not set.
+	$ENV{RENDERER_URL} //= $self->config('RENDERER_URL');
+	$ENV{FORM_ACTION}  //= $self->config('FORM_ACTION') // '';
+
+	# Legacy fallback: build RENDERER_URL from SITE_HOST + baseURL
+	unless ($ENV{RENDERER_URL}) {
+		for (qw(baseURL formURL SITE_HOST)) {
+			$ENV{$_} //= $self->config($_);
+		}
+		my $host = $ENV{SITE_HOST} // 'http://localhost:3000';
+		my $base = $ENV{baseURL}   // '';
+		if ($base =~ m!^https?://!) {
+			# MITM mode: baseURL is the proxy origin, SITE_HOST is the renderer
+			$ENV{RENDERER_URL} = $host;
+			$ENV{FORM_ACTION}  = $ENV{formURL} if $ENV{formURL} && $ENV{formURL} =~ /\S/;
+			# basehref comes from the proxy for asset URLs
+			$main::basehref_override = $base;
+		} elsif ($base =~ /\S/) {
+			$ENV{RENDERER_URL} = "${host}/${base}";
+		} else {
+			$ENV{RENDERER_URL} = $host;
+		}
 	}
 
 	# Hypnotoad tuning from environment (Fargate vCPU count differs from bare metal).
@@ -53,23 +84,48 @@ sub startup ($self) {
 	$hyp->{clients}          = $ENV{HYPNOTOAD_CLIENTS}          + 0 if $ENV{HYPNOTOAD_CLIENTS};
 	$hyp->{graceful_timeout} = $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT} + 0 if $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT};
 
-	sanitizeHostURLs();
+	configureURLs();
 
 	print "Renderer is based at $main::basehref\n";
 	print "Problem attempts will be sent to $main::formURL\n";
 
-	# Handle optional CORS settings
-	if (my $CORS_ORIGIN = $self->config('CORS_ORIGIN')) {
-		die "CORS_ORIGIN ($CORS_ORIGIN) must be an absolute URL or '*'"
-			unless ($CORS_ORIGIN eq '*' || $CORS_ORIGIN =~ /^https?:\/\//);
+	# Increase max header line size from 8KB to 64KB.
+	# Browsers on shared wildcard domains send large Cookie headers
+	# from sibling services, which silently truncates the request.
+	$ENV{MOJO_MAX_LINE_SIZE} = 65536;
 
-		warn "*** [CONFIG] Using '*' for CORS_ORIGIN is insecure\n"
-			if ($CORS_ORIGIN eq '*');
+	# CORS: allow requests from known OPL origins (learned during registration)
+	# and optionally from a static CORS_ORIGIN config for other use cases.
+	{
+		my $static_origin = $self->config('CORS_ORIGIN');
+		if ($static_origin) {
+			die "CORS_ORIGIN ($static_origin) must be an absolute URL or '*'"
+				unless ($static_origin eq '*' || $static_origin =~ /^https?:\/\//);
+			warn "*** [CONFIG] Using '*' for CORS_ORIGIN is insecure\n"
+				if ($static_origin eq '*');
+		}
 
 		$self->hook(
 			before_dispatch => sub {
 				my $c = shift;
-				$c->res->headers->header('Access-Control-Allow-Origin' => $CORS_ORIGIN);
+				my $origin = $c->req->headers->origin // return;
+
+				my $allowed = $static_origin && ($static_origin eq '*' || $static_origin eq $origin)
+					? $static_origin
+					: Renderer::Registration::is_known_origin($origin)
+						? $origin
+						: undef;
+				return unless $allowed;
+
+				$c->res->headers->header('Access-Control-Allow-Origin'  => $allowed);
+				$c->res->headers->header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
+				$c->res->headers->header('Access-Control-Allow-Headers' => 'Content-Type');
+
+				# Short-circuit preflight requests
+				if ($c->req->method eq 'OPTIONS') {
+					$c->res->headers->header('Access-Control-Max-Age' => '86400');
+					$c->rendered(204);
+				}
 			}
 		);
 	}
@@ -216,46 +272,46 @@ sub timeout ($c) {
 	);
 }
 
-sub sanitizeHostURLs {
+# Derive basehref, formURL, route prefix, and SITE_HOST from RENDERER_URL.
+#
+# Deployment strategies:
+#   1. Direct:    RENDERER_URL=https://render.example.com
+#   2. Subpath:   RENDERER_URL=https://example.com/renderer
+#   3. MITM:      RENDERER_URL=https://render.example.com  FORM_ACTION=https://cms.example.com/render-api
+#                  (+ basehref_override from legacy baseURL=https://cms.example.com/renderer/)
+sub configureURLs {
+	my $url = Mojo::URL->new($ENV{RENDERER_URL});
+	die "*** [CONFIG] RENDERER_URL must be an absolute URL\n" unless $url->is_abs;
+
+	# SITE_HOST = origin only (scheme + host + port). Used for JWT iss/aud.
+	$ENV{SITE_HOST} = $url->clone->path('')->query(undef)->fragment(undef)->to_string;
 	$ENV{SITE_HOST} =~ s!/$!!;
 
-	# set an absolute base href for asset urls under iframe embedding
-	if ($ENV{baseURL} =~ m!^https?://!) {
+	# Route prefix = path component (e.g. "/renderer" or "")
+	my $path_prefix = $url->path->to_string // '';
+	$path_prefix =~ s!/$!!;
+	$ENV{baseURL} = $path_prefix;
 
-		# this should only be used by MITM sites when proxying renderer assets
-		my $baseURL = $ENV{baseURL} =~ m!/$! ? $ENV{baseURL} : "$ENV{baseURL}/";
-		$main::basehref = Mojo::URL->new($baseURL);
-
-		# do NOT use the proxy address in our router!
-		$ENV{baseURL} = '';
-	} elsif ($ENV{baseURL} =~ m!\S!) {
-
-		# ENV{baseURL} is used to build routes, so configure as "/extension"
-		$ENV{baseURL} = "/$ENV{baseURL}";
-		warn "*** [CONFIG] baseURL should not end in a slash\n"
-			if $ENV{baseURL} =~ s!/$!!;
-		warn "*** [CONFIG] baseURL should begin with a slash\n"
-			unless $ENV{baseURL} =~ s!^//!/!;
-
-		# base href must end in a slash when not hosting at the root
-		$main::basehref =
-			Mojo::URL->new($ENV{SITE_HOST})->path("$ENV{baseURL}/");
+	# basehref = what browsers use to resolve relative asset URLs
+	if ($main::basehref_override) {
+		# MITM: proxy serves assets from its own origin
+		my $override = $main::basehref_override;
+		$override .= '/' unless $override =~ m!/$!;
+		$main::basehref = Mojo::URL->new($override);
+	} elsif ($path_prefix) {
+		$main::basehref = Mojo::URL->new($ENV{SITE_HOST})->path("$path_prefix/");
 	} else {
-		# no proxy and service is hosted at the root of SITE_HOST
 		$main::basehref = Mojo::URL->new($ENV{SITE_HOST});
 	}
 
-	if ($ENV{formURL} =~ m!\S!) {
-
-		# this should only be used by MITM
-		$main::formURL = Mojo::URL->new($ENV{formURL});
-		die '*** [CONFIG] if provided, formURL must be absolute'
+	# formURL = where answer submission forms POST to
+	if ($ENV{FORM_ACTION} && $ENV{FORM_ACTION} =~ /\S/) {
+		$main::formURL = Mojo::URL->new($ENV{FORM_ACTION});
+		die "*** [CONFIG] FORM_ACTION must be an absolute URL\n"
 			unless $main::formURL->is_abs;
 	} else {
-		# if using MITM proxy base href + renderer api not at SITE_HOST root
-		# provide form url as absolute SITE_HOST/extension/render-api
 		$main::formURL =
-			Mojo::URL->new($ENV{SITE_HOST})->path("$ENV{baseURL}/render-api");
+			Mojo::URL->new($ENV{SITE_HOST})->path("$path_prefix/render-api");
 	}
 }
 

@@ -11,6 +11,9 @@ use Renderer::Identity;
 # Stored OPL public key (raw 32 bytes) — set after successful registration.
 my $OPL_PUBLIC_KEY;
 
+# Known OPL origins (public-facing URLs) — used for dynamic CORS.
+my %OPL_ORIGINS;
+
 my $RETRY_INTERVAL = 30;  # seconds between registration retries
 
 # Register this renderer with the OPL.
@@ -62,6 +65,11 @@ sub _attempt_register {
 				$OPL_PUBLIC_KEY = decode_base64($body->{public_key});
 				$app->log->info("Registration: success — OPL pubkey stored ("
 					. length($OPL_PUBLIC_KEY) . " bytes)");
+				if (my $origin = $body->{origin}) {
+					$origin =~ s{/+$}{};  # strip trailing slash
+					$OPL_ORIGINS{$origin} = 1;
+					$app->log->info("Registration: CORS origin learned — $origin");
+				}
 			} else {
 				$app->log->warn("Registration: 200 but no OPL public_key in response");
 				_schedule_retry($app, $callback_url);
@@ -93,5 +101,8 @@ sub _build_callback_url {
 # Accessors for the stored OPL public key.
 sub opl_public_key     { return $OPL_PUBLIC_KEY }
 sub has_opl_public_key { return defined $OPL_PUBLIC_KEY && length($OPL_PUBLIC_KEY) == 32 }
+
+# Check if an origin belongs to a known OPL.
+sub is_known_origin { return $OPL_ORIGINS{ $_[0] // '' } ? 1 : 0 }
 
 1;
