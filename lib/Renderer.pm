@@ -194,6 +194,32 @@ sub startup ($self) {
 	$self->helper(logID           => sub { shift->req->request_id });
 	$self->helper(exception       => sub { Renderer::Controller::Render::exception(@_) });
 
+	# Structured request logging — one JSON line per request
+	require Time::HiRes;
+	require Mojo::JSON;
+	$self->hook(before_dispatch => sub ($c) {
+		$c->stash('_request_start' => Time::HiRes::time());
+	});
+	$self->hook(after_dispatch => sub ($c) {
+		my $start = $c->stash('_request_start') // return;
+		my $req = $c->req;
+		my $res = $c->res;
+		my $path = $req->url->path->to_string;
+		return if $path eq '/health';
+		my %entry = (
+			type        => 'request',
+			method      => $req->method,
+			path        => $path,
+			status      => $res->code,
+			duration_ms => sprintf('%.1f', (Time::HiRes::time() - $start) * 1000),
+			request_id  => $req->request_id,
+		);
+		# Renderer-specific fields
+		$entry{cache_status} = $c->stash('_cache_status') if $c->stash('_cache_status');
+		$entry{pg_hash}      = $c->stash('pg_hash')       if $c->stash('pg_hash');
+		$self->log->info(Mojo::JSON::encode_json(\%entry));
+	});
+
 	# Routes
 	# baseURL sets the root at which the renderer is listening,
 	# and is used in Environment for pg_root_url
