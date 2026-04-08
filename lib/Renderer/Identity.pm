@@ -9,6 +9,24 @@ use MIME::Base64 qw(encode_base64 decode_base64);
 use Encode qw(encode);
 use File::Spec;
 use File::Path qw(make_path);
+use Mojo::Log;
+use Mojo::JSON qw(encode_json);
+use Mojo::Date;
+
+my $log = Mojo::Log->new;
+if ($ENV{LOG_FORMAT} && $ENV{LOG_FORMAT} eq 'json') {
+	$log->format(sub {
+		my ($time, $level, @lines) = @_;
+		encode_json({
+			timestamp => Mojo::Date->new($time)->to_datetime,
+			level     => $level,
+			pid       => $$,
+			service   => 'renderer',
+			component => 'Identity',
+			message   => join(' ', @lines),
+		}) . "\n";
+	});
+}
 
 my $PRIVATE_KEY;
 my $PUBLIC_KEY;
@@ -35,11 +53,11 @@ sub init {
 		$PUBLIC_KEY  = decode_base64($ENV{IDENTITY_PUBLIC_KEY_B64});
 		$PRIVATE_KEY = decode_base64($ENV{IDENTITY_PRIVATE_KEY_B64});
 		unless ($PUBLIC_KEY && $PRIVATE_KEY && length($PUBLIC_KEY) == 32 && length($PRIVATE_KEY) == 64) {
-			warn "Identity: env var keypair invalid (pub=" . length($PUBLIC_KEY // '') . "B, priv=" . length($PRIVATE_KEY // '') . "B), falling through\n";
+			$log->warn("env var keypair invalid (pub=" . length($PUBLIC_KEY // '') . "B, priv=" . length($PRIVATE_KEY // '') . "B), falling through");
 			undef $PUBLIC_KEY;
 			undef $PRIVATE_KEY;
 		} else {
-			warn "Identity: loaded keypair from environment\n";
+			$log->info("loaded keypair from environment");
 		}
 	}
 
@@ -48,7 +66,7 @@ sub init {
 		$PRIVATE_KEY = _slurp($key_file);
 		$PUBLIC_KEY  = _slurp($pub_file);
 		unless ($PRIVATE_KEY && $PUBLIC_KEY && length($PUBLIC_KEY) == 32 && length($PRIVATE_KEY) == 64) {
-			warn "Identity: keypair files corrupt, regenerating\n";
+			$log->warn("keypair files corrupt, regenerating");
 			undef $PRIVATE_KEY;
 			undef $PUBLIC_KEY;
 		}
@@ -62,13 +80,13 @@ sub init {
 			_spew($key_file, $PRIVATE_KEY);
 			chmod 0600, $key_file;
 			_spew($pub_file, $PUBLIC_KEY);
-			warn "Identity: generated new keypair\n";
-			warn "Identity: to share across fleet, store in Secrets Manager:\n";
-			warn "Identity:   public_key:  " . encode_base64($PUBLIC_KEY, '') . "\n";
-			warn "Identity:   private_key: " . encode_base64($PRIVATE_KEY, '') . "\n";
+			$log->info("generated new keypair");
+			$log->info("to share across fleet, store in Secrets Manager:");
+			$log->info("  public_key:  " . encode_base64($PUBLIC_KEY, ''));
+			$log->info("  private_key: " . encode_base64($PRIVATE_KEY, ''));
 		};
 		if ($@) {
-			warn "Identity: cannot generate keypair: $@\n";
+			$log->error("cannot generate keypair: $@");
 			return 0;
 		}
 	}

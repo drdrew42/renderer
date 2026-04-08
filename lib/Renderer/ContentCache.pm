@@ -6,9 +6,28 @@ use warnings;
 use Digest::SHA qw(sha256_hex);
 use File::Path  qw(make_path remove_tree);
 use File::Spec;
+use Mojo::Log;
+use Mojo::JSON qw(encode_json);
+use Mojo::Date;
 
 # Base directory for all content-addressed storage
 my $PRIVATE = "$ENV{RENDER_ROOT}/private";
+
+# Module-level logger — respects LOG_FORMAT for structured output
+my $log = Mojo::Log->new;
+if ($ENV{LOG_FORMAT} && $ENV{LOG_FORMAT} eq 'json') {
+	$log->format(sub {
+		my ($time, $level, @lines) = @_;
+		encode_json({
+			timestamp => Mojo::Date->new($time)->to_datetime,
+			level     => $level,
+			pid       => $$,
+			service   => 'renderer',
+			component => 'ContentCache',
+			message   => join(' ', @lines),
+		}) . "\n";
+	});
+}
 
 # Return the pg_hash associated with a URL, or undef if unknown.
 sub pg_hash_for_url {
@@ -26,7 +45,7 @@ sub save_url_index {
 	my ($url, $pg_hash) = @_;
 	my $index_file = _url_index_path($url);
 	make_path(File::Spec->catdir($PRIVATE, '.url_index'));
-	open my $fh, '>', $index_file or warn "ContentCache: cannot write url_index: $!" && return;
+	open my $fh, '>', $index_file or do { $log->warn("Cannot write url_index: $!"); return };
 	print $fh $pg_hash;
 	close $fh;
 	return 1;
@@ -48,7 +67,7 @@ sub stage_problem {
 	# Write the problem source
 	my $pg_file = File::Spec->catfile($dir, 'problem.pg');
 	open my $fh, '>:encoding(UTF-8)', $pg_file
-		or warn "ContentCache: cannot write problem.pg: $!" && return;
+		or do { $log->warn("Cannot write problem.pg: $!"); return };
 	print $fh $raw_source;
 	close $fh;
 
@@ -73,7 +92,7 @@ sub stage_macro {
 	my $path = File::Spec->catfile($macro_dir, $hash);
 	return 1 if -f $path;    # already cached
 	open my $fh, '>:encoding(UTF-8)', $path
-		or warn "ContentCache: cannot write macro $hash: $!" && return;
+		or do { $log->warn("Cannot write macro $hash: $!"); return };
 	print $fh $source;
 	close $fh;
 	return 1;
@@ -114,7 +133,7 @@ sub save_path_index {
 	my ($file_path, $pg_hash) = @_;
 	my $index_file = _path_index_path($file_path);
 	make_path(File::Spec->catdir($PRIVATE, '.path_index'));
-	open my $fh, '>', $index_file or warn "ContentCache: cannot write path_index: $!" && return;
+	open my $fh, '>', $index_file or do { $log->warn("Cannot write path_index: $!"); return };
 	print $fh $pg_hash;
 	close $fh;
 	return 1;

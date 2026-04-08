@@ -86,8 +86,8 @@ sub startup ($self) {
 
 	configureURLs();
 
-	print "Renderer is based at $main::basehref\n";
-	print "Problem attempts will be sent to $main::formURL\n";
+	$self->log->info("Renderer is based at $main::basehref");
+	$self->log->info("Problem attempts will be sent to $main::formURL");
 
 	# Increase max header line size from 8KB to 64KB.
 	# Browsers on shared wildcard domains send large Cookie headers
@@ -101,7 +101,7 @@ sub startup ($self) {
 		if ($static_origin) {
 			die "CORS_ORIGIN ($static_origin) must be an absolute URL or '*'"
 				unless ($static_origin eq '*' || $static_origin =~ /^https?:\/\//);
-			warn "*** [CONFIG] Using '*' for CORS_ORIGIN is insecure\n"
+			$self->log->warn("Using '*' for CORS_ORIGIN is insecure")
 				if ($static_origin eq '*');
 		}
 
@@ -164,7 +164,7 @@ sub startup ($self) {
 
 	if ($self->config('INTERACTION_LOG')) {
 		my $interactionLogPath = "$ENV{RENDER_ROOT}/logs/interactions.log";
-		print "[LOGS] Saving interactions to $interactionLogPath\n";
+		$self->log->info("Saving interactions to $interactionLogPath");
 		my $resultsLog = Mojo::Log->new(path => $interactionLogPath, level => 'info');
 		$resultsLog->format(sub {
 			my ($time, $level, @lines) = @_;
