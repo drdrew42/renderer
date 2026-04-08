@@ -84,9 +84,6 @@ sub startup ($self) {
 	$hyp->{clients}          = $ENV{HYPNOTOAD_CLIENTS}          + 0 if $ENV{HYPNOTOAD_CLIENTS};
 	$hyp->{graceful_timeout} = $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT} + 0 if $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT};
 
-	$self->log->info("RENDERER_URL env=" . ($ENV{RENDERER_URL} // 'UNDEF')
-		. " config=" . ($self->config('RENDERER_URL') // 'UNDEF'));
-
 	configureURLs();
 
 	$self->log->info("Renderer is based at $main::basehref");
