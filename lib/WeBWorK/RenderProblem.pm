@@ -197,19 +197,42 @@ sub standaloneRenderer {
 	my $isSubmit     = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
 	my $isInstructor = $inputs_ref->{isInstructor} ? 1 : 0;
 
-	# Answers and solutions are a single unlock: showCorrectAnswers is the switch.
-	# When answers are shown, solutions are shown too (if the problem has them),
-	# unless showSolutions is explicitly 0 (e.g. instructor wants answers only).
-	# Hints are ungated passthrough — PG's $showHint threshold controls visibility.
+	# Permission model — isInstructor is the mode switch.
+	#
+	# Instructor (preview): everything visible by default. Callers can
+	#   suppress individual flags to see the student view.
+	#
+	# Student (assessed): nothing revealed by default. showCorrectAnswers
+	#   is the primary reveal trigger (the "Show Correct Answers" button).
+	#   Solutions ride along with correct answers unless explicitly
+	#   suppressed (showSolutions=0). showSolutions alone without
+	#   showCorrectAnswers is ignored — solutions don't make sense without
+	#   the answers they explain. Hints are always available (PG's
+	#   showHints is a render gate, not security-sensitive).
 	#
 	# Session lifecycle (non-instructor only):
-	# - answerJWTs flow on every submit. The LMS owns due-date / scoring policy.
-	# - Session locks when: student scores 100% OR showCorrectAnswers is requested.
-	# - After lock: no answerJWT, no session updates. The interaction is over.
-	my $showCorrectAnswers = $inputs_ref->{showCorrectAnswers} ? 1 : 0;
-	my $showSolutions = $showCorrectAnswers
-		&& !(defined $inputs_ref->{showSolutions} && !$inputs_ref->{showSolutions});
-	my $showHints = $inputs_ref->{showHints} ? 1 : 0;
+	# - answerJWTs flow on every submit. The LMS owns due-date / scoring.
+	# - Session locks when: student scores 100% OR showCorrectAnswers.
+	# - After lock: no answerJWT, no session updates.
+	my $showCorrectAnswers;
+	my $showSolutions;
+	my $showHints;
+
+	if ($isInstructor) {
+		$showCorrectAnswers = defined $inputs_ref->{showCorrectAnswers}
+			? ($inputs_ref->{showCorrectAnswers} ? 1 : 0) : 1;
+		$showSolutions = defined $inputs_ref->{showSolutions}
+			? ($inputs_ref->{showSolutions} ? 1 : 0) : 1;
+		$showHints = defined $inputs_ref->{showHints}
+			? ($inputs_ref->{showHints} ? 1 : 0) : 1;
+	} else {
+		$showCorrectAnswers = $inputs_ref->{showCorrectAnswers} ? 1 : 0;
+		# Solutions ride with correct answers unless explicitly suppressed.
+		$showSolutions = $showCorrectAnswers
+			&& !(defined $inputs_ref->{showSolutions} && !$inputs_ref->{showSolutions});
+		$showHints = defined $inputs_ref->{showHints}
+			? ($inputs_ref->{showHints} ? 1 : 0) : 1;
+	}
 	my $displayResults = $inputs_ref->{answersSubmitted} && !$isPreview;
 	my $forceResults   = $displayResults                 && $inputs_ref->{showPartialCorrectAnswers};
 
@@ -339,14 +362,14 @@ sub generateJWTs {
 		answers => unbless($pg->{answers}),
 	};
 	# Lock the session when the interaction is over (non-instructor only):
-	# - Student requested correct answers (answers are now compromised), or
+	# - Student requested correct answers (which implies solutions too), or
 	# - Student scored 100% (nothing left to accomplish).
 	# After lock: no further answerJWTs, no session updates.
 	if (!$inputs_ref->{isInstructor}) {
 		my $perfect = defined $pg->{problem_result}{score} && $pg->{problem_result}{score} >= 1;
 		if ($inputs_ref->{showCorrectAnswers} || $perfect) {
 			$sessionHash->{showCorrectAnswers} = 1 if $inputs_ref->{showCorrectAnswers};
-			$sessionHash->{isLocked} = 1;
+			$sessionHash->{isLocked}           = 1;
 		}
 	}
 

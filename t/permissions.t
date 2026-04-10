@@ -44,39 +44,75 @@ PG
 
 # ─── Permission model ──────────────────────────────────────────────────────
 
-subtest 'showCorrectAnswers implies showSolutions' => sub {
+# ─── Instructor defaults ──────────────────────────────────────────────────
+
+subtest 'instructor: solutions and answers visible by default' => sub {
 	$t->post_ok('/render-api' => form => {
-		problemSource      => $pg_source,
-		outputFormat       => 'default',
-		problemSeed        => 1234,
-		isInstructor       => 1,
-		showCorrectAnswers => 1,
+		problemSource => $pg_source,
+		outputFormat  => 'default',
+		problemSeed   => 1234,
+		isInstructor  => 1,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	like($body, qr/solution accordion/, 'solutions visible when showCorrectAnswers=1');
+	like($body, qr/solution accordion/, 'solutions visible by default for instructor');
 };
 
-subtest 'showSolutions=0 suppresses even with showCorrectAnswers' => sub {
+subtest 'instructor: showSolutions=0 suppresses solutions' => sub {
 	$t->post_ok('/render-api' => form => {
-		problemSource      => $pg_source,
-		outputFormat       => 'default',
-		problemSeed        => 1234,
-		isInstructor       => 1,
-		showCorrectAnswers => 1,
-		showSolutions      => 0,
+		problemSource => $pg_source,
+		outputFormat  => 'default',
+		problemSeed   => 1234,
+		isInstructor  => 1,
+		showSolutions => 0,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	unlike($body, qr/solution accordion/, 'solutions suppressed by explicit showSolutions=0');
+	unlike($body, qr/solution accordion/, 'instructor can suppress solutions');
 };
 
-subtest 'no showCorrectAnswers = no solutions' => sub {
+# ─── Student defaults ────────────────────────────────────────────────────
+
+subtest 'student: no solutions without showCorrectAnswers' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemSource => $pg_source,
 		outputFormat  => 'default',
 		problemSeed   => 1234,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	unlike($body, qr/solution accordion/, 'no solutions without showCorrectAnswers');
+	unlike($body, qr/solution accordion/, 'no solutions for student by default');
+};
+
+subtest 'student: showCorrectAnswers implies solutions' => sub {
+	$t->post_ok('/render-api' => form => {
+		problemSource      => $pg_source,
+		outputFormat       => 'default',
+		problemSeed        => 1234,
+		showCorrectAnswers => 1,
+	})->status_is(200);
+	my $body = $t->tx->res->body;
+	like($body, qr/solution accordion/, 'showCorrectAnswers reveals solutions too');
+};
+
+subtest 'student: showCorrectAnswers + showSolutions=0 suppresses solutions' => sub {
+	$t->post_ok('/render-api' => form => {
+		problemSource      => $pg_source,
+		outputFormat       => 'default',
+		problemSeed        => 1234,
+		showCorrectAnswers => 1,
+		showSolutions      => 0,
+	})->status_is(200);
+	my $body = $t->tx->res->body;
+	unlike($body, qr/solution accordion/, 'explicit showSolutions=0 suppresses even with showCorrectAnswers');
+};
+
+subtest 'student: showSolutions=1 without showCorrectAnswers is ignored' => sub {
+	$t->post_ok('/render-api' => form => {
+		problemSource => $pg_source,
+		outputFormat  => 'default',
+		problemSeed   => 1234,
+		showSolutions => 1,
+	})->status_is(200);
+	my $body = $t->tx->res->body;
+	unlike($body, qr/solution accordion/, 'showSolutions alone does nothing for student');
 };
 
 subtest 'hints are ungated passthrough' => sub {
@@ -189,6 +225,81 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 
 	my $locked_raw = $t->tx->res->json;
 	ok(!$locked_raw->{rh_result}{answerJWT}, 'no answerJWT from already-locked session');
+};
+
+subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
+	$t->post_ok('/render-api' => form => {
+		problemSource => $pg_source,
+		outputFormat  => 'raw',
+		problemSeed   => 9999,
+	})->status_is(200);
+
+	my $raw = $t->tx->res->json;
+	my $problemJWT = $raw->{inputs_ref}{problemJWT};
+	ok($problemJWT, 'got problemJWT');
+
+	# Submit a wrong answer but request correct answers (implies solutions)
+	$t->post_ok('/render-api' => form => {
+		problemJWT         => $problemJWT,
+		outputFormat       => 'raw',
+		submitAnswers      => 1,
+		showCorrectAnswers => 1,
+		AnSwEr0001         => '41',
+	})->status_is(200);
+
+	my $submit = $t->tx->res->json;
+	my $sessionJWT = $submit->{rh_result}{sessionJWT};
+	ok($sessionJWT, 'got sessionJWT after showCorrectAnswers request');
+
+	my $claims = decode_jwt(
+		token => $sessionJWT,
+		key   => $ENV{webworkJWTsecret},
+	);
+	is($claims->{isLocked},            1, 'session locked by showCorrectAnswers');
+	is($claims->{showCorrectAnswers},  1, 'showCorrectAnswers claim persisted');
+
+	# Subsequent request should not produce an answerJWT
+	$t->post_ok('/render-api' => form => {
+		problemJWT    => $problemJWT,
+		sessionJWT    => $sessionJWT,
+		outputFormat  => 'raw',
+		submitAnswers => 1,
+		AnSwEr0001    => '42',
+	})->status_is(200);
+
+	my $locked = $t->tx->res->json;
+	ok(!$locked->{rh_result}{answerJWT}, 'no answerJWT after showCorrectAnswers lock');
+};
+
+subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
+	$t->post_ok('/render-api' => form => {
+		problemSource => $pg_source,
+		outputFormat  => 'raw',
+		problemSeed   => 8888,
+	})->status_is(200);
+
+	my $raw = $t->tx->res->json;
+	my $problemJWT = $raw->{inputs_ref}{problemJWT};
+	ok($problemJWT, 'got problemJWT');
+
+	# Submit wrong answer with showSolutions but NOT showCorrectAnswers
+	$t->post_ok('/render-api' => form => {
+		problemJWT    => $problemJWT,
+		outputFormat  => 'raw',
+		submitAnswers => 1,
+		showSolutions => 1,
+		AnSwEr0001    => '41',
+	})->status_is(200);
+
+	my $submit = $t->tx->res->json;
+	my $sessionJWT = $submit->{rh_result}{sessionJWT};
+	ok($sessionJWT, 'got sessionJWT');
+
+	my $claims = decode_jwt(
+		token => $sessionJWT,
+		key   => $ENV{webworkJWTsecret},
+	);
+	ok(!$claims->{isLocked}, 'session NOT locked by showSolutions alone');
 };
 
 # ─── Raw param injection blocked ──────────────────────────────────────────

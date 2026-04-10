@@ -67,6 +67,8 @@ sub parseRequest ($c) {
 
 		# Security-sensitive claims from the session always win over raw params.
 		# Prevents students from injecting isLocked=0 or isInstructor=1 via POST.
+		# showCorrectAnswers is the reveal trigger (solutions ride along);
+		# once the session records a reveal, the caller can't claw it back.
 		for (qw(isLocked isInstructor showCorrectAnswers answersSubmitted)) {
 			$params{$_} = $claims->{$_} if exists $claims->{$_};
 		}
