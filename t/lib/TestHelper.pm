@@ -27,7 +27,7 @@ sub temp_render_root {
 	# Renderer.pm requires renderer.conf.dist to boot
 	my $conf_file = File::Spec->catfile($dir, 'renderer.conf.dist');
 	open my $cfh, '>', $conf_file or die "Cannot create renderer.conf.dist: $!";
-	print $cfh "{\n  secrets => ['test'],\n  STRICT_JWT => 0,\n};\n";
+	print $cfh "{\n  secrets => ['test'],\n  problemJWTsecret => 'test-problem-secret',\n  webworkJWTsecret => 'test-session-secret',\n};\n";
 	close $cfh;
 
 	return $dir;

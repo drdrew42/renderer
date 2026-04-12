@@ -14,6 +14,10 @@ BEGIN {
 
 use Test::Mojo;
 
+# Renderer startup refuses placeholder secrets; supply test values.
+$ENV{problemJWTsecret} //= 'test-problem-secret';
+$ENV{webworkJWTsecret} //= 'test-session-secret';
+
 # Boot the app — Renderer.pm's BEGIN block auto-derives RENDER_ROOT.
 my $t = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};

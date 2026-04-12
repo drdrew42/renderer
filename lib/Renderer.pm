@@ -43,6 +43,17 @@ sub startup ($self) {
 		$ENV{$_} //= $self->config($_);
 	}
 
+	# Refuse to start if shared secrets are still placeholders.
+	# Prevents silent fallback to conf-file defaults when a service forgets to
+	# pass the env var — see WeBWorK3/Config and Secrets Evolution for rationale.
+	for my $k (qw(problemJWTsecret webworkJWTsecret)) {
+		my $v = $ENV{$k} // '';
+		if ($v eq '' || $v eq 'CHANGE_ME_IN_ENV') {
+			die "FATAL: $k is unset or still at placeholder value. "
+				. "Set env var `$k` (e.g. in .env) before starting the renderer.\n";
+		}
+	}
+
 	# --- URL configuration ---
 	# RENDERER_URL: the public URL where this renderer is reachable.
 	#   e.g. "https://render.lan.drdrew.us" or "https://cms.example.com/renderer"

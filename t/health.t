@@ -17,6 +17,10 @@ use Test::Mojo;
 # Renderer.pm's BEGIN block auto-derives RENDER_ROOT from the lib/ directory.
 # We boot the app first, then use RENDER_ROOT for setup.
 
+# Renderer startup refuses placeholder secrets; supply test values.
+$ENV{problemJWTsecret} //= 'test-problem-secret';
+$ENV{webworkJWTsecret} //= 'test-session-secret';
+
 my $t = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 

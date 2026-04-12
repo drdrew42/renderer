@@ -86,7 +86,7 @@ Configuration lives in `renderer.conf` (copied from `renderer.conf.dist` during 
 | `problemJWTsecret` | `problemJWTsecret` | Shared secret for encrypting render configuration JWTs. Must match any service that creates problem tokens. |
 | `webworkJWTsecret` | `webworkJWTsecret` | Shared secret for session state JWTs (attempt history, scores). |
 | `CORS_ORIGIN` | — | Allowed origin for CORS headers. Set to the embedding site's origin for iframe deployments. `*` is insecure. |
-| `STRICT_JWT` | `STRICT_JWT` | When `1`, rejects requests without a `problemJWT` or `sessionJWT`. Prevents raw-parameter API access. |
+| `STRICT_JWT` | `STRICT_JWT` | **DEPRECATED.** Kept for backward compatibility; value is ignored. Replaced by action-level JWT gating — student submits that would produce an answerJWT now require a problemJWT regardless of this setting. Preview/browse paths remain open. |
 | `FULL_APP_INSECURE` | — | Enables editor UI, OPL browser, and file management routes in production mode. Always available in development mode. |
 | `STATIC_EXPIRES` | — | `Cache-Control` max-age (seconds) for static assets under `/webwork2_files/`. |
 
@@ -151,15 +151,16 @@ The LMS and renderer are separate services. The student's browser communicates w
 docker run -d -p 3000:3000 \
   -e SITE_HOST=https://renderer.example.com \
   -e CORS_ORIGIN=https://lms.example.com \
-  -e STRICT_JWT=1 \
+  -e problemJWTsecret=<shared-with-LMS> \
+  -e webworkJWTsecret=<renderer-internal> \
   renderer
 ```
 
 - `SITE_HOST` must match the iframe's `src` origin (what the browser sees)
 - `CORS_ORIGIN` is the LMS origin (the iframe's parent)
-- `STRICT_JWT=1` — only JWT-authenticated requests are accepted
 - `problemJWTsecret` must be shared between the LMS and renderer
 - `JWTanswerURL` is embedded in the JWT by the LMS, not configured on the renderer
+- Student submit paths that produce an answerJWT require a valid `problemJWT` (enforced automatically — no flag needed). Preview and browsing paths stay open.
 
 ## Renderer API
 

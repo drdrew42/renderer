@@ -21,9 +21,10 @@ sub parseRequest ($c) {
 		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
 	$originIP ||= $c->tx->remote_address || 'unknown-origin';
 
-	if ($ENV{STRICT_JWT} && !(defined $params{problemJWT} || defined $params{sessionJWT})) {
-		return $c->exception('Not allowed to request problems with raw data.', 403);
-	}
+	# Action-level JWT gating (replaces the old STRICT_JWT binary flag):
+	# only student submits that would produce an answerJWT require a problemJWT.
+	# Preview, OPL library browsing, and authored-problem iteration stay open.
+	# See WeBWorK3/Config and Secrets Evolution for rationale.
 
 	# protect against DOM manipulation
 	if (defined $params{submitAnswers} && defined $params{previewAnswers}) {
@@ -100,6 +101,8 @@ sub parseRequest ($c) {
 		$claims = $claims->{webwork} if defined $claims->{webwork};
 		# override key-values in params with those provided in the JWT
 		@params{ keys %$claims } = values %$claims;
+		# Mark this request as JWT-grounded — required to produce answerJWTs.
+		$c->stash(_jwt_grounded => 1);
 	} elsif ($params{outputFormat} ne 'ptx') {
 		# if no JWT is provided, create one (unless this is a pretext request)
 		$params{aud} = $ENV{SITE_HOST};
@@ -429,6 +432,13 @@ async sub problem ($c) {
 	# Instructors never produce answer JWTs — their interactions are exploratory.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
 		&& !$inputs_ref->{isLocked} && !$inputs_ref->{isInstructor}) {
+		# Gate: an answerJWT must only be produced from a JWT-grounded request.
+		# A student submit without a verified problemJWT (or sessionJWT carrying one)
+		# cannot produce a chain-eligible answer. See WeBWorK3/Config and Secrets Evolution.
+		unless ($c->stash('_jwt_grounded')) {
+			$c->log->error('Student submit without JWT grounding — rejecting answerJWT generation.');
+			return $c->exception('Submit requires a problemJWT or sessionJWT.', 403);
+		}
 		# can this be 'await'ed later?
 		$return_object->{JWTanswerURLstatus} =
 			await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});

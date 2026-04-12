@@ -12,6 +12,10 @@ BEGIN {
 use Test::Mojo;
 use Crypt::JWT qw(decode_jwt);
 
+# Renderer startup refuses placeholder secrets; supply test values.
+$ENV{problemJWTsecret} //= 'test-problem-secret';
+$ENV{webworkJWTsecret} //= 'test-session-secret';
+
 my $t = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 

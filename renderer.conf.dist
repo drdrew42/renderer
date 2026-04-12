@@ -23,21 +23,25 @@
   # formURL => '',
 
   # --- JWT Secrets ---
-  # problemJWT: encrypts render configuration. Shared between renderer and any service
-  # that creates problem tokens (e.g. an LMS integration).
-  problemJWTsecret => 'shared',
+  # problemJWT: signs/encrypts render configuration. Shared between renderer and any
+  # service that creates problem tokens (e.g. an LMS integration or WW3).
+  # MUST be overridden in production via env var `problemJWTsecret`.
+  # Startup will refuse to run if this placeholder is still in effect.
+  problemJWTsecret => 'CHANGE_ME_IN_ENV',
 
   # webworkJWT: encrypts session state (attempt history, scores). Used internally
   # by the renderer; shared with services that issue sessionJWTs.
-  webworkJWTsecret => 'private',
+  # MUST be overridden in production via env var `webworkJWTsecret`.
+  webworkJWTsecret => 'CHANGE_ME_IN_ENV',
 
   # --- Security & Access ---
   # CORS_ORIGIN: Set to the embedding site's origin for iframe deployments.
   # '*' is convenient for development but insecure in production.
   CORS_ORIGIN => '*',
 
-  # STRICT_JWT: When enabled, rejects any request that doesn't include a
-  # problemJWT or sessionJWT. Prevents raw-parameter access to the render API.
+  # STRICT_JWT: DEPRECATED. Replaced by action-level JWT gating — student submits
+  # that would produce an answerJWT now require a problemJWT regardless of this
+  # setting. Kept here for backward compat with older configs; value is ignored.
   STRICT_JWT => 0,
 
   # FULL_APP_INSECURE: Enables the editor UI, OPL browser, file management routes,
