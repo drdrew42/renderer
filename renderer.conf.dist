@@ -39,10 +39,37 @@
   # '*' is convenient for development but insecure in production.
   CORS_ORIGIN => '*',
 
-  # STRICT_JWT: DEPRECATED. Replaced by action-level JWT gating — student submits
-  # that would produce an answerJWT now require a problemJWT regardless of this
-  # setting. Kept here for backward compat with older configs; value is ignored.
+  # STRICT_JWT: entry gate. When truthy, requests that are neither JWT-bearing
+  # nor peer-signed (see `peers` below / RENDERER_PEERS env var) are rejected
+  # with 401. When falsy, ungrounded unsigned requests are permitted via a
+  # self-minted JWT (legacy/VPC-editor posture). Peer-signed requests are
+  # always admitted regardless of this setting — STRICT_JWT controls only
+  # ungrounded, unsigned traffic. See WeBWorK/Renderer/Trust Model and Editor
+  # Flow in the vault.
+  #
+  # Recommended:
+  #   public/student instances                 STRICT_JWT => 1
+  #   VPC-isolated editor instances            STRICT_JWT => 0 (or omit)
+  #   single-deployment serving both lanes     STRICT_JWT => 1 (peers bypass)
+  #
+  # The answerJWT emission gate is independent and always active — self-minted
+  # and peer-signed renders never produce answerJWTs.
   STRICT_JWT => 0,
+
+  # peers: trusted peers for the peer-signed render lane. Each entry pins an
+  # Ed25519 public key to a peer name. Peer-signed requests bypass JWT
+  # requirements and may submit raw `problemSource` for editor/authoring flows.
+  # Prefer setting via env var RENDERER_PEERS (JSON string) for cluster
+  # deployments — env var overrides this config key. See
+  # LibreTexts/Editor Provider Integration — Peer-Signed Render.md in the vault
+  # for the signing protocol and integration spec.
+  #
+  # Example:
+  #   peers => [
+  #     { name => 'adapt-editor', public_key => 'jEA8DWhq/akvgDKbYGcVArdfndp8gC+BfplhC6Sqlxw=' },
+  #     { name => 'ww3-portal',   public_key => 'a4Fz...==' },
+  #   ],
+  peers => [],
 
   # FULL_APP_INSECURE: Enables the editor UI, OPL browser, file management routes,
   # and supplemental API endpoints in production mode. These are always available

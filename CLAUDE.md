@@ -51,6 +51,28 @@ lib/
 - **TOFU registration**: `Registration.pm` handles bidirectional trust with OPL. Renderer registers its public key + callback URL. OPL can probe back via callback endpoint.
 - **Hypnotoad env vars**: `HYPNOTOAD_WORKERS`, `HYPNOTOAD_ACCEPTS`, `HYPNOTOAD_REQUESTS`, `HYPNOTOAD_SPARE`, `HYPNOTOAD_CLIENTS`, `HYPNOTOAD_GRACEFUL_TIMEOUT`. Override `renderer.conf` values.
 
+### Authorization Model — Two Lanes, Two Gates
+
+The renderer accepts two kinds of trusted callers:
+
+| Lane | Trust signal | Common use |
+|---|---|---|
+| **JWT-bearing** | `problemJWT` / `sessionJWT` minted by a peer using shared `problemJWTsecret` | Browser-mediated render: student attempts, instructor preview of library problems, assignment delivery |
+| **Peer-signed** | Ed25519 signature on the request itself (`X-Peer-Name` + `X-Peer-Timestamp` + `X-Peer-Signature` headers), peer pubkey pinned via `RENDERER_PEERS` config | Server-to-server: raw `problemSource` authoring, editor flows, asset fetches |
+
+And two orthogonal gates govern what any given request may do:
+
+| Gate | Mechanism | Semantics |
+|---|---|---|
+| **Entry** | `STRICT_JWT` env/config | When truthy, reject requests that have *neither* a JWT *nor* a valid peer signature. When falsy, ungrounded requests are permitted via self-minted JWT (legacy/VPC editor posture). |
+| **Emission** | `_can_emit_answer_jwt` stash | Always active. An `answerJWT` is only emitted when the request arrived with an *upstream* problemJWT (not self-minted, not peer-signed). Peer-signed raw-source renders never emit answerJWTs — the "one-shot rule." |
+
+**Peer-signed requests always admitted** (when registered + signature valid), regardless of `STRICT_JWT`. STRICT_JWT controls whether *ungrounded, unsigned* requests can self-mint. This lets a single strict instance serve both the browser lane (via JWT) and the editor lane (via peer signature) — valuable for single-deployment consolidation.
+
+**Raw `problemSource` one-shot rule**: peer-signed render requests carrying raw source render one-shot only — no `sessionJWT` minted, no `answerJWT` emitted, no `pg_hash` leak to the browser. Editor-providers hold the state; every interaction is a fresh peer-signed render from their backend.
+
+See `LibreTexts/Renderer Secrets Migration.md`, `LibreTexts/Editor Provider Integration — Peer-Signed Render.md`, and `WeBWorK/Renderer/Trust Model and Editor Flow.md` in the vault for the full picture.
+
 ### Route Groups
 
 | Route | Controller | Purpose |
@@ -76,6 +98,8 @@ lib/
 | `LOG_FORMAT` | plain | `json` for structured logging |
 | `MOJO_LOG_LEVEL` | info | Log level |
 | `MOJO_MODE` | — | `production` disables dev-mode editor routes |
+| `STRICT_JWT` | — | Entry gate: when truthy, reject requests that are neither JWT-bearing nor peer-signed (401). Peer-signed requests are *always* accepted when the signature verifies — STRICT_JWT only governs ungrounded/unsigned requests. Public instances should set; VPC-isolated editor instances can leave unset for backward-compat (self-mint fallback). |
+| `RENDERER_PEERS` | — | JSON array of `{name, public_key}` entries pinning trusted peers for the peer-signed lane. Example: `[{"name":"adapt-editor","public_key":"jEA8..."}]`. Read at startup; cluster-consistent when provided via deployment config. |
 | `HYPNOTOAD_WORKERS` | 10 (conf) | Worker processes |
 | `HYPNOTOAD_ACCEPTS` | 400 (conf) | Max connections per worker before rotation (memory leak mitigation) |
 | `HYPNOTOAD_REQUESTS` | 5 (conf) | Max requests per keep-alive connection |

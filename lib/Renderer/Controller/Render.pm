@@ -21,15 +21,74 @@ sub parseRequest ($c) {
 		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
 	$originIP ||= $c->tx->remote_address || 'unknown-origin';
 
-	# Action-level JWT gating (replaces the old STRICT_JWT binary flag):
-	# only student submits that would produce an answerJWT require a problemJWT.
-	# Preview, OPL library browsing, and authored-problem iteration stay open.
+	# Two orthogonal gates govern renderer access:
+	#   1. Entry gate  (STRICT_JWT)         — may this request render at all?
+	#   2. Emission gate (_can_emit_answer_jwt) — may this request produce an answerJWT?
+	#
+	# STRICT_JWT=1 rejects ungrounded requests at the door (public/student instances
+	# that expect all callers to arrive with a peer-minted problemJWT or sessionJWT).
+	# STRICT_JWT=0 permits self-minted JWTs, so previews, library browsing, and
+	# raw-source authoring all work — typically paired with a network-isolated
+	# deployment (e.g. ADAPT's VPC-only editor renderer) that treats the network
+	# as the trust boundary.
+	#
+	# The emission gate is always active: only requests carrying an upstream JWT
+	# can produce answerJWTs. Self-minted JWTs do not ground answer emission.
+	#
 	# See WeBWorK3/Config and Secrets Evolution for rationale.
 
 	# protect against DOM manipulation
 	if (defined $params{submitAnswers} && defined $params{previewAnswers}) {
 		$c->log->error('Simultaneous submit and preview! JWT: ', $params{problemJWT} // {});
 		return $c->exception('Malformed request.', 400);
+	}
+
+	# Reject raw-param pg_hash paired with raw-param problemSource when no upstream
+	# JWT is present. Legitimate callers carry pg_hash inside the JWT; this combo
+	# in the clear suggests an attempt to render attacker-chosen source under a
+	# cached problem's identity.
+	if (defined $params{pg_hash} && defined $params{problemSource}
+		&& !defined $params{problemJWT} && !defined $params{sessionJWT})
+	{
+		$c->log->error('pg_hash + problemSource without JWT — rejecting.');
+		return $c->exception('Malformed request.', 400);
+	}
+
+	# Peer-signed lane (Stage 1): verify X-Peer-Signature header over the canonical
+	# request form. On success, this request is trusted as coming from a registered
+	# mesh peer — it bypasses the JWT entry gate but NOT the answerJWT emission gate.
+	# Raw problemSource arriving on this lane is one-shot: no sessionJWT, no
+	# answerJWT, no pg_hash leak to the browser. See
+	# [[WeBWorK/Renderer/Trust Model and Editor Flow]].
+	{
+		my $peer_name = $c->req->headers->header('X-Peer-Name');
+		my $peer_ts   = $c->req->headers->header('X-Peer-Timestamp');
+		my $peer_sig  = $c->req->headers->header('X-Peer-Signature');
+		if (defined $peer_name || defined $peer_ts || defined $peer_sig) {
+			my %result = Renderer::Registration::verify_peer_signature(
+				method    => $c->req->method,
+				path      => $c->req->url->path->to_string,
+				timestamp => $peer_ts // '',
+				body      => $c->req->body,
+				peer_name => $peer_name // '',
+				signature => $peer_sig // '',
+			);
+			unless ($result{ok}) {
+				$c->log->error("Peer signature verification failed: $result{reason}");
+				return $c->exception("Peer signature rejected: $result{reason}", 401);
+			}
+			$c->log->info("Peer-signed request accepted from '$peer_name'");
+			$c->stash(_peer_signed => $peer_name);
+		}
+	}
+
+	# Translate the peer-facing `formAction` field to the internal `formURL` name
+	# honored by FormatRenderedProblem. This lets editor-providers specify
+	# "send form submits back to me" in a name that matches their mental model.
+	# Applies to any request; unused formAction would otherwise leak into
+	# downstream params / telemetry.
+	if (defined $params{formAction}) {
+		$params{formURL} //= delete $params{formAction};
 	}
 
 	# Normalize common lowercase query params to camelCase before JWT processing.
@@ -101,10 +160,26 @@ sub parseRequest ($c) {
 		$claims = $claims->{webwork} if defined $claims->{webwork};
 		# override key-values in params with those provided in the JWT
 		@params{ keys %$claims } = values %$claims;
-		# Mark this request as JWT-grounded — required to produce answerJWTs.
-		$c->stash(_jwt_grounded => 1);
+		# Mark this request as upstream-JWT-bearing — required to produce answerJWTs.
+		$c->stash(_can_emit_answer_jwt => 1);
+	} elsif ($c->stash('_peer_signed')) {
+		# Peer-signed lane: the peer authorized this render directly. No JWT needed
+		# and none is minted — peer-signed raw-source renders are one-shot with no
+		# browser-carried continuation token. _can_emit_answer_jwt stays unset.
+		# Set aud for any downstream code that reads it.
+		$params{aud} = $ENV{SITE_HOST};
+		$params{isInstructor} //= 0;
+		$params{sessionID} ||= time;
 	} elsif ($params{outputFormat} ne 'ptx') {
-		# if no JWT is provided, create one (unless this is a pretext request)
+		# Entry gate: when STRICT_JWT is on, every request (except pretext) must
+		# arrive with an upstream problemJWT, sessionJWT, or valid peer signature.
+		# Reject otherwise.
+		if ($ENV{STRICT_JWT}) {
+			return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401);
+		}
+		# Entry gate off (typically VPC-isolated editor instance): self-mint a JWT
+		# so the rest of the pipeline has a uniform input shape. Self-minted JWTs
+		# do not ground answerJWT emission — _can_emit_answer_jwt stays unset.
 		$params{aud} = $ENV{SITE_HOST};
 		$params{isInstructor} //= 0;
 		$params{sessionID} ||= time;
@@ -432,11 +507,13 @@ async sub problem ($c) {
 	# Instructors never produce answer JWTs — their interactions are exploratory.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
 		&& !$inputs_ref->{isLocked} && !$inputs_ref->{isInstructor}) {
-		# Gate: an answerJWT must only be produced from a JWT-grounded request.
-		# A student submit without a verified problemJWT (or sessionJWT carrying one)
-		# cannot produce a chain-eligible answer. See WeBWorK3/Config and Secrets Evolution.
-		unless ($c->stash('_jwt_grounded')) {
-			$c->log->error('Student submit without JWT grounding — rejecting answerJWT generation.');
+		# Emission gate: an answerJWT is only produced when the request arrived
+		# with an upstream-minted problemJWT (or sessionJWT carrying one).
+		# Self-minted JWTs do not qualify — see parseRequest. This gate is orthogonal
+		# to STRICT_JWT, which governs whether ungrounded requests are accepted at all.
+		# Ref: WeBWorK3/Config and Secrets Evolution.
+		unless ($c->stash('_can_emit_answer_jwt')) {
+			$c->log->error('Student submit without upstream JWT — rejecting answerJWT generation.');
 			return $c->exception('Submit requires a problemJWT or sessionJWT.', 403);
 		}
 		# can this be 'await'ed later?
