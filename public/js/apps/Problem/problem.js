@@ -1,5 +1,16 @@
 (() => {
-	const frame = window.frameElement.id || window.frameElement.dataset.id || 'no-id';
+	// Frame identification: window.name works cross-origin (set by the embedder
+	// via <iframe name="...">), window.frameElement is null cross-origin. Prefer
+	// window.name, fall back to frameElement for same-origin legacy embedders,
+	// then 'no-id' when neither is set.
+	const frame = window.name || window.frameElement?.id || window.frameElement?.dataset.id || 'no-id';
+
+	// postMessage target origin: declared by the trusted render-request source
+	// (JWT claim or peer-signed body field), templated into <html data-parent-origin>.
+	// Absent → wildcard '*' (legacy behavior; acceptable when no listener is
+	// expected or when the render path is unauthenticated preview).
+	const parentOrigin = document.documentElement.dataset.parentOrigin || '*';
+
 	// Activate the popovers in the results table.
 	document.querySelectorAll('.attemptResults .answer-preview[data-bs-toggle="popover"]').forEach((preview) => {
 		if (preview.dataset.bsContent) new bootstrap.Popover(preview);
@@ -8,8 +19,8 @@
 	// if there is a JWTanswerURLstatus element, report it to parent
 	const status = document.getElementById('JWTanswerURLstatus')?.value;
 	if (status) {
-		console.log('problem status updated:', JSON.parse(value));
-		window.parent.postMessage(value, '*');
+		console.log('problem status updated:', JSON.parse(status));
+		window.parent.postMessage(status, parentOrigin);
 	}
 
 	// fetch the problem-result-score and postMessage to parent
@@ -21,7 +32,7 @@
 				status: score,
 				frame: frame
 			}),
-			'*'
+			parentOrigin
 		);
 	}
 
@@ -35,7 +46,7 @@
 					id: hint.dataset.bsTarget,
 					frame: frame
 				}),
-				'*'
+				parentOrigin
 			);
 		});
 	});
@@ -49,7 +60,7 @@
 					id: solution.dataset.bsTarget,
 					frame: frame
 				}),
-				'*'
+				parentOrigin
 			);
 		});
 	});
@@ -63,7 +74,7 @@
 	function processMessageQueue() {
 		// Process the original messages in the queue
 		for (let message = messageQueue.pop(); message; message = messageQueue.pop()) {
-			window.parent.postMessage(JSON.stringify(message), '*');
+			window.parent.postMessage(JSON.stringify(message), parentOrigin);
 		}
 
 		// Clear the message queue and timer

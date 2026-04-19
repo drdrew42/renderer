@@ -1,7 +1,11 @@
 % use WeBWorK::Utils qw(getAssetURL wwRound);
 %
 <!DOCTYPE html>
+% if ($parent_origin) {
+<html <%== $COURSE_LANG_AND_DIR %> data-parent-origin="<%= $parent_origin %>">
+% } else {
 <html <%== $COURSE_LANG_AND_DIR %>>
+% }
 <head>
 	<meta charset='utf-8'>
 	<base href="<%= $SITE_URL %>">

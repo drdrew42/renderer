@@ -91,6 +91,17 @@ sub parseRequest ($c) {
 		$params{formURL} //= delete $params{formAction};
 	}
 
+	# parent_origin declares where the rendered iframe's postMessage broadcasts
+	# are authorized to target (portal URL / editor-provider origin). Only
+	# accepted from trusted sources:
+	#   - Peer-signed lane: carried in the signed body form-data; captured here
+	#     before the param strip below and restored after JWT processing.
+	#   - JWT lane: carried as a claim; merged into $params via the generic
+	#     claim merge below (no special handling needed).
+	# Raw URL/body params without a trust signal are stripped alongside the
+	# other security-sensitive claims below.
+	my $peer_parent_origin = $c->stash('_peer_signed') ? delete $params{parent_origin} : undef;
+
 	# Normalize common lowercase query params to camelCase before JWT processing.
 	$params{outputFormat}  //= delete $params{outputformat}  if exists $params{outputformat};
 	$params{displayMode}   //= delete $params{displaymode}   if exists $params{displaymode};
@@ -105,7 +116,7 @@ sub parseRequest ($c) {
 	$c->stash(_no_cache => $params{noCache} ? 1 : 0);
 
 	# ensure that these params are only provided by trusted source
-	for (qw(JWTanswerURL sessionID numCorrect numIncorrect)) {
+	for (qw(JWTanswerURL sessionID numCorrect numIncorrect parent_origin)) {
 		delete $params{$_};
 	}
 
@@ -193,6 +204,12 @@ sub parseRequest ($c) {
 		$params{problemJWT} = $req_jwt;
 	}
 	$params{originIP} = $originIP if $originIP;
+
+	# Restore peer-signed parent_origin (captured before the strip above).
+	# The JWT lane recovers parent_origin via the generic claim merge;
+	# the peer-signed lane has no such merge, so we reapply explicitly.
+	$params{parent_origin} //= $peer_parent_origin if defined $peer_parent_origin;
+
 	return \%params;
 }
 

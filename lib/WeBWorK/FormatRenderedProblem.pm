@@ -38,6 +38,12 @@ sub formatRenderedProblem {
 	my $SITE_URL        = $inputs_ref->{baseURL} ? Mojo::URL->new($inputs_ref->{baseURL}) : $main::basehref;
 	my $FORM_ACTION_URL = $inputs_ref->{formURL} ? Mojo::URL->new($inputs_ref->{formURL}) : $main::formURL;
 
+	# parent_origin: where rendered iframe's postMessage broadcasts are allowed
+	# to target. Only set if it arrived via a trusted lane (JWT claim or
+	# peer-signed body field). Empty string → template omits data-parent-origin
+	# attribute → problem.js falls back to wildcard '*' (preserves legacy behavior).
+	my $parent_origin = $inputs_ref->{parent_origin} // '';
+
 	my $displayMode = $inputs_ref->{displayMode} // 'MathJax';
 
 	# HTML document language setting
@@ -243,6 +249,7 @@ sub formatRenderedProblem {
 		rh_result                => $rh_result,
 		SITE_URL                 => $SITE_URL,
 		FORM_ACTION_URL          => $FORM_ACTION_URL,
+		parent_origin            => $parent_origin,
 		COURSE_LANG_AND_DIR      => get_lang_and_dir($formLanguage),
 		PROBLEM_LANG_AND_DIR     => $PROBLEM_LANG_AND_DIR,
 		third_party_css          => \@third_party_css,

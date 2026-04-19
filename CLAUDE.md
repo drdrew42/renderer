@@ -71,6 +71,19 @@ And two orthogonal gates govern what any given request may do:
 
 **Raw `problemSource` one-shot rule**: peer-signed render requests carrying raw source render one-shot only — no `sessionJWT` minted, no `answerJWT` emitted, no `pg_hash` leak to the browser. Editor-providers hold the state; every interaction is a fresh peer-signed render from their backend.
 
+### Cross-Origin Broadcast (`parent_origin`)
+
+The rendered iframe broadcasts postMessage events (scores, hint clicks, focus/blur) to `window.parent`. To enable principled cross-origin embedding, the renderer accepts a `parent_origin` declaration from either trust lane:
+
+- JWT lane: `parent_origin` as a claim on the problemJWT
+- Peer-signed lane: `parent_origin` as a form-data field in the signed body
+
+When present, templated into rendered HTML as `<html data-parent-origin="...">`. Client-side `problem.js` uses it as the target origin for every `window.parent.postMessage(data, target)` — no more wildcard `'*'`. When absent, falls back to `'*'` (legacy behavior; acceptable for unauthenticated preview).
+
+Raw URL/body params for `parent_origin` are stripped unless they arrive inside a JWT claim or signed body — prevents unauthenticated callers from declaring arbitrary broadcast targets.
+
+Frame identification: `problem.js` reads `window.name` (settable cross-origin via `<iframe name="...">`) before falling back to `window.frameElement` — the latter is null cross-origin.
+
 See `LibreTexts/Renderer Secrets Migration.md`, `LibreTexts/Editor Provider Integration — Peer-Signed Render.md`, and `WeBWorK/Renderer/Trust Model and Editor Flow.md` in the vault for the full picture.
 
 ### Route Groups
