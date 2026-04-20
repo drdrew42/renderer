@@ -1,4 +1,13 @@
+// Origin gate: when parent_origin is declared (trusted source — see
+// <html data-parent-origin>), only accept messages from that origin.
+// When absent, accept all (preserves legacy behavior for previews and
+// embedders that predate the cross-origin contract). Symmetric to the
+// outbound postMessage targeting in problem.js.
+const parentOrigin = document.documentElement.dataset.parentOrigin;
+
 window.addEventListener('message', (event) => {
+	if (parentOrigin && event.origin !== parentOrigin) return;
+
 	let message;
 	try {
 		message = JSON.parse(event.data);

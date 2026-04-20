@@ -78,7 +78,12 @@ The rendered iframe broadcasts postMessage events (scores, hint clicks, focus/bl
 - JWT lane: `parent_origin` as a claim on the problemJWT
 - Peer-signed lane: `parent_origin` as a form-data field in the signed body
 
-When present, templated into rendered HTML as `<html data-parent-origin="...">`. Client-side `problem.js` uses it as the target origin for every `window.parent.postMessage(data, target)` — no more wildcard `'*'`. When absent, falls back to `'*'` (legacy behavior; acceptable for unauthenticated preview).
+When present, templated into rendered HTML as `<html data-parent-origin="...">`. Validation is bidirectional:
+
+- **Outbound** (`problem.js`): uses it as the target origin for every `window.parent.postMessage(data, target)` — no more wildcard `'*'`.
+- **Inbound** (`css-message.js`): rejects messages whose `event.origin` doesn't match. Symmetric trust boundary — only the declared parent can inject CSS, query hints/solutions, or otherwise drive iframe state.
+
+When absent, both directions fall back to legacy behavior: outbound uses `'*'`, inbound accepts any origin. Preserves compatibility with previews, pre-contract integrations, and the unauthenticated self-mint path.
 
 Raw URL/body params for `parent_origin` are stripped unless they arrive inside a JWT claim or signed body — prevents unauthenticated callers from declaring arbitrary broadcast targets.
 
