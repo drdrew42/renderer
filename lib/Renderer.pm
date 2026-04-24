@@ -31,6 +31,7 @@ use Renderer::Controller::IO;
 use Renderer::Identity;
 use Renderer::Telemetry;
 use Renderer::Registration;
+use Renderer::Version;
 use WeBWorK::FormatRenderedProblem;
 
 sub startup ($self) {
@@ -242,8 +243,10 @@ sub startup ($self) {
 	$r->any('/health' => sub ($c) {
 		my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
 		$c->render(json => {
-			status  => $ok ? 'ok' : 'error',
-			service => 'Renderer',
+			status           => $ok ? 'ok' : 'error',
+			service          => 'Renderer',
+			pg_version       => Renderer::Version::pg_version(),
+			renderer_version => Renderer::Version::renderer_version(),
 		}, status => $ok ? 200 : 503);
 	});
 

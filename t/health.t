@@ -43,7 +43,9 @@ subtest 'health 200 when private/ exists' => sub {
 	$t->get_ok('/health')
 		->status_is(200)
 		->json_is('/status'  => 'ok')
-		->json_is('/service' => 'Renderer');
+		->json_is('/service' => 'Renderer')
+		->json_has('/pg_version')
+		->json_has('/renderer_version');
 };
 
 subtest 'health 503 when private/ missing' => sub {

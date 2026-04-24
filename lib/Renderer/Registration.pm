@@ -8,6 +8,7 @@ use Mojo::JSON qw(encode_json decode_json);
 use MIME::Base64 qw(encode_base64 decode_base64);
 use Digest::SHA qw(sha256_hex);
 use Renderer::Identity;
+use Renderer::Version qw(pg_version renderer_version);
 
 # Unified peer registry: name → raw 32-byte Ed25519 public key.
 # Populated from two sources:
@@ -100,9 +101,11 @@ sub _attempt_register {
 	my ($app, $callback_url) = @_;
 
 	my $payload = encode_json({
-		fingerprint  => Renderer::Identity::fingerprint(),
-		public_key   => Renderer::Identity::public_key_b64(),
-		callback_url => $callback_url,
+		fingerprint      => Renderer::Identity::fingerprint(),
+		public_key       => Renderer::Identity::public_key_b64(),
+		callback_url     => $callback_url,
+		pg_version       => pg_version(),
+		renderer_version => renderer_version(),
 	});
 
 	my $sig = Renderer::Identity::sign($payload);
