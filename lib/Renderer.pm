@@ -239,6 +239,7 @@ sub startup ($self) {
 
 	$r->any('/render-api')->to('render#problem');
 	$r->post('/render-api/callback')->to('render#callback');
+	$r->post('/render-api/audit')->to('audit#audit');
 	$r->any('/render-ptx')->to('render#render_ptx');
 	$r->any('/health' => sub ($c) {
 		my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
