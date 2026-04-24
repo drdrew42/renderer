@@ -144,6 +144,14 @@ sub _perform_audit ($source) {
 			if ($backend_flag) { push @backend_raw,  $msg }
 			else               { push @frontend_raw, $msg }
 		};
+		# Reset $SIG{__DIE__} to default so Mojolicious's global die
+		# handler (which tries to construct a Mojo::Exception) doesn't
+		# intercept dies that happen inside the Safe compartment.  Without
+		# this, every Safe-reval failure shows up as a misleading
+		# "Can't locate object method new via package Mojo::Exception"
+		# because Safe blocks the `require Mojo::Exception` that the
+		# handler tries to do.
+		local $SIG{__DIE__} = 'DEFAULT';
 		# Safe::reval returns the value of the last statement; that may
 		# legitimately be undef (e.g. empty source).  $@ is the
 		# discriminator: non-empty means compile error or die during
