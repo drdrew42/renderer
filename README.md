@@ -279,3 +279,49 @@ This JWT encapsulates the status of the user's interaction with the problem.
 
 The goal here is to update the `JWTanswerURL` with the score and "state" for the user. If you have uses for additional
 information, please feel free to suggest as a GitHub Issue.
+
+## Deployer Security Notes
+
+The renderer is intentionally dumb: it renders what it's told with the parameters it's given. It does **not** enforce
+policy about who is allowed to request what — gating which inputs reach `/render-api` is the deployer's responsibility.
+None of the surfaces below are renderer bugs; they're parameters the renderer trusts the caller to set responsibly.
+
+### Surfaces that can leak correct answers
+
+These output formats include `answers.correct_ans` for every slot in the response, with **no internal gate**:
+
+| Parameter         | Value | Where the leak happens                                                                  |
+| ----------------- | ----- | --------------------------------------------------------------------------------------- |
+| `outputFormat`    | `raw` | `lib/WeBWorK/FormatRenderedProblem.pm:180` — emits the entire `$rh_result` as JSON      |
+| `outputFormat`    | `ptx` | `lib/WeBWorK/FormatRenderedProblem.pm:159` — builds `answerhashXML` from `answers`      |
+
+The `json` output format **is** internally gated (`FormatRenderedProblem.pm:289` — only includes `answers` when
+`isInstructor=1`), so it's safe as long as `isInstructor` is constrained.
+
+### Surfaces that change the trust profile of a render
+
+| Parameter           | Risk if URL-injectable                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `isInstructor`      | Toggles answer inclusion in `outputFormat=json`; also flips defaults for `showSolutions` etc.   |
+| `showCorrectAnswers`| Renders the correct-answer reveal directly in the result summary                                |
+| `problemSourceURL`  | Redirects source-fetch to an arbitrary URL (deployer should pin to their own OPL/library)       |
+| `problemSource`     | Lets the caller execute arbitrary PG; intended in the peer-signed lane, hostile in any other    |
+| `JWTanswerURL`      | Where answerJWTs (score + sessionJWT) are POSTed — **the renderer already gates this internally to JWT-only** since the consequence (signing scores to an attacker-controlled endpoint) is severe. The other rows are not internally gated. |
+
+### Defense strategies
+
+In rough order of increasing decoupling:
+
+1. **JWT claim locking** — the issuer stamps sensitive claims into the problemJWT. The renderer's rule that "JWT claims
+   override form-data" (see [ProblemJWT](#problemjwt)) prevents URL injection of those keys. Simple to deploy, but ties
+   the policy to the issuer's code — a renderer shared by multiple issuers can't trust them uniformly.
+2. **Reverse-proxy filter** — Caddy / nginx / CloudFront / WAF strips or rewrites disallowed query params before they
+   reach `/render-api`. Decouples policy from the issuer; the deployer owns it. Composes with strategy 1.
+3. **Bearer-token gating on `/render-api`** — wrap the renderer behind a service-mesh auth layer so only known callers
+   can reach it. Common in multi-tenant or API-gateway deployments.
+4. **Network isolation** — renderer accessible only on a private network from a trusted gateway service. Direct
+   browser-to-renderer iframe flows then need a signed-URL pattern (the gateway mints, the renderer verifies).
+
+These are not mutually exclusive; pick the combination that matches your trust model. A single-tenant LMS deployment
+might use only (1). A multi-tenant CDN-fronted deployment likely uses (2) and (3). A locked-down SSR-from-backend
+deployment can use (4) with no JWTs at all.
