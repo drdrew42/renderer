@@ -4,6 +4,14 @@ use Mojo::Base 'Mojolicious::Controller', -signatures;
 use Mojo::JSON qw(encode_json);
 use MIME::Base64 qw(decode_base64);
 use Opcode;
+
+# Self-bootstrap PG/lib so direct loads (e.g. `prove t/audit.t`, `perl -c`)
+# resolve WWSafe without external -I. In production, RenderProblem.pm has
+# already added it by the time Mojo lazy-loads this controller.
+use File::Basename qw(dirname);
+use File::Spec;
+use lib File::Spec->catdir(dirname(__FILE__), '..', '..', 'PG', 'lib');
+
 use WWSafe;
 
 use Renderer::Registration;
