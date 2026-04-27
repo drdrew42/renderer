@@ -10,6 +10,7 @@ use Crypt::Ed25519;
 use MIME::Base64 qw(decode_base64);
 use File::Spec;
 use WeBWorK::PreTeXt;
+use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
 use Renderer::ContentCache;
 use Renderer::Registration;
 use Renderer::Telemetry;
@@ -56,7 +57,7 @@ sub parseRequest ($c) {
 	# backing value was undef render as `value=""`, which is `defined` but empty;
 	# Crypt::JWT::decode_jwt rejects empty tokens with "missing token". Strip
 	# them up front so the elsif chain below dispatches as if they weren't sent.
-	for my $k (qw(problemJWT sessionJWT challengeJWT)) {
+	for my $k (qw(problemJWT sessionJWT challengeJWT verdict_signed)) {
 		delete $params{$k} if defined $params{$k} && !length $params{$k};
 	}
 
@@ -66,6 +67,43 @@ sub parseRequest ($c) {
 	# Pick one.
 	if (defined $params{challengeJWT} && defined $params{problemJWT}) {
 		return $c->exception('Ambiguous envelope: both challengeJWT and problemJWT present.', 400);
+	}
+
+	# Render-time verdict fold (WW3-053). When the portal threads
+	# verdict_signed through a render request — typically on the RESUME path,
+	# where /play/launch handed the portal session_jwt + verdict_signed — the
+	# renderer mints sessionJWT_{k+1} folding the verdict before downstream
+	# processing reads state. This is essential for open-mode plays where
+	# state.draws[] must include the just-allocated draw before the renderer
+	# can resolve the seed for current_focus. For closed-mode it keeps the
+	# trust envelope coherent: sessionJWT.state matches the position the
+	# portal asked us to render. The fold replaces $params{sessionJWT} so
+	# the existing sessionJWT decode (below) sees verdict-folded state.
+	#
+	# Requires both challengeJWT and sessionJWT to be present alongside
+	# verdict_signed — verdict_signed is meaningful only on the challengeJWT
+	# lane and only against an existing base session.
+	if (defined $params{verdict_signed}) {
+		return $c->exception('verdict_signed requires sessionJWT.', 400)
+			unless defined $params{sessionJWT};
+		return $c->exception('verdict_signed requires challengeJWT.', 400)
+			unless defined $params{challengeJWT};
+
+		my ($folded, $err) = verifyAndFoldVerdict(
+			$params{sessionJWT},
+			$params{verdict_signed},
+			$ENV{problemJWTsecret},
+			$ENV{webworkJWTsecret},
+		);
+		if ($err) {
+			$c->log->error("verdict_signed fold rejected: $err");
+			return $c->exception("verdict_signed: $err", 400);
+		}
+		$params{sessionJWT} = $folded;
+		$c->stash(_verdict_folded => 1);
+		# verdict_signed was a one-shot input; remove from params so it
+		# doesn't accidentally shadow downstream reads or get logged.
+		delete $params{verdict_signed};
 	}
 
 	# Reject raw-param pg_hash paired with raw-param problemSource when no upstream

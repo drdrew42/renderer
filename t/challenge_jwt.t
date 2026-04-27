@@ -330,4 +330,205 @@ subtest 'legacy problemJWT path still works (regression)' => sub {
 	like($body, qr/What is the answer\?/, 'legacy path still renders');
 };
 
+# ─── verdict_signed render-time fold (WW3-053) ──────────────────────────────
+
+# Mint a verdict_signed JWS for tests. Mirrors what the orchestrator emits
+# from BuildVerdictJWT — same HS256 + problemJWTsecret, same claim shape.
+sub make_verdict_signed {
+	my (%args) = @_;
+	my $payload = {
+		iss                 => 'https://ww3.example.edu',
+		aud                 => $ENV{SITE_HOST},
+		play_id             => $args{play_id} // '11111111-1111-1111-1111-111111111111',
+		challenge_id        => 'sha256:abcdef',
+		mint_sequence_basis => $args{basis} // 0,
+		verdict             => $args{verdict} // {
+			current_focus  => 1,
+			next_available => [1, 2],
+			draw_next      => undef,
+			finalization   => undef,
+		},
+	};
+	return encode_jwt(payload => $payload, key => $ENV{problemJWTsecret}, alg => 'HS256');
+}
+
+subtest 'verdict_signed: render-time fold replaces sessionJWT with verdict-applied state' => sub {
+	my $jwt = make_challenge_jwt();
+	my $base = make_play_session_jwt(
+		challenge_jwt => $jwt,
+		state => {
+			started_at     => undef,
+			current_focus  => 0,
+			next_available => [0, 1, 2],
+			draws          => [],
+			finalization   => undef,
+		},
+		mint_sequence => 5,
+	);
+	my $vsigned = make_verdict_signed(
+		basis   => 5,
+		verdict => {
+			current_focus  => 1,
+			next_available => [1, 2],
+			draw_next      => undef,
+			finalization   => undef,
+		},
+	);
+
+	post_json({
+		challengeJWT   => $jwt,
+		sessionJWT     => $base,
+		verdict_signed => $vsigned,
+		position       => 1,
+		problemSource  => $pg_source,
+	})->status_is(200);
+
+	my $resp = decode_json($t->tx->res->body);
+	my $surfaced = $resp->{JWT}{session};
+	ok($surfaced, 'sessionJWT surfaced after fold');
+
+	my $claims = decode_jwt(token => $surfaced, key => $ENV{webworkJWTsecret});
+	is($claims->{state}{current_focus}, 1, 'current_focus reflects verdict fold');
+	is_deeply($claims->{state}{next_available}, [1, 2], 'next_available reflects verdict fold');
+	cmp_ok($claims->{mint_sequence}, '>=', 6, 'mint_sequence advanced past base');
+};
+
+subtest 'verdict_signed: open-mode draw_next appends to draws[]' => sub {
+	my $challengeJWT = make_challenge_jwt(
+		shape    => 'open',
+		problems => [
+			{ pg_hash => 'sha256:open0', seed => '*' },
+			{ pg_hash => 'sha256:open1', seed => '*' },
+		],
+	);
+	my $base = make_play_session_jwt(
+		challenge_jwt => $challengeJWT,
+		state => {
+			started_at     => undef,
+			current_focus  => 0,
+			next_available => [0],
+			draws          => [
+				{ draw_position => 0, pool_index => 0, pg_hash => 'sha256:open0', seed => 11111 },
+			],
+			finalization   => undef,
+		},
+		mint_sequence => 1,
+	);
+	my $new_draw = { draw_position => 1, pool_index => 1, pg_hash => 'sha256:open1', seed => 77777 };
+	my $vsigned = make_verdict_signed(
+		basis   => 1,
+		verdict => {
+			current_focus  => 1,
+			next_available => [1],
+			draw_next      => $new_draw,
+			finalization   => undef,
+		},
+	);
+
+	post_json({
+		challengeJWT   => $challengeJWT,
+		sessionJWT     => $base,
+		verdict_signed => $vsigned,
+		position       => 1,
+		problemSource  => $pg_source,
+	})->status_is(200);
+
+	my $resp = decode_json($t->tx->res->body);
+	my $surfaced = $resp->{JWT}{session};
+	my $claims = decode_jwt(token => $surfaced, key => $ENV{webworkJWTsecret});
+	is(scalar @{ $claims->{state}{draws} }, 2, 'draws[] now has both entries');
+	is($claims->{state}{draws}[1]{seed}, 77777, 'new draw seed appended');
+};
+
+subtest 'verdict_signed: invalid signature → 400' => sub {
+	my $jwt = make_challenge_jwt();
+	my $base = make_play_session_jwt(challenge_jwt => $jwt);
+	my $bogus = encode_jwt(
+		payload => {
+			play_id             => '11111111-1111-1111-1111-111111111111',
+			mint_sequence_basis => 0,
+			verdict             => { current_focus => 0, next_available => [0] },
+		},
+		alg => 'HS256',
+		key => 'a-totally-different-secret_____',
+	);
+
+	post_json({
+		challengeJWT   => $jwt,
+		sessionJWT     => $base,
+		verdict_signed => $bogus,
+		position       => 0,
+		problemSource  => $pg_source,
+	})->status_is(400);
+};
+
+subtest 'verdict_signed: mismatched play_id → 400' => sub {
+	my $jwt = make_challenge_jwt();
+	my $base = make_play_session_jwt(challenge_jwt => $jwt);
+	my $vsigned = make_verdict_signed(
+		play_id => '99999999-9999-9999-9999-999999999999',
+		basis   => 0,
+	);
+
+	post_json({
+		challengeJWT   => $jwt,
+		sessionJWT     => $base,
+		verdict_signed => $vsigned,
+		position       => 0,
+		problemSource  => $pg_source,
+	})->status_is(400);
+};
+
+subtest 'verdict_signed: stale mint_sequence_basis → 400' => sub {
+	my $jwt = make_challenge_jwt();
+	my $base = make_play_session_jwt(challenge_jwt => $jwt, mint_sequence => 10);
+	my $vsigned = make_verdict_signed(basis => 7);  # stale relative to base
+
+	post_json({
+		challengeJWT   => $jwt,
+		sessionJWT     => $base,
+		verdict_signed => $vsigned,
+		position       => 0,
+		problemSource  => $pg_source,
+	})->status_is(400);
+};
+
+subtest 'verdict_signed without sessionJWT → 400' => sub {
+	my $jwt = make_challenge_jwt();
+	my $vsigned = make_verdict_signed(basis => 0);
+
+	post_json({
+		challengeJWT   => $jwt,
+		verdict_signed => $vsigned,
+		position       => 0,
+		problemSource  => $pg_source,
+	})->status_is(400);
+};
+
+subtest 'verdict_signed without challengeJWT → 400' => sub {
+	my $cjwt_for_base = make_challenge_jwt();
+	my $base = make_play_session_jwt(challenge_jwt => $cjwt_for_base);
+	my $vsigned = make_verdict_signed();
+
+	post_json({
+		sessionJWT     => $base,
+		verdict_signed => $vsigned,
+		position       => 0,
+		problemSource  => $pg_source,
+	})->status_is(400);
+};
+
+subtest 'empty-string verdict_signed treated as not-present' => sub {
+	# Symmetric with the empty-string handling for problemJWT / sessionJWT /
+	# challengeJWT. An empty string in the form payload should be a no-op,
+	# not a 400.
+	my $jwt = make_challenge_jwt();
+	post_json({
+		challengeJWT   => $jwt,
+		verdict_signed => '',
+		position       => 0,
+		problemSource  => $pg_source,
+	})->status_is(200);
+};
+
 done_testing;
