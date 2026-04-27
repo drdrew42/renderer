@@ -320,9 +320,11 @@ sub jsonResponse {
 				[ map { ref $_ eq 'HASH' ? "$_->{file}" : ref $_ eq 'ARRAY' ? "$_->[0]" : "$_" } @extra_files ],
 		},
 		JWT => {
-			problem => $inputs_ref->{problemJWT},
-			session => $rh_result->{sessionJWT},
-			answer  => $rh_result->{answerJWT}
+			problem    => $inputs_ref->{problemJWT},
+			session    => $rh_result->{sessionJWT},
+			answer     => $rh_result->{answerJWT},
+			challenge  => $inputs_ref->{challengeJWT},
+			submission => $rh_result->{submissionJWT},
 		},
 	};
 }

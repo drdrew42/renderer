@@ -154,6 +154,14 @@ sub process_problem {
 	} elsif ($inputs_ref->{previewAnswers}) {
 		# preview: leave session unmodified, no answerJWT
 		$return_object->{sessionJWT} = $inputs_ref->{sessionJWT};
+	} elsif ($inputs_ref->{challengeJWT}) {
+		# challengeJWT path (WW3-032). Mints the play-level sessionJWT (always)
+		# and the per-submission submissionJWT (only on submit). These minters
+		# live side-by-side with generateJWTs; they share no state and emit
+		# different shapes (Artifact Shape doc, sibling envelopes).
+		$return_object->{sessionJWT} = generatePlaySessionJWT($return_object, $inputs_ref);
+		$return_object->{submissionJWT} = generateSubmissionJWT($return_object, $inputs_ref)
+			if $inputs_ref->{submitAnswers};
 	} elsif ($inputs_ref->{problemJWT}) {
 		my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
 		$return_object->{sessionJWT} = $sessionJWT;
@@ -410,6 +418,110 @@ sub generateJWTs {
 
 	my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
 	return ($sessionJWT, $answerJWT);
+}
+
+# ─── challengeJWT path minters (WW3-032) ─────────────────────────────────
+#
+# These mint the play-level sessionJWT and the per-submission submissionJWT
+# defined by [[WeBWorK3/Challenge/Artifact Shape]]. They live alongside the
+# legacy generateJWTs above and share no state with it; the dispatch at
+# process_problem picks one path or the other based on which envelope the
+# request arrived with. The key architectural difference: attempt counting
+# (numCorrect/numIncorrect) and lock state (isLocked) are NOT carried here —
+# atom evaluation is orchestrator-only (Architecture B).
+
+# Mint the play-level sessionJWT. Embeds the inbound challengeJWT verbatim
+# and propagates the navigation state forward by one mint_sequence. The
+# orchestrator updates state via answer-URL verdicts; the renderer never
+# evaluates atoms or modifies state itself.
+sub generatePlaySessionJWT {
+	my ($pg, $inputs_ref) = @_;
+
+	# Extract prior state + sequence from the inbound sessionJWT (already
+	# decoded by parseRequest into $inputs_ref via the generic claim merge).
+	# First render of a play has no inbound state — sequence starts at 0.
+	my $prev_seq      = $inputs_ref->{mint_sequence};
+	my $next_seq      = defined $prev_seq ? $prev_seq + 1 : 0;
+	my $prior_state   = (ref $inputs_ref->{state} eq 'HASH') ? $inputs_ref->{state} : {};
+
+	my $payload = {
+		iss => $ENV{SITE_HOST},
+		aud => $ENV{SITE_HOST},
+
+		# Embed the static play definition. The orchestrator validates it on
+		# every answer-URL POST without needing a separate lookup.
+		challenge_jwt => $inputs_ref->{challengeJWT},
+
+		# Navigation state — copied through unchanged. The renderer is not the
+		# atom evaluator; the orchestrator's verdicts update this on the next
+		# round trip.
+		state => {
+			started_at     => $prior_state->{started_at},
+			current_focus  => $prior_state->{current_focus},
+			next_available => $prior_state->{next_available} // [],
+			draws          => $prior_state->{draws}          // [],
+			finalization   => $prior_state->{finalization},
+		},
+
+		mint_sequence => $next_seq,
+	};
+
+	return encode_jwt(
+		payload  => $payload,
+		alg      => 'HS256',
+		key      => $ENV{webworkJWTsecret},
+		auto_iat => 1,
+	);
+}
+
+# Mint the per-submission submissionJWT. Self-audienced (renderer reads it
+# back on reView), problemJWTsecret-signed (same key as today's answerJWT).
+# Carries enough render context (pg_hash + seed) to reproduce the rendered
+# state exactly, plus the student's answers and the renderer's grading.
+sub generateSubmissionJWT {
+	my ($pg, $inputs_ref) = @_;
+
+	# Per-answer scores in stable order. Atoms see only the aggregated score;
+	# part_scores are kept for chain audit and instructor review.
+	my @answer_keys = sort keys %{ $pg->{answers} // {} };
+	my %submitted_answers;
+	my @part_scores;
+	for my $k (@answer_keys) {
+		$submitted_answers{$k} = $inputs_ref->{$k} // '';
+		push @part_scores, $pg->{answers}{$k}{score} // 0;
+	}
+
+	# ISO8601 UTC timestamp — matches the chain entry format the orchestrator
+	# expects (per Artifact Shape §submissionJWT).
+	my @t = gmtime();
+	my $submitted_at = sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ',
+		$t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
+
+	my $payload = {
+		iss => $ENV{SITE_HOST},
+		aud => $ENV{SITE_HOST},
+
+		play_id          => $inputs_ref->{play_id},
+		challenge_id     => $inputs_ref->{challenge_id},
+		chain_student_id => $inputs_ref->{chain_student_id},
+		position         => $inputs_ref->{position} + 0,    # numeric
+
+		pg_hash => $inputs_ref->{pg_hash},
+		seed    => $inputs_ref->{problemSeed},
+
+		submitted_answers => \%submitted_answers,
+		part_scores       => \@part_scores,
+		score             => ($pg->{problem_result}{score} // 0) + 0,
+
+		submitted_at => $submitted_at,
+	};
+
+	return encode_jwt(
+		payload  => $payload,
+		alg      => 'HS256',
+		key      => $ENV{problemJWTsecret},
+		auto_iat => 1,
+	);
 }
 
 sub writeRenderLogEntry($) {

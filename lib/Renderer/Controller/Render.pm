@@ -43,6 +43,14 @@ sub parseRequest ($c) {
 		return $c->exception('Malformed request.', 400);
 	}
 
+	# challengeJWT and problemJWT are sibling trust lanes — never both at once.
+	# challengeJWT is the play-level definition (WW3 orchestrator-minted);
+	# problemJWT is the legacy per-problem envelope (LibreTexts/ADAPT).
+	# Pick one.
+	if (defined $params{challengeJWT} && defined $params{problemJWT}) {
+		return $c->exception('Ambiguous envelope: both challengeJWT and problemJWT present.', 400);
+	}
+
 	# Reject raw-param pg_hash paired with raw-param problemSource when no upstream
 	# JWT is present. Legitimate callers carry pg_hash inside the JWT; this combo
 	# in the clear suggests an attempt to render attacker-chosen source under a
@@ -172,6 +180,90 @@ sub parseRequest ($c) {
 		# override key-values in params with those provided in the JWT
 		@params{ keys %$claims } = values %$claims;
 		# Mark this request as upstream-JWT-bearing — required to produce answerJWTs.
+		$c->stash(_can_emit_answer_jwt => 1);
+	} elsif (defined $params{challengeJWT}) {
+		# challengeJWT trust lane (WW3-032). The challengeJWT is the static play
+		# definition minted by the WW3 orchestrator; we decode, locate the
+		# requested position, and hoist its render context. Atom evaluation lives
+		# orchestrator-side (Architecture B), so `mode` and `constraints` are
+		# carried but not consumed here. The portal supplies `position` to pick
+		# which problem in the pool to render.
+		$c->log->info("Received JWT: using challengeJWT");
+		my $claims;
+		eval {
+			$claims = decode_jwt(
+				token      => $params{challengeJWT},
+				key        => $ENV{problemJWTsecret},
+				verify_aud => $ENV{SITE_HOST},
+			);
+			1;
+		} or do {
+			return $c->croak($@, 3);
+		};
+
+		my $position = $params{position};
+		return $c->exception('challengeJWT requires a position parameter.', 400)
+			unless defined $position && $position =~ /^\d+$/;
+
+		my $problems = $claims->{problems} // [];
+		return $c->exception("position $position out of range (have @{[ scalar @$problems ]} problems).", 400)
+			if $position >= scalar @$problems;
+
+		my $entry = $problems->[$position];
+		my $pg_hash = $entry->{pg_hash}
+			or return $c->exception('challengeJWT problem entry missing pg_hash.', 400);
+
+		# Seed resolution: closed challenges carry the seed in the JWT;
+		# open challenges carry "*" and the resolved seed lives in the
+		# inbound sessionJWT's state.draws[draw_position == position] entry.
+		my $seed = $entry->{seed};
+		if (!defined $seed || $seed eq '*') {
+			my $draws = $params{state} && ref $params{state} eq 'HASH'
+				? ($params{state}{draws} // [])
+				: [];
+			my ($draw) = grep { defined $_->{draw_position} && $_->{draw_position} == $position } @$draws;
+			return $c->exception("Open challenge: no draw recorded for position $position.", 400)
+				unless $draw && defined $draw->{seed};
+			$seed = $draw->{seed};
+			# In open mode the active pg_hash also lives on the draw record
+			# (the pool entry is one of many; the draw pinned which one).
+			$pg_hash = $draw->{pg_hash} if defined $draw->{pg_hash};
+		}
+
+		# Hoist render context.
+		$params{pg_hash}     = $pg_hash;
+		$params{problemSeed} = $seed;
+
+		# Render permissions are attempt-wide flags. Apply just the renderer-
+		# visible fields; everything else (e.g. duration_anchor) is orchestrator
+		# concern. Permission claims override raw form values — same precedence
+		# as the problemJWT path.
+		if (my $rp = $claims->{render_permissions}) {
+			for my $k (qw(isInstructor showCorrectAnswers showHints showSolutions)) {
+				$params{$k} = $rp->{$k} if defined $rp->{$k};
+			}
+		}
+		$params{isInstructor} //= 0;
+
+		# Identity claims propagate into the submissionJWT.
+		for my $k (qw(play_id challenge_id chain_student_id assignment_id)) {
+			$params{$k} = $claims->{$k} if defined $claims->{$k};
+		}
+
+		# Stamp the answer endpoint so submissionJWTs land at the orchestrator,
+		# not at any legacy answerURL the client might have tried to inject.
+		return $c->exception('challengeJWT missing answer_url.', 400)
+			unless defined $claims->{answer_url};
+		$params{JWTanswerURL} = $claims->{answer_url};
+
+		# outputFormat lock: WW3-028 deliberately ships challengeJWT WITHOUT an
+		# outputFormat claim (preserves the 99bc18f leak fix). The challengeJWT
+		# path is iframe-render-only; "simple" is the only safe value. Lock it
+		# here, overriding any URL-injected value.
+		$params{outputFormat} = 'simple';
+
+		# Mark this request as upstream-JWT-bearing — required to emit
+		# submissionJWTs (the challengeJWT-path analog of answerJWTs).
 		$c->stash(_can_emit_answer_jwt => 1);
 	} elsif ($c->stash('_peer_signed')) {
 		# Peer-signed lane: the peer authorized this render directly. No JWT needed
@@ -520,22 +612,35 @@ async sub problem ($c) {
 	};
 	$return_object->{inputs_ref} = $inputs_ref;
 
-	# If answerURL provided and this is a student submit, send the answerJWT.
+	# If answerURL provided and this is a student submit, send the answerJWT
+	# (legacy problemJWT path) or submissionJWT envelope (challengeJWT path).
 	# Instructors never produce answer JWTs — their interactions are exploratory.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
 		&& !$inputs_ref->{isLocked} && !$inputs_ref->{isInstructor}) {
-		# Emission gate: an answerJWT is only produced when the request arrived
-		# with an upstream-minted problemJWT (or sessionJWT carrying one).
-		# Self-minted JWTs do not qualify — see parseRequest. This gate is orthogonal
-		# to STRICT_JWT, which governs whether ungrounded requests are accepted at all.
+		# Emission gate: an answerJWT/submissionJWT is only produced when the
+		# request arrived with an upstream-minted problemJWT, challengeJWT, or
+		# sessionJWT carrying one. Self-minted JWTs do not qualify — see
+		# parseRequest. This gate is orthogonal to STRICT_JWT, which governs
+		# whether ungrounded requests are accepted at all.
 		# Ref: WeBWorK3/Config and Secrets Evolution.
 		unless ($c->stash('_can_emit_answer_jwt')) {
-			$c->log->error('Student submit without upstream JWT — rejecting answerJWT generation.');
-			return $c->exception('Submit requires a problemJWT or sessionJWT.', 403);
+			$c->log->error('Student submit without upstream JWT — rejecting answer emission.');
+			return $c->exception('Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403);
 		}
-		# can this be 'await'ed later?
-		$return_object->{JWTanswerURLstatus} =
-			await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});
+		if ($return_object->{submissionJWT}) {
+			# challengeJWT path: POST {type, session_jwt, submission_jwt} envelope
+			# to challengeJWT.answer_url (per Answer-URL Contract).
+			$return_object->{JWTanswerURLstatus} = await sendSubmissionEnvelope(
+				$c,
+				$inputs_ref->{JWTanswerURL},
+				$return_object->{sessionJWT},
+				$return_object->{submissionJWT},
+			);
+		} else {
+			# Legacy problemJWT path: POST raw answerJWT to JWTanswerURL.
+			$return_object->{JWTanswerURLstatus} =
+				await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});
+		}
 	}
 
 	# log interaction and format the response
@@ -760,6 +865,49 @@ async sub sendAnswerJWT ($c, $JWTanswerURL, $answerJWT) {
 	$answerJWTresponse =~ s/'/\\'/g;
 	$c->log->info("answerJWT response " . $answerJWTresponse);
 	return $answerJWTresponse;
+}
+
+# challengeJWT path: POST a JSON envelope { type, session_jwt, submission_jwt }
+# to challengeJWT.answer_url. The orchestrator (WW3) runs atom evaluation and
+# returns a verdict; we surface the response status to the iframe so the portal
+# can fold the verdict into its next sessionJWT cache entry.
+async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt) {
+	my $envelope = {
+		type           => 'submission',
+		session_jwt    => $session_jwt,
+		submission_jwt => $submission_jwt,
+	};
+	my $body   = encode_json($envelope);
+	my $header = {
+		Origin         => $ENV{SITE_HOST},
+		'Content-Type' => 'application/json',
+	};
+
+	my $response = {
+		subject => 'webwork.result',
+		message => 'initial message',
+	};
+
+	$c->log->info("sending submissionJWT envelope to $answer_url");
+	await $c->ua->max_redirects(5)->request_timeout(7)->post_p($answer_url, $header, $body)->then(sub {
+		my $tx = shift->result;
+		$response->{status} = int($tx->code);
+		if ($tx->json) {
+			$response = { %$response, %{ $tx->json } };
+		} else {
+			$response->{message} = $tx->body;
+		}
+	})->catch(sub {
+		my $err = shift;
+		$c->log->error($err);
+		$response->{status}  = 500;
+		$response->{message} = '[' . $c->logID . '] ' . $err;
+	});
+
+	my $encoded = encode_json($response);
+	$encoded =~ s/'/\\'/g;
+	$c->log->info("submission envelope response " . $encoded);
+	return $encoded;
 }
 
 sub exception ($c, $message, $status, @extra) {
