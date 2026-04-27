@@ -689,12 +689,46 @@ async sub problem ($c) {
 		if ($return_object->{submissionJWT}) {
 			# challengeJWT path: POST {type, session_jwt, submission_jwt} envelope
 			# to challengeJWT.answer_url (per Answer-URL Contract).
-			$return_object->{JWTanswerURLstatus} = await sendSubmissionEnvelope(
+			my $resp = await sendSubmissionEnvelope(
 				$c,
 				$inputs_ref->{JWTanswerURL},
 				$return_object->{sessionJWT},
 				$return_object->{submissionJWT},
 			);
+
+			# Post-answer-URL verdict fold (WW3-053). When the orchestrator
+			# returns verdict_signed alongside the verdict, mint
+			# sessionJWT_{k+1} folding it. Same primitive as the render-time
+			# fold in parseRequest — different source of verdict_signed (HTTP
+			# response body vs form param), identical fold semantics. The
+			# result replaces $return_object->{sessionJWT} so the rendered
+			# JSON envelope's JWT.session carries the verdict-folded mint.
+			#
+			# Skip the fold on:
+			#   - rejected/error responses (no verdict to fold; keep the
+			#     pre-POST mint as the surfaced session)
+			#   - missing verdict_signed (orchestrator below WW3-053 cutover,
+			#     or non-WW3 answer_url targets — graceful degradation: the
+			#     pre-POST mint stays surfaced, system catches up on next
+			#     interaction via stale-recovery)
+			if ($resp->{verdict_signed}) {
+				my ($folded, $err) = verifyAndFoldVerdict(
+					$return_object->{sessionJWT},
+					$resp->{verdict_signed},
+					$ENV{problemJWTsecret},
+					$ENV{webworkJWTsecret},
+				);
+				if ($err) {
+					$c->log->error("post-answer-URL verdict fold rejected: $err");
+					# Don't fail the whole render — the submission landed and
+					# the pre-POST mint is still a valid sessionJWT (just one
+					# verdict behind). Stale-recovery handles the catch-up.
+				} else {
+					$return_object->{sessionJWT} = $folded;
+				}
+			}
+
+			$return_object->{JWTanswerURLstatus} = encodeAnswerStatus($resp);
 		} else {
 			# Legacy problemJWT path: POST raw answerJWT to JWTanswerURL.
 			$return_object->{JWTanswerURLstatus} =
@@ -928,8 +962,14 @@ async sub sendAnswerJWT ($c, $JWTanswerURL, $answerJWT) {
 
 # challengeJWT path: POST a JSON envelope { type, session_jwt, submission_jwt }
 # to challengeJWT.answer_url. The orchestrator (WW3) runs atom evaluation and
-# returns a verdict; we surface the response status to the iframe so the portal
-# can fold the verdict into its next sessionJWT cache entry.
+# returns a verdict; we surface the response so the post-POST verdict fold
+# (WW3-053) can mint sessionJWT_{k+1} in the caller, and the JS-safe encoded
+# form ends up in JWTanswerURLstatus for the rendered HTML.
+#
+# Returns a response HASHREF. Caller is responsible for encoding it for
+# downstream consumers (see encodeAnswerStatus). This contract differs from
+# sendAnswerJWT (legacy lane), which returns a pre-encoded string — the
+# challengeJWT lane needs structured access to verdict_signed for the fold.
 async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt) {
 	my $envelope = {
 		type           => 'submission',
@@ -963,9 +1003,16 @@ async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt
 		$response->{message} = '[' . $c->logID . '] ' . $err;
 	});
 
+	$c->log->info("submission envelope response " . encode_json($response));
+	return $response;
+}
+
+# Encode a response hashref as the JS-safe JSON string that goes into
+# JWTanswerURLstatus. The single-quote escape is required because the value
+# is later embedded as a JS string literal in default.html.ep.
+sub encodeAnswerStatus ($response) {
 	my $encoded = encode_json($response);
 	$encoded =~ s/'/\\'/g;
-	$c->log->info("submission envelope response " . $encoded);
 	return $encoded;
 }
 

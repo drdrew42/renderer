@@ -518,6 +518,125 @@ subtest 'verdict_signed without challengeJWT → 400' => sub {
 	})->status_is(400);
 };
 
+# Post-answer-URL verdict fold (WW3-053) — needs a fake orchestrator server
+# so sendSubmissionEnvelope's POST gets a real verdict_signed in response.
+
+subtest 'post-answer-URL fold: orchestrator verdict_signed in response folds into surfaced sessionJWT' => sub {
+	require Mojolicious::Lite;
+	require Mojo::Server::Daemon;
+
+	# Tiny fake orchestrator: responds at /assess/play/.../answer with a
+	# canned accepted verdict + verdict_signed under the same secret the
+	# renderer uses for problemJWT verification.
+	my $fake = Mojolicious::Lite->new;
+	$fake->routes->post('/assess/play/:play_id/answer' => sub {
+		my $c = shift;
+		my $play_id = $c->stash('play_id');
+		my $verdict = {
+			current_focus  => 2,
+			next_available => [2],
+			draw_next      => undef,
+			finalization   => undef,
+		};
+		my $verdict_signed = encode_jwt(
+			payload => {
+				iss                 => 'https://ww3.example.edu',
+				aud                 => $ENV{SITE_HOST},
+				play_id             => $play_id,
+				challenge_id        => 'sha256:abcdef',
+				# Pre-POST mint advances inbound mint_sequence by 1. With
+				# inbound sessionJWT_3 (sequence 3), pre-POST mint is 4;
+				# orchestrator's verdict pairs with that basis.
+				mint_sequence_basis => 4,
+				verdict             => $verdict,
+			},
+			alg => 'HS256',
+			key => $ENV{problemJWTsecret},
+		);
+		$c->render(json => {
+			status         => 'accepted',
+			verdict        => $verdict,
+			verdict_signed => $verdict_signed,
+		});
+	});
+
+	my $server = Mojo::Server::Daemon->new(app => $fake)->silent(1);
+	$server->listen(['http://127.0.0.1']);
+	$server->start;
+	my $port = $server->ports->[0];
+	my $play_id = '11111111-1111-1111-1111-111111111111';
+	my $answer_url = "http://127.0.0.1:$port/assess/play/$play_id/answer";
+
+	# Mint a challengeJWT pointing at the fake server, plus an inbound
+	# sessionJWT at mint_sequence 3 to make the sequence chain explicit:
+	# inbound 3 → pre-POST mint 4 → fold (basis=4) produces sequence 5.
+	my $jwt = make_challenge_jwt(answer_url => $answer_url);
+	my $inbound_session = make_play_session_jwt(
+		challenge_jwt => $jwt,
+		mint_sequence => 3,
+	);
+
+	post_json({
+		challengeJWT  => $jwt,
+		sessionJWT    => $inbound_session,
+		position      => 0,
+		problemSource => $pg_source,
+		submitAnswers => 1,
+		'AnSwEr0001'  => '42',
+	})->status_is(200);
+
+	my $resp = decode_json($t->tx->res->body);
+	my $surfaced = $resp->{JWT}{session};
+	ok($surfaced, 'sessionJWT surfaced post-POST');
+
+	my $claims = decode_jwt(token => $surfaced, key => $ENV{webworkJWTsecret});
+	is($claims->{state}{current_focus}, 2, 'surfaced sessionJWT carries verdict.current_focus');
+	is_deeply($claims->{state}{next_available}, [2], 'surfaced sessionJWT carries verdict.next_available');
+	is($claims->{mint_sequence}, 5, 'mint_sequence advanced from inbound 3 → pre-POST 4 → fold 5');
+};
+
+subtest 'post-answer-URL fold: missing verdict_signed leaves pre-POST mint intact' => sub {
+	require Mojolicious::Lite;
+	require Mojo::Server::Daemon;
+
+	# Fake server returns a response WITHOUT verdict_signed. The fold
+	# should be skipped (graceful degradation) and the pre-POST mint
+	# should remain the surfaced sessionJWT.
+	my $fake = Mojolicious::Lite->new;
+	$fake->routes->post('/answer-no-verdict' => sub {
+		my $c = shift;
+		$c->render(json => {
+			status  => 'accepted',
+			verdict => { current_focus => 5, next_available => [5] },
+			# verdict_signed deliberately absent
+		});
+	});
+
+	my $server = Mojo::Server::Daemon->new(app => $fake)->silent(1);
+	$server->listen(['http://127.0.0.1']);
+	$server->start;
+	my $port = $server->ports->[0];
+	my $answer_url = "http://127.0.0.1:$port/answer-no-verdict";
+
+	my $jwt = make_challenge_jwt(answer_url => $answer_url);
+
+	post_json({
+		challengeJWT  => $jwt,
+		position      => 0,
+		problemSource => $pg_source,
+		submitAnswers => 1,
+		'AnSwEr0001'  => '42',
+	})->status_is(200);
+
+	my $resp = decode_json($t->tx->res->body);
+	my $surfaced = $resp->{JWT}{session};
+	my $claims = decode_jwt(token => $surfaced, key => $ENV{webworkJWTsecret});
+	# The pre-POST mint preserves inbound state (current_focus undef on
+	# first render). Critically NOT 5 (the verdict's value) — fold did not
+	# run because verdict_signed was absent.
+	isnt($claims->{state}{current_focus}, 5, 'pre-POST mint NOT replaced by unsigned verdict');
+};
+
 subtest 'empty-string verdict_signed treated as not-present' => sub {
 	# Symmetric with the empty-string handling for problemJWT / sessionJWT /
 	# challengeJWT. An empty string in the form payload should be a no-op,
