@@ -118,6 +118,13 @@ COPY --from=builder /usr/local /usr/local
 # Copy the full app tree (includes pruned node_modules and generated assets)
 COPY --from=builder /usr/app /usr/app
 
+# Renderer version — populated at build time from `git describe --always --dirty
+# --abbrev=8 --tags` on the build host. Surfaces in /health and is forwarded to
+# OPL on registration so consumers know which renderer build is talking to them.
+# Defaults to 'unknown' when the build was launched without --build-arg.
+ARG RENDERER_VERSION=unknown
+ENV RENDERER_VERSION=${RENDERER_VERSION}
+
 EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
