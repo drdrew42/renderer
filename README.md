@@ -86,7 +86,8 @@ Configuration lives in `renderer.conf` (copied from `renderer.conf.dist` during 
 | `problemJWTsecret` | `problemJWTsecret` | Shared secret for encrypting render configuration JWTs. Must match any service that creates problem tokens. |
 | `webworkJWTsecret` | `webworkJWTsecret` | Shared secret for session state JWTs (attempt history, scores). |
 | `CORS_ORIGIN` | — | Allowed origin for CORS headers. Set to the embedding site's origin for iframe deployments. `*` is insecure. |
-| `STRICT_JWT` | `STRICT_JWT` | **DEPRECATED.** Kept for backward compatibility; value is ignored. Replaced by action-level JWT gating — student submits that would produce an answerJWT now require a problemJWT regardless of this setting. Preview/browse paths remain open. |
+| `STRICT_JWT` | `STRICT_JWT` | Entry gate. When `1`, ungrounded requests are rejected with 401 — the instance only serves callers arriving with a `problemJWT`, `challengeJWT`, `sessionJWT`, or `X-Peer-Signature`. When `0` (default), ungrounded requests are admitted. Orthogonal to answerJWT emission, which is always gated by upstream-JWT presence. |
+| `SELF_MINT_DISABLED` | `SELF_MINT_DISABLED` | When unset (default), an admitted ungrounded request is wrapped in a self-minted `problemJWT` so the next render can flow through the standard `sessionJWT` round-trip without the consumer re-mailing `isInstructor`, `sessionID`, etc. Set to `1` for raw-passthrough deployments. Self-minted JWTs cannot ground answerJWT emission. |
 | `FULL_APP_INSECURE` | — | Enables editor UI, OPL browser, and file management routes in production mode. Always available in development mode. |
 | `STATIC_EXPIRES` | — | `Cache-Control` max-age (seconds) for static assets under `/webwork2_files/`. |
 

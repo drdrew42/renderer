@@ -21,19 +21,28 @@ sub parseRequest ($c) {
 		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
 	$originIP ||= $c->tx->remote_address || 'unknown-origin';
 
-	# Two orthogonal gates govern renderer access:
-	#   1. Entry gate  (STRICT_JWT)         — may this request render at all?
-	#   2. Emission gate (_can_emit_answer_jwt) — may this request produce an answerJWT?
+	# Three knobs govern renderer access:
+	#   1. Entry gate    (STRICT_JWT)            — may this ungrounded request render at all?
+	#   2. Session UX    (SELF_MINT_DISABLED)    — should we wrap this render in a self-minted JWT?
+	#   3. Emission gate (_can_emit_answer_jwt)  — may this request produce an answerJWT?
 	#
-	# STRICT_JWT=1 rejects ungrounded requests at the door (public/student instances
+	# (1) STRICT_JWT=1 rejects ungrounded requests at the door (public/student instances
 	# that expect all callers to arrive with a peer-minted problemJWT or sessionJWT).
-	# STRICT_JWT=0 permits self-minted JWTs, so previews, library browsing, and
-	# raw-source authoring all work — typically paired with a network-isolated
-	# deployment (e.g. ADAPT's VPC-only editor renderer) that treats the network
-	# as the trust boundary.
+	# STRICT_JWT=0 admits ungrounded requests — typically paired with a network-isolated
+	# deployment (e.g. ADAPT's VPC-only editor renderer) that treats the network as the
+	# trust boundary.
 	#
-	# The emission gate is always active: only requests carrying an upstream JWT
-	# can produce answerJWTs. Self-minted JWTs do not ground answer emission.
+	# (2) Self-minting is the renderer's UX opinion: when an ungrounded request is
+	# admitted, encapsulate its inputs in a problemJWT so subsequent renders flow
+	# through the standard sessionJWT round-trip without the consumer re-mailing
+	# every parameter (isInstructor, sessionID, etc.). Default ON. Set
+	# SELF_MINT_DISABLED=1 for raw-passthrough deployments that don't want a JWT
+	# materialized on their behalf.
+	#
+	# (3) The emission gate is always active: only requests carrying an upstream JWT
+	# can produce answerJWTs. Self-minted JWTs cannot carry JWTanswerURL (it's
+	# stripped from raw params and only re-injected from upstream claims), so they
+	# can't ground answer emission even after a sessionJWT round-trip.
 	#
 	# See WeBWorK3/Config and Secrets Evolution for rationale.
 
@@ -274,26 +283,30 @@ sub parseRequest ($c) {
 		$params{isInstructor} //= 0;
 		$params{sessionID} ||= time;
 	} elsif ($params{outputFormat} ne 'ptx') {
-		# Entry gate: when STRICT_JWT is on, every request (except pretext) must
-		# arrive with an upstream problemJWT, sessionJWT, or valid peer signature.
-		# Reject otherwise.
+		# Entry gate (STRICT_JWT): block ungrounded requests at the door for
+		# instances that only serve authorized upstream consumers.
 		if ($ENV{STRICT_JWT}) {
 			return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401);
 		}
-		# Entry gate off (typically VPC-isolated editor instance): self-mint a JWT
-		# so the rest of the pipeline has a uniform input shape. Self-minted JWTs
-		# do not ground answerJWT emission — _can_emit_answer_jwt stays unset.
-		$params{aud} = $ENV{SITE_HOST};
-		$params{isInstructor} //= 0;
-		$params{sessionID} ||= time;
-		my $req_jwt = encode_jwt(
-			payload  => \%params,
-			key      => $ENV{problemJWTsecret},
-			alg      => 'PBES2-HS512+A256KW',
-			enc      => 'A256GCM',
-			auto_iat => 1
-		);
-		$params{problemJWT} = $req_jwt;
+		# Session UX (default on; SELF_MINT_DISABLED=1 to opt out): wrap the
+		# inbound params in a self-minted problemJWT so the next render flows
+		# through the standard sessionJWT round-trip without the consumer
+		# re-mailing isInstructor / sessionID / etc. Self-minted JWTs carry no
+		# JWTanswerURL, so _can_emit_answer_jwt stays unset and answerJWTs
+		# cannot be produced even after round-tripping.
+		unless ($ENV{SELF_MINT_DISABLED}) {
+			$params{aud} = $ENV{SITE_HOST};
+			$params{isInstructor} //= 0;
+			$params{sessionID} ||= time;
+			my $req_jwt = encode_jwt(
+				payload  => \%params,
+				key      => $ENV{problemJWTsecret},
+				alg      => 'PBES2-HS512+A256KW',
+				enc      => 'A256GCM',
+				auto_iat => 1
+			);
+			$params{problemJWT} = $req_jwt;
+		}
 	}
 	$params{originIP} = $originIP if $originIP;
 

@@ -204,4 +204,52 @@ subtest 'STRICT_JWT=0 self-mint still works (backward compat)' => sub {
 	)->status_is(200);
 };
 
+# ── Self-mint UX is independent of STRICT_JWT ────────────────────────
+# Default-on: an admitted ungrounded request is wrapped in a self-minted
+# problemJWT, which produces a sessionJWT in the response so the consumer
+# can round-trip without re-mailing every input.
+
+subtest 'STRICT_JWT=0 default: self-mint produces a sessionJWT' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	local $ENV{SELF_MINT_DISABLED};
+	delete $ENV{SELF_MINT_DISABLED};
+	$t->post_ok('/render-api',
+		{ Accept => 'application/json' },
+		form => {
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+		},
+	)->status_is(200);
+	my $resp = Mojo::JSON::decode_json($t->tx->res->body);
+	ok($resp->{JWT}{session}, 'self-minted request returns a sessionJWT');
+};
+
+subtest 'SELF_MINT_DISABLED=1: ungrounded render emits no sessionJWT' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	local $ENV{SELF_MINT_DISABLED} = 1;
+	$t->post_ok('/render-api',
+		{ Accept => 'application/json' },
+		form => {
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+		},
+	)->status_is(200);
+	my $resp = Mojo::JSON::decode_json($t->tx->res->body);
+	ok(!$resp->{JWT}{session}, 'no sessionJWT emitted when self-mint disabled');
+};
+
+subtest 'SELF_MINT_DISABLED has no effect when STRICT_JWT=1' => sub {
+	local $ENV{STRICT_JWT} = 1;
+	local $ENV{SELF_MINT_DISABLED} = 1;
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+	);
+	$t->post_ok('/render-api',
+		{ 'Content-Type' => 'application/x-www-form-urlencoded' },
+		$body,
+	)->status_is(401);
+};
+
 done_testing();
