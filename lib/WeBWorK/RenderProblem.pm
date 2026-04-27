@@ -146,12 +146,13 @@ sub process_problem {
 	$return_object->{pgResources}       = \@pgResources;
 	$return_object->{raw_metadata_text} = $raw_metadata_text if $inputs_ref->{includeTags};
 
-	# Generate sessionJWT + answerJWT for student interactions only.
-	# Instructors don't get session tracking or answer JWTs — their
-	# interactions are exploratory and should not produce telemetry.
-	if ($inputs_ref->{isInstructor}) {
-		# no-op: no session, no answer JWT
-	} elsif ($inputs_ref->{previewAnswers}) {
+	# Mint continuation tokens. The discriminator is JWTanswerURL: its presence
+	# is the caller's signal "I want this rendering's answers reported back to
+	# me" — i.e., persistence is desired. isInstructor is a second-tier gate
+	# applied later in the controller, where the actual answerJWT POST is
+	# refused for instructors (Render.pm:639). The artifact is still produced
+	# here so the HTML form has a sessionJWT to carry forward.
+	if ($inputs_ref->{previewAnswers}) {
 		# preview: leave session unmodified, no answerJWT
 		$return_object->{sessionJWT} = $inputs_ref->{sessionJWT};
 	} elsif ($inputs_ref->{challengeJWT}) {
@@ -162,11 +163,19 @@ sub process_problem {
 		$return_object->{sessionJWT} = generatePlaySessionJWT($return_object, $inputs_ref);
 		$return_object->{submissionJWT} = generateSubmissionJWT($return_object, $inputs_ref)
 			if $inputs_ref->{submitAnswers};
-	} elsif ($inputs_ref->{problemJWT}) {
+	} elsif ($inputs_ref->{problemJWT} && $inputs_ref->{JWTanswerURL}) {
+		# Caller asked for persistence (provided JWTanswerURL). Mint full
+		# session+answer pair. Works for instructors and students alike;
+		# the controller-side POST gate handles the instructor-as-second-tier
+		# distinction.
 		my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
 		$return_object->{sessionJWT} = $sessionJWT;
 		$return_object->{answerJWT}  = $answerJWT;
 	}
+	# Else: problemJWT without JWTanswerURL = exploratory self-mint render.
+	# No persistence signal from the caller, so no sessionJWT is minted. The
+	# problemJWT-in-HTML hidden field carries config (incl. isInstructor)
+	# forward across submits.
 
 	#######################################################################
 	# Handle errors

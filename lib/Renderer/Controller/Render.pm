@@ -52,6 +52,14 @@ sub parseRequest ($c) {
 		return $c->exception('Malformed request.', 400);
 	}
 
+	# Treat empty-string JWT params as not-present. Hidden form fields whose
+	# backing value was undef render as `value=""`, which is `defined` but empty;
+	# Crypt::JWT::decode_jwt rejects empty tokens with "missing token". Strip
+	# them up front so the elsif chain below dispatches as if they weren't sent.
+	for my $k (qw(problemJWT sessionJWT challengeJWT)) {
+		delete $params{$k} if defined $params{$k} && !length $params{$k};
+	}
+
 	# challengeJWT and problemJWT are sibling trust lanes — never both at once.
 	# challengeJWT is the play-level definition (WW3 orchestrator-minted);
 	# problemJWT is the legacy per-problem envelope (LibreTexts/ADAPT).

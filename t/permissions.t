@@ -10,11 +10,29 @@ BEGIN {
 }
 
 use Test::Mojo;
-use Crypt::JWT qw(decode_jwt);
+use Crypt::JWT qw(decode_jwt encode_jwt);
 
 # Renderer startup refuses placeholder secrets; supply test values.
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
+
+# Helper: mint an upstream-style problemJWT carrying JWTanswerURL. Required
+# for any test that expects sessionJWT/answerJWT to be produced — sessionJWT
+# minting is now gated on JWTanswerURL presence (caller asks for persistence).
+sub upstream_problem_jwt {
+	my %extra = @_;
+	return encode_jwt(
+		payload => {
+			aud          => $ENV{SITE_HOST},
+			iss          => $ENV{SITE_HOST},
+			JWTanswerURL => 'https://upstream.example.test/answer',
+			%extra,
+		},
+		key      => $ENV{problemJWTsecret},
+		alg      => 'HS256',
+		auto_iat => 1,
+	);
+}
 
 my $t = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
@@ -177,21 +195,16 @@ subtest 'debug outputFormat returns diagnostic JSON' => sub {
 # ─── Session lock ──────────────────────────────────────────────────────────
 
 subtest 'session locks on 100% score (non-instructor)' => sub {
-	# First render to get a problemJWT
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'raw',
-		problemSeed   => 1234,
-	})->status_is(200);
-
-	my $raw = $t->tx->res->json;
-	my $problemJWT = $raw->{inputs_ref}{problemJWT};
-	ok($problemJWT, 'got problemJWT from first render');
+	# Use an upstream-minted problemJWT carrying JWTanswerURL so the renderer
+	# mints session+answer JWTs (the persistence path).
+	my $problemJWT = upstream_problem_jwt();
 
 	# Submit the correct answer
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
+		problemSource => $pg_source,
 		outputFormat  => 'raw',
+		problemSeed   => 1234,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
@@ -221,8 +234,10 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 	# Now submit again with the locked session — should get no answerJWT
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
+		problemSource => $pg_source,
 		sessionJWT    => $sessionJWT,
 		outputFormat  => 'raw',
+		problemSeed   => 1234,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
@@ -232,20 +247,14 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 };
 
 subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'raw',
-		problemSeed   => 9999,
-	})->status_is(200);
-
-	my $raw = $t->tx->res->json;
-	my $problemJWT = $raw->{inputs_ref}{problemJWT};
-	ok($problemJWT, 'got problemJWT');
+	my $problemJWT = upstream_problem_jwt();
 
 	# Submit a wrong answer but request correct answers (implies solutions)
 	$t->post_ok('/render-api' => form => {
 		problemJWT         => $problemJWT,
+		problemSource      => $pg_source,
 		outputFormat       => 'raw',
+		problemSeed        => 9999,
 		submitAnswers      => 1,
 		showCorrectAnswers => 1,
 		AnSwEr0001         => '41',
@@ -265,8 +274,10 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 	# Subsequent request should not produce an answerJWT
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
+		problemSource => $pg_source,
 		sessionJWT    => $sessionJWT,
 		outputFormat  => 'raw',
+		problemSeed   => 9999,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
@@ -276,20 +287,14 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 };
 
 subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'raw',
-		problemSeed   => 8888,
-	})->status_is(200);
-
-	my $raw = $t->tx->res->json;
-	my $problemJWT = $raw->{inputs_ref}{problemJWT};
-	ok($problemJWT, 'got problemJWT');
+	my $problemJWT = upstream_problem_jwt();
 
 	# Submit wrong answer with showSolutions but NOT showCorrectAnswers
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
+		problemSource => $pg_source,
 		outputFormat  => 'raw',
+		problemSeed   => 8888,
 		submitAnswers => 1,
 		showSolutions => 1,
 		AnSwEr0001    => '41',
@@ -309,20 +314,14 @@ subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
 # ─── Raw param injection blocked ──────────────────────────────────────────
 
 subtest 'raw isLocked=0 cannot override locked sessionJWT' => sub {
-	# Get a locked session first
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'raw',
-		problemSeed   => 5678,
-	})->status_is(200);
-
-	my $raw = $t->tx->res->json;
-	my $problemJWT = $raw->{inputs_ref}{problemJWT};
+	my $problemJWT = upstream_problem_jwt();
 
 	# Submit correct answer to lock
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
+		problemSource => $pg_source,
 		outputFormat  => 'raw',
+		problemSeed   => 5678,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
@@ -333,8 +332,10 @@ subtest 'raw isLocked=0 cannot override locked sessionJWT' => sub {
 	# Try to bypass with raw isLocked=0
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
+		problemSource => $pg_source,
 		sessionJWT    => $locked_session,
 		outputFormat  => 'raw',
+		problemSeed   => 5678,
 		submitAnswers => 1,
 		isLocked      => 0,
 		AnSwEr0001    => '42',

@@ -13,6 +13,7 @@ BEGIN {
 
 use Test::Mojo;
 use Crypt::Ed25519;
+use Crypt::JWT qw(encode_jwt);
 use MIME::Base64 qw(encode_base64);
 use Mojo::JSON qw(encode_json);
 use Mojo::Parameters;
@@ -209,7 +210,7 @@ subtest 'STRICT_JWT=0 self-mint still works (backward compat)' => sub {
 # problemJWT, which produces a sessionJWT in the response so the consumer
 # can round-trip without re-mailing every input.
 
-subtest 'STRICT_JWT=0 default: self-mint produces a sessionJWT' => sub {
+subtest 'STRICT_JWT=0 default: self-mint produces a problemJWT (no JWTanswerURL → no sessionJWT)' => sub {
 	local $ENV{STRICT_JWT} = 0;
 	local $ENV{SELF_MINT_DISABLED};
 	delete $ENV{SELF_MINT_DISABLED};
@@ -221,10 +222,12 @@ subtest 'STRICT_JWT=0 default: self-mint produces a sessionJWT' => sub {
 		},
 	)->status_is(200);
 	my $resp = Mojo::JSON::decode_json($t->tx->res->body);
-	ok($resp->{JWT}{session}, 'self-minted request returns a sessionJWT');
+	ok($resp->{JWT}{problem}, 'self-minted request returns a problemJWT');
+	ok(!$resp->{JWT}{session},
+		'no sessionJWT for self-mint without JWTanswerURL (persistence not requested)');
 };
 
-subtest 'SELF_MINT_DISABLED=1: ungrounded render emits no sessionJWT' => sub {
+subtest 'SELF_MINT_DISABLED=1: ungrounded render emits no problemJWT' => sub {
 	local $ENV{STRICT_JWT} = 0;
 	local $ENV{SELF_MINT_DISABLED} = 1;
 	$t->post_ok('/render-api',
@@ -235,7 +238,8 @@ subtest 'SELF_MINT_DISABLED=1: ungrounded render emits no sessionJWT' => sub {
 		},
 	)->status_is(200);
 	my $resp = Mojo::JSON::decode_json($t->tx->res->body);
-	ok(!$resp->{JWT}{session}, 'no sessionJWT emitted when self-mint disabled');
+	ok(!$resp->{JWT}{problem}, 'no problemJWT minted when self-mint disabled');
+	ok(!$resp->{JWT}{session}, 'no sessionJWT either (nothing to ground it)');
 };
 
 subtest 'SELF_MINT_DISABLED has no effect when STRICT_JWT=1' => sub {
@@ -250,6 +254,109 @@ subtest 'SELF_MINT_DISABLED has no effect when STRICT_JWT=1' => sub {
 		{ 'Content-Type' => 'application/x-www-form-urlencoded' },
 		$body,
 	)->status_is(401);
+};
+
+# ── HTML continuation surface: problemJWT round-trip ─────────────────
+# Self-minted problemJWT must end up in the rendered HTML as a hidden field
+# so subsequent submits carry it back. Truthy guard means we never emit
+# `value=""` for an undef JWT (which would crash Crypt::JWT::decode_jwt on
+# the next request with "missing token").
+
+subtest 'HTML emits problemJWT when self-minted, no sessionJWT (no JWTanswerURL)' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	local $ENV{SELF_MINT_DISABLED};
+	delete $ENV{SELF_MINT_DISABLED};
+	# Exploratory render (instructor, no JWTanswerURL). Self-mint produces a
+	# problemJWT for round-trip; sessionJWT is NOT minted because no caller
+	# asked for persistence.
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+		isInstructor  => 1,
+	);
+	$t->post_ok('/render-api',
+		{ 'Content-Type' => 'application/x-www-form-urlencoded' },
+		$body,
+	)->status_is(200);
+	my $html = $t->tx->res->body;
+	like($html, qr/<input[^>]*name="problemJWT"[^>]*value="[^"]+"/,
+		'problemJWT hidden field present with non-empty value');
+	unlike($html, qr/<input[^>]*name="sessionJWT"/,
+		'sessionJWT hidden field NOT emitted when caller provided no JWTanswerURL');
+	unlike($html, qr/<input[^>]*name="problemJWT"[^>]*value=""/,
+		'problemJWT never emits empty value');
+};
+
+subtest 'HTML emits sessionJWT when caller provided JWTanswerURL (instructor)' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	# Instructor + caller-provided JWTanswerURL = persistence requested.
+	# sessionJWT must be minted regardless of isInstructor; the controller's
+	# submit dispatcher gates the actual answerJWT POST on !isInstructor.
+	# We supply a problemJWT carrying both isInstructor=1 and a JWTanswerURL,
+	# signed with problemJWTsecret.
+	my $problemJWT = encode_jwt(
+		payload => {
+			aud           => $ENV{SITE_HOST},
+			iss           => $ENV{SITE_HOST},
+			isInstructor  => 1,
+			JWTanswerURL  => 'https://upstream.example.test/answer',
+			pg_hash       => 'sha256:probe',
+			problemUUID   => 'probe-uuid',
+		},
+		key       => $ENV{problemJWTsecret},
+		alg       => 'HS256',
+		auto_iat  => 1,
+	);
+	my $body = form_body(
+		problemSource => $pg_source,
+		problemJWT    => $problemJWT,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+	);
+	$t->post_ok('/render-api',
+		{ 'Content-Type' => 'application/x-www-form-urlencoded' },
+		$body,
+	)->status_is(200);
+	my $html = $t->tx->res->body;
+	like($html, qr/<input[^>]*name="problemJWT"[^>]*value="[^"]+"/,
+		'problemJWT hidden field present');
+	like($html, qr/<input[^>]*name="sessionJWT"[^>]*value="[^"]+"/,
+		'sessionJWT minted + injected (instructor + JWTanswerURL)');
+	unlike($html, qr/value=""/,
+		'no empty hidden values anywhere');
+};
+
+subtest 'empty-string sessionJWT submit is treated as not-present' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	# Simulates the form-resubmit path: client sends sessionJWT="" because the
+	# template (pre-fix) emitted an empty hidden field. With the defensive
+	# delete-up-front in parseRequest, this should render normally instead of
+	# 500-ing with "JWT: missing token".
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+		sessionJWT    => '',
+	);
+	$t->post_ok('/render-api',
+		{ 'Content-Type' => 'application/x-www-form-urlencoded' },
+		$body,
+	)->status_is(200);
+};
+
+subtest 'empty-string problemJWT submit is treated as not-present' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+		problemJWT    => '',
+	);
+	$t->post_ok('/render-api',
+		{ 'Content-Type' => 'application/x-www-form-urlencoded' },
+		$body,
+	)->status_is(200);
 };
 
 done_testing();
