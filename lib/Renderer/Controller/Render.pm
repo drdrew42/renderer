@@ -289,6 +289,23 @@ sub parseRequest ($c) {
 		$params{pg_hash}     = $pg_hash;
 		$params{problemSeed} = $seed;
 
+		# challengeJWT carries pg_hash but no source URL — synthesize one from
+		# OPL's content-addressed hash route. Mirrors the problemJWT flow
+		# (commit 2575e78 in ww3) which builds problemSourceURL from pg_hash
+		# for the same reason. Without this, sub problem has neither
+		# problemSourceURL nor sourceFilePath and can't fetch the source.
+		# OPL exposes /api/problems/hash/<pg_hash> for content-hash lookup
+		# (Library.pm:281-282). Caller can override OPL_API_URL via env.
+		#
+		# Skip when the caller supplied raw problemSource — that path is the
+		# editor preview / test bypass and shouldn't trigger an OPL fetch.
+		# Mirrors the existing precedence: $params{problemSource} present
+		# means "use this source verbatim, don't go to network."
+		unless (defined $params{problemSource}) {
+			my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
+			$params{problemSourceURL} = "$opl_base/api/problems/hash/$pg_hash";
+		}
+
 		# Render permissions are attempt-wide flags. Apply just the renderer-
 		# visible fields; everything else (e.g. duration_anchor) is orchestrator
 		# concern. Permission claims override raw form values — same precedence
