@@ -16,6 +16,24 @@
 		if (preview.dataset.bsContent) new bootstrap.Popover(preview);
 	});
 
+	// Post the most recent renderer-minted sessionJWT to the parent. This is
+	// the WW3-053 close-the-loop channel: every iframe load surfaces the
+	// current sessionJWT (post-render-time-fold for RESUME, post-answer-URL-
+	// fold for submit) so the portal can persist it to localStorage and use
+	// it on the next interaction. Decoding the sessionJWT gives the portal
+	// the verdict-folded state without needing a separate verdict callback.
+	const sessionJWTValue = document.getElementById('sessionJWT')?.value;
+	if (sessionJWTValue) {
+		window.parent.postMessage(
+			JSON.stringify({
+				type: 'webwork.session.minted',
+				session_jwt: sessionJWTValue,
+				frame: frame
+			}),
+			parentOrigin
+		);
+	}
+
 	// if there is a JWTanswerURLstatus element, report it to parent
 	const status = document.getElementById('JWTanswerURLstatus')?.value;
 	if (status) {
