@@ -273,7 +273,15 @@ sub parseRequest ($c) {
 			return $c->croak($@, 3);
 		};
 
+		# Derive position: explicit form/query param wins (initial render from
+		# the portal's iframe URL); otherwise fall back to the sessionJWT's
+		# state.current_focus (form-submit re-render — the renderer stamped
+		# this into the sessionJWT it minted on the previous render).
+		# state landed in $params via the sessionJWT claim merge above.
 		my $position = $params{position};
+		if (!defined $position && ref $params{state} eq 'HASH') {
+			$position = $params{state}{current_focus};
+		}
 		return $c->exception('challengeJWT requires a position parameter.', 400)
 			unless defined $position && $position =~ /^\d+$/;
 
