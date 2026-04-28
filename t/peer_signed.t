@@ -291,10 +291,11 @@ subtest 'HTML emits problemJWT when self-minted, no sessionJWT (no JWTanswerURL)
 subtest 'HTML emits sessionJWT when caller provided JWTanswerURL (instructor)' => sub {
 	local $ENV{STRICT_JWT} = 0;
 	# Instructor + caller-provided JWTanswerURL = persistence requested.
-	# sessionJWT must be minted regardless of isInstructor; the controller's
-	# submit dispatcher gates the actual answerJWT POST on !isInstructor.
-	# We supply a problemJWT carrying both isInstructor=1 and a JWTanswerURL,
-	# signed with problemJWTsecret.
+	# sessionJWT is minted regardless of isInstructor. The controller's submit
+	# dispatcher fires the answerURL POST whenever a JWT-borne answerURL is
+	# present (renderer is dumb — it does as it's told); isInstructor is the
+	# orchestrator's concern. We supply a problemJWT carrying both
+	# isInstructor=1 and a JWTanswerURL, signed with problemJWTsecret.
 	my $problemJWT = encode_jwt(
 		payload => {
 			aud           => $ENV{SITE_HOST},

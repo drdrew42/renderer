@@ -751,11 +751,12 @@ async sub problem ($c) {
 	};
 	$return_object->{inputs_ref} = $inputs_ref;
 
-	# If answerURL provided and this is a student submit, send the answerJWT
-	# (legacy problemJWT path) or submissionJWT envelope (challengeJWT path).
-	# Instructors never produce answer JWTs — their interactions are exploratory.
+	# If answerURL provided and this is a submit, send the answerJWT (legacy
+	# problemJWT path) or submissionJWT envelope (challengeJWT path). The
+	# renderer is dumb here: a JWT-declared answerURL means "report back" —
+	# isInstructor is the orchestrator's concern, not ours.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
-		&& !$inputs_ref->{isLocked} && !$inputs_ref->{isInstructor}) {
+		&& !$inputs_ref->{isLocked}) {
 		# Emission gate: an answerJWT/submissionJWT is only produced when the
 		# request arrived with an upstream-minted problemJWT, challengeJWT, or
 		# sessionJWT carrying one. Self-minted JWTs do not qualify — see
