@@ -465,22 +465,6 @@ sub generatePlaySessionJWT {
 	my $next_seq      = defined $prev_seq ? $prev_seq + 1 : 0;
 	my $prior_state   = (ref $inputs_ref->{state} eq 'HASH') ? $inputs_ref->{state} : {};
 
-	# current_focus: the position being rendered right now is the
-	# authoritative "where the student is" — stamp it into state so form-
-	# submit re-renders can derive position from sessionJWT alone (no
-	# separate hidden field needed). Prior state's current_focus only wins
-	# if nothing was passed (defensive — shouldn't happen on the
-	# challengeJWT lane where parseRequest always sets position).
-	#
-	# Note: after the answer-URL fold (WW3-053), VerdictJWT replaces this
-	# with the orchestrator's verdict.current_focus — so this stamp is the
-	# pre-verdict view; the post-verdict mint may move focus elsewhere
-	# (random_one mode, auto_advance, etc.).
-	my $current_focus = $prior_state->{current_focus};
-	if (defined $inputs_ref->{position}) {
-		$current_focus = $inputs_ref->{position} + 0;  # numeric
-	}
-
 	# answersSubmitted: cumulative-once-submitted flag. Carry forward via the
 	# minted sessionJWT so subsequent renders' displayResults gate fires.
 	# Mirrors the legacy generateJWTs which always sets this to 1 — once any
@@ -499,11 +483,14 @@ sub generatePlaySessionJWT {
 		# every answer-URL POST without needing a separate lookup.
 		challenge_jwt => $inputs_ref->{challengeJWT},
 
-		# Navigation state — pre-verdict view of where the student is.
-		# Verdict-bearing interactions update this via the WW3-053 fold.
+		# Navigation state — copied through unchanged from prior. The renderer
+		# is not the atom evaluator; the orchestrator's verdicts (post-POST
+		# fold via WW3-053) update this on the next round trip. Position
+		# (the rendered problem) lives in render-context (form/URL), not
+		# in state.current_focus — student_picks mode keeps focus null.
 		state => {
 			started_at     => $prior_state->{started_at},
-			current_focus  => $current_focus,
+			current_focus  => $prior_state->{current_focus},
 			next_available => $prior_state->{next_available} // [],
 			draws          => $prior_state->{draws}          // [],
 			finalization   => $prior_state->{finalization},

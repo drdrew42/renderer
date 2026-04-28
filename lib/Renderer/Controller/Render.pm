@@ -57,8 +57,27 @@ sub parseRequest ($c) {
 	# backing value was undef render as `value=""`, which is `defined` but empty;
 	# Crypt::JWT::decode_jwt rejects empty tokens with "missing token". Strip
 	# them up front so the elsif chain below dispatches as if they weren't sent.
-	for my $k (qw(problemJWT sessionJWT challengeJWT verdict_signed)) {
+	for my $k (qw(problemJWT sessionJWT challengeJWT verdict_signed initial_state)) {
 		delete $params{$k} if defined $params{$k} && !length $params{$k};
+	}
+
+	# initial_state: portal-supplied JSON serialization of the play's initial
+	# navigation state (next_available, current_focus, draws[], finalization,
+	# started_at). Per Lifecycle.md, the portal hands challenge_jwt +
+	# initial_state to the renderer for sessionJWT_0 minting on first render.
+	# Without this, the renderer's first mint has no prior state to copy and
+	# emits empty next_available — atom-evaluated state is lost.
+	# Decoded into $params{state} so generatePlaySessionJWT's prior_state
+	# read picks it up uniformly with the sessionJWT-decoded path.
+	if (defined $params{initial_state} && !defined $params{sessionJWT}) {
+		eval {
+			my $decoded = decode_json($params{initial_state});
+			$params{state} = $decoded if ref $decoded eq 'HASH';
+			1;
+		} or do {
+			$c->log->warn("initial_state parse failed: $@");
+		};
+		delete $params{initial_state};
 	}
 
 	# challengeJWT and problemJWT are sibling trust lanes — never both at once.
@@ -273,15 +292,13 @@ sub parseRequest ($c) {
 			return $c->croak($@, 3);
 		};
 
-		# Derive position: explicit form/query param wins (initial render from
-		# the portal's iframe URL); otherwise fall back to the sessionJWT's
-		# state.current_focus (form-submit re-render — the renderer stamped
-		# this into the sessionJWT it minted on the previous render).
-		# state landed in $params via the sessionJWT claim merge above.
+		# Position must come from the URL/form. Initial render gets it as a
+		# URL param from the portal's iframe mount; form-submit re-render
+		# carries it as a hidden form field in default.html.ep. Render-
+		# context belongs in the form, not in sessionJWT state — student_picks
+		# mode deliberately keeps state.current_focus null, so it can't be
+		# the carrier.
 		my $position = $params{position};
-		if (!defined $position && ref $params{state} eq 'HASH') {
-			$position = $params{state}{current_focus};
-		}
 		return $c->exception('challengeJWT requires a position parameter.', 400)
 			unless defined $position && $position =~ /^\d+$/;
 
