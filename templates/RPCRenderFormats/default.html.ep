@@ -63,10 +63,10 @@
 					% # showCorrectAnswers), and the embedded problemJWT. When both fields
 					% # are emitted, sessionJWT wins via parseRequest's claim-merge.
 					% if ($rh_result->{inputs_ref}{problemJWT}) {
-						%= hidden_field problemJWT => $rh_result->{inputs_ref}{problemJWT}
+						%= hidden_field problemJWT => $rh_result->{inputs_ref}{problemJWT}, id => 'problemJWT'
 					% }
 					% if ($rh_result->{sessionJWT}) {
-						%= hidden_field sessionJWT => $rh_result->{sessionJWT}
+						%= hidden_field sessionJWT => $rh_result->{sessionJWT}, id => 'sessionJWT'
 					% }
 					% # challengeJWT lane: form-submit re-render needs position to
 					% # know which problem to render. sessionJWT.state.current_focus
@@ -81,7 +81,7 @@
 					% # orchestrator state, and rides in the form alongside
 					% # sessionJWT.
 					% if (defined $rh_result->{inputs_ref}{position}) {
-						%= hidden_field position => $rh_result->{inputs_ref}{position}
+						%= hidden_field position => $rh_result->{inputs_ref}{position}, id => 'position'
 					% }
 					% # answersSubmitted: cumulative "has submitted at some point"
 					% # flag. Once truthy, carry it forward in every form so future
@@ -90,10 +90,10 @@
 					% # in-render derivation (handles first submit). HTML field
 					% # survives sessionJWT-less paths (peer-signed lane, fallback).
 					% if ($rh_result->{inputs_ref}{answersSubmitted}) {
-						%= hidden_field answersSubmitted => 1
+						%= hidden_field answersSubmitted => 1, id => 'answersSubmitted'
 					% }
 					% if ($rh_result->{JWTanswerURLstatus}) {
-						%= hidden_field JWTanswerURLstatus => $rh_result->{JWTanswerURLstatus}
+						%= hidden_field JWTanswerURLstatus => $rh_result->{JWTanswerURLstatus}, id => 'JWTanswerURLstatus'
 					% }
 					% if ($formatName eq 'debug' && $rh_result->{inputs_ref}{clientDebug}) {
 						%= hidden_field clientDebug => $rh_result->{inputs_ref}{clientDebug}
