@@ -534,12 +534,28 @@ sub generateSubmissionJWT {
 
 	# Per-answer scores in stable order. Atoms see only the aggregated score;
 	# part_scores are kept for chain audit and instructor review.
+	#
+	# submitted_answers carries BOTH the plain answer field (AnSwEr0001) AND
+	# its MathQuill-paired field (MaThQuIlL_AnSwEr0001) when present. The
+	# plain field is what PG grades against; the MathQuill field is the
+	# LaTeX representation the visual editor renders from. Capturing both
+	# lets the portal prefill the rendered form completely on warm reload —
+	# without the LaTeX side, mqeditor.js's 100ms-delayed mathField.latex()
+	# init has nothing to render the visual from, and complex expressions
+	# (e.g., \frac{1}{2}) can't be reconstructed from mq.text() alone.
 	my @answer_keys = sort keys %{ $pg->{answers} // {} };
 	my %submitted_answers;
 	my @part_scores;
 	for my $k (@answer_keys) {
 		$submitted_answers{$k} = $inputs_ref->{$k} // '';
 		push @part_scores, $pg->{answers}{$k}{score} // 0;
+
+		# Capture the MathQuill-paired LaTeX field if the form carried one.
+		# Per mqeditor.js, the convention is `MaThQuIlL_<answer-label>`.
+		my $mq_key = "MaThQuIlL_$k";
+		if (defined $inputs_ref->{$mq_key}) {
+			$submitted_answers{$mq_key} = $inputs_ref->{$mq_key};
+		}
 	}
 
 	# ISO8601 UTC timestamp — matches the chain entry format the orchestrator
