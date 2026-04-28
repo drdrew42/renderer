@@ -83,6 +83,15 @@
 					% if (defined $rh_result->{inputs_ref}{position}) {
 						%= hidden_field position => $rh_result->{inputs_ref}{position}
 					% }
+					% # answersSubmitted: cumulative "has submitted at some point"
+					% # flag. Once truthy, carry it forward in every form so future
+					% # renders' displayResults gate fires correctly. Sibling
+					% # carriers: sessionJWT (signed, navigation state) and
+					% # in-render derivation (handles first submit). HTML field
+					% # survives sessionJWT-less paths (peer-signed lane, fallback).
+					% if ($rh_result->{inputs_ref}{answersSubmitted}) {
+						%= hidden_field answersSubmitted => 1
+					% }
 					% if ($rh_result->{JWTanswerURLstatus}) {
 						%= hidden_field JWTanswerURLstatus => $rh_result->{JWTanswerURLstatus}
 					% }

@@ -214,6 +214,18 @@ sub standaloneRenderer {
 	my $isSubmit     = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
 	my $isInstructor = $inputs_ref->{isInstructor} ? 1 : 0;
 
+	# answersSubmitted is the cumulative "the student has submitted at some
+	# point in this play/session" flag — distinct from submitAnswers (this
+	# specific click). The displayResults gate (line below) reads this flag,
+	# so without setting it on submit-the-current-render the first submit
+	# response shows no green-feedback styling. Three carriers bring it in:
+	#   - sessionJWT claim (parseRequest hoists it into $inputs_ref)
+	#   - HTML hidden field (form-submit re-render carries it forward)
+	#   - this in-render derivation (handles the very first submit, where
+	#     neither prior carrier has it)
+	# OR them together so any signal triggers it.
+	$inputs_ref->{answersSubmitted} ||= $isSubmit;
+
 	# Permission model — isInstructor is the mode switch.
 	#
 	# Instructor (preview): everything visible by default. Callers can
@@ -469,6 +481,16 @@ sub generatePlaySessionJWT {
 		$current_focus = $inputs_ref->{position} + 0;  # numeric
 	}
 
+	# answersSubmitted: cumulative-once-submitted flag. Carry forward via the
+	# minted sessionJWT so subsequent renders' displayResults gate fires.
+	# Mirrors the legacy generateJWTs which always sets this to 1 — once any
+	# render of this session has happened (which on the legacy lane means a
+	# JWTanswerURL was provided), the next round-trip displays results.
+	# Inputs_ref->answersSubmitted is already OR'd with $isSubmit above in
+	# standaloneRenderer, so on the first submit the flag becomes truthy and
+	# rides forward.
+	my $answers_submitted = $inputs_ref->{answersSubmitted} ? 1 : 0;
+
 	my $payload = {
 		iss => $ENV{SITE_HOST},
 		aud => $ENV{SITE_HOST},
@@ -486,6 +508,11 @@ sub generatePlaySessionJWT {
 			draws          => $prior_state->{draws}          // [],
 			finalization   => $prior_state->{finalization},
 		},
+
+		# Cumulative "has submitted at some point" — see comment in
+		# standaloneRenderer. Top-level so parseRequest's claim merge
+		# treats it as a security-sensitive claim (line ~206).
+		answersSubmitted => $answers_submitted,
 
 		mint_sequence => $next_seq,
 	};
