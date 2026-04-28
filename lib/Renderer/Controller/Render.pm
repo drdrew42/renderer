@@ -213,6 +213,23 @@ sub parseRequest ($c) {
 		foreach my $key (keys %$claims) {
 			$params{$key} //= $claims->{$key};
 		}
+
+		# Hoist the embedded challenge_jwt (snake_case JWT claim, per
+		# Artifact Shape §sessionJWT) to the camelCase form param so the
+		# challengeJWT-lane elsif below picks it up. Without this, on form
+		# submit the sessionJWT carries challenge_jwt as a claim but the
+		# dispatch never recognizes it as a challengeJWT request — falls
+		# through to the entry gate, pg_hash never gets resolved,
+		# problemSourceURL never gets synthesized, and sub problem fails
+		# with an empty sourceFilePath.
+		#
+		# Initial render works because the portal passes challengeJWT as a
+		# query param directly. Form-submit re-render only carries
+		# sessionJWT, so the embedded challenge_jwt is the only path back
+		# to pg_hash.
+		if (!defined $params{challengeJWT} && defined $params{challenge_jwt}) {
+			$params{challengeJWT} = $params{challenge_jwt};
+		}
 	}
 
 	# problemJWT sets basic problem request configuration and rendering options
