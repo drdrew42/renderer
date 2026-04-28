@@ -155,12 +155,21 @@ sub verifyAndFoldVerdict {
 		finalization   => $verdict->{finalization},
 	};
 
+	# answersSubmitted is the cumulative "this play has seen at least one
+	# submit" flag. The base sessionJWT carries it forward via parseRequest's
+	# claim merge; preserve it across the fold so warm-reload-to-completed-
+	# problem renders see displayResults=true (green-feedback styling) rather
+	# than degrading to blue-preview-i. Verdict-fold isn't a fresh play; it's
+	# state advancement.
+	my $answers_submitted = $base_claims->{answersSubmitted} ? 1 : 0;
+
 	my $payload = {
-		iss           => $ENV{SITE_HOST},
-		aud           => $ENV{SITE_HOST},
-		challenge_jwt => $embedded_cjwt,
-		state         => $new_state,
-		mint_sequence => $session_seq + 1,
+		iss              => $ENV{SITE_HOST},
+		aud              => $ENV{SITE_HOST},
+		challenge_jwt    => $embedded_cjwt,
+		state            => $new_state,
+		mint_sequence    => $session_seq + 1,
+		answersSubmitted => $answers_submitted,
 	};
 
 	my $new_session_jwt = eval {
