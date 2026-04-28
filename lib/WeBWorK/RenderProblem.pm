@@ -428,10 +428,17 @@ sub generateJWTs {
 
 	# form answerJWT — this is the LMS-readable score report.
 	# isLocked signals the LMS to stop sending new interactions for this student+problem.
+	# Legacy answerJWT carries problemJWT and sessionJWT as siblings. The
+	# sessionJWT is signed with webworkJWTsecret (renderer-internal) so the
+	# recipient can't reach into it to recover the original problemJWT —
+	# we surface it directly here. The sessionJWT also retains problemJWT
+	# as an embedded claim so it remains self-contained as a restart token;
+	# the duplication is intentional for the legacy path.
 	my $responseHash = {
 		iss        => $ENV{SITE_HOST},
 		aud        => $inputs_ref->{JWTanswerURL},
 		score      => $scoreHash,
+		problemJWT => $inputs_ref->{problemJWT},
 		sessionJWT => $sessionJWT,
 		isLocked   => $sessionHash->{isLocked} ? 1 : 0,
 		platform   => 'standaloneRenderer'
