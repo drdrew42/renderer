@@ -1,6 +1,4 @@
 (() => {
-	console.log('[problem.js] IIFE start');
-
 	// Frame identification: window.name works cross-origin (set by the embedder
 	// via <iframe name="...">), window.frameElement is null cross-origin. Prefer
 	// window.name, fall back to frameElement for same-origin legacy embedders,
@@ -12,7 +10,6 @@
 	// Absent → wildcard '*' (legacy behavior; acceptable when no listener is
 	// expected or when the render path is unauthenticated preview).
 	const parentOrigin = document.documentElement.dataset.parentOrigin || '*';
-	console.log('[problem.js] frame=' + frame + ' parentOrigin=' + parentOrigin);
 
 	// Activate the popovers in the results table.
 	document.querySelectorAll('.attemptResults .answer-preview[data-bs-toggle="popover"]').forEach((preview) => {
@@ -25,11 +22,8 @@
 	// fold for submit) so the portal can persist it to localStorage and use
 	// it on the next interaction. Decoding the sessionJWT gives the portal
 	// the verdict-folded state without needing a separate verdict callback.
-	const sessionJWTField = document.getElementById('sessionJWT');
-	const sessionJWTValue = sessionJWTField?.value;
-	console.log('[problem.js] sessionJWT field present:', !!sessionJWTField, 'value length:', sessionJWTValue?.length ?? 0);
+	const sessionJWTValue = document.getElementById('sessionJWT')?.value;
 	if (sessionJWTValue) {
-		console.log('[problem.js] posting webwork.session.minted to ' + parentOrigin);
 		window.parent.postMessage(
 			JSON.stringify({
 				type: 'webwork.session.minted',
@@ -38,8 +32,6 @@
 			}),
 			parentOrigin
 		);
-	} else {
-		console.log('[problem.js] NOT posting session.minted: no sessionJWT value');
 	}
 
 	// if there is a JWTanswerURLstatus element, report it to parent
