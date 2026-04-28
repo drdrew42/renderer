@@ -68,6 +68,21 @@
 					% if ($rh_result->{sessionJWT}) {
 						%= hidden_field sessionJWT => $rh_result->{sessionJWT}
 					% }
+					% # challengeJWT lane: form-submit re-render needs position to
+					% # know which problem to render. sessionJWT.state.current_focus
+					% # was the obvious carrier — and works for modes that auto-
+					% # advance (random_one, ordered_first) — but classic /
+					% # student_picks deliberately leaves current_focus=null in the
+					% # orchestrator's verdict (the student picks freely; the
+					% # orchestrator has no opinion about which problem they're on).
+					% # Once the verdict-fold (WW3-053) lands, current_focus becomes
+					% # null, and a same-page resubmit can't recover position from
+					% # state alone. position is therefore render-context, not
+					% # orchestrator state, and rides in the form alongside
+					% # sessionJWT.
+					% if (defined $rh_result->{inputs_ref}{position}) {
+						%= hidden_field position => $rh_result->{inputs_ref}{position}
+					% }
 					% if ($rh_result->{JWTanswerURLstatus}) {
 						%= hidden_field JWTanswerURLstatus => $rh_result->{JWTanswerURLstatus}
 					% }
