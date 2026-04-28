@@ -475,8 +475,23 @@ sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
 				$c->stash(_cache_status => 'miss_304');
 				return ($cached_source, $pg_hash);
 			}
-			# Shouldn't happen, but fall through to error
-			$c->log->warn("ContentCache 304 but disk miss for $pg_hash — re-fetching");
+			# Cache index thought we had it (sent If-None-Match) but the
+			# bytes are missing on disk. Recover by retrying without the
+			# conditional header so OPL returns the full 200 + body. The
+			# previous "fall-through to error" path was a bug — the warn
+			# said "re-fetching" but no actual retry happened.
+			$c->log->warn("ContentCache 304 but disk miss for $pg_hash — retrying unconditional");
+			my $retry_header = { %$header };
+			delete $retry_header->{'If-None-Match'};
+			return $c->ua->max_redirects(5)->request_timeout(10)->get_p($url => $retry_header)->then(sub {
+				my $retry_tx  = shift;
+				my $retry_res = $retry_tx->result;
+				unless ($retry_res->is_success) {
+					$c->log->error("fetchRemoteSource retry: Request to $url failed - " . $retry_res->message);
+					return (undef, undef);
+				}
+				return _parse_and_stage_response($c, $retry_res, $url);
+			});
 		}
 
 		unless ($res->is_success) {
@@ -484,73 +499,79 @@ sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
 			return (undef, undef);
 		}
 
-		# Parse enriched JSON response
-		my $obj;
-		eval { $obj = decode_json($res->body); 1; } or do {
-			$c->log->error('fetchRemoteSource: Failed to parse JSON', $res->body);
-			return (undef, undef);
-		};
-
-		my $raw_source   = $obj->{raw_source};
-		my $fetched_hash = $obj->{pg_hash} || $res->headers->header('ETag');
-
-		unless ($raw_source && $fetched_hash) {
-			$c->log->warn("ContentCache: response missing raw_source or pg_hash");
-			return ($raw_source, undef);
-		}
-
-		# Stage macros first (they must exist before problem symlinks)
-		my @macros_to_link;
-		for my $macro (@{ $obj->{macros} // [] }) {
-			next unless $macro->{hash} && $macro->{source_type}
-				&& ($macro->{source_type} eq 'custom' || $macro->{source_type} eq 'override');
-
-			my $cache_hash = $macro->{hash};
-
-			# Fetch macro if not already cached
-			unless (-f "$ENV{RENDER_ROOT}/private/macros/$cache_hash") {
-				if ($macro->{url}) {
-					# Macro URL may be relative (/api/macros/...) — resolve against OPL base
-					my $macro_url = $macro->{url};
-					if ($macro_url =~ m{^/}) {
-						my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
-						$macro_url = $opl_base . $macro_url;
-					}
-					$c->log->info("Fetching macro $macro->{name}: $macro_url");
-					my $macro_tx = $c->ua->get($macro_url);
-					if ($macro_tx->result->is_success) {
-						# If OPL redirected us, extract the canonical hash from the final URL
-						my $final_url = $macro_tx->req->url->to_string;
-						if ($final_url =~ m{/api/macros/(sha256:[0-9a-f]+)$}) {
-							my $redirected_hash = $1;
-							if ($redirected_hash ne $macro->{hash}) {
-								$c->log->info("Macro $macro->{name}: redirected $macro->{hash} → $redirected_hash");
-								$cache_hash = $redirected_hash;
-							}
-						}
-						Renderer::ContentCache::stage_macro($cache_hash, $macro_tx->result->body);
-					} else {
-						$c->log->warn("ContentCache: failed to fetch macro $macro->{name}");
-					}
-				}
-			}
-
-			push @macros_to_link, { name => $macro->{name}, hash => $cache_hash };
-		}
-
-		# Stage the problem
-		Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
-		Renderer::ContentCache::save_url_index($url, $fetched_hash);
-		$c->log->info("ContentCache STAGED: $fetched_hash from $url");
-		$c->stash(_cache_status => 'miss_200');
-
-		return ($raw_source, $fetched_hash);
+		return _parse_and_stage_response($c, $res, $url);
 	})->catch(sub {
 		my $err = shift;
 		$c->stash(message => $err);
 		$c->log->error("Problem source: Request to $url failed with error - $err");
 		return (undef, undef);
 	});
+}
+
+# Parse the OPL JSON response, stage macros + problem to disk cache,
+# return (raw_source, fetched_hash). Extracted from _fetch_content_addressed_p
+# so the 200-path AND the 304-with-disk-miss retry path can share it.
+sub _parse_and_stage_response ($c, $res, $url) {
+	my $obj;
+	eval { $obj = decode_json($res->body); 1; } or do {
+		$c->log->error('fetchRemoteSource: Failed to parse JSON', $res->body);
+		return (undef, undef);
+	};
+
+	my $raw_source   = $obj->{raw_source};
+	my $fetched_hash = $obj->{pg_hash} || $res->headers->header('ETag');
+
+	unless ($raw_source && $fetched_hash) {
+		$c->log->warn("ContentCache: response missing raw_source or pg_hash");
+		return ($raw_source, undef);
+	}
+
+	# Stage macros first (they must exist before problem symlinks)
+	my @macros_to_link;
+	for my $macro (@{ $obj->{macros} // [] }) {
+		next unless $macro->{hash} && $macro->{source_type}
+			&& ($macro->{source_type} eq 'custom' || $macro->{source_type} eq 'override');
+
+		my $cache_hash = $macro->{hash};
+
+		# Fetch macro if not already cached
+		unless (-f "$ENV{RENDER_ROOT}/private/macros/$cache_hash") {
+			if ($macro->{url}) {
+				# Macro URL may be relative (/api/macros/...) — resolve against OPL base
+				my $macro_url = $macro->{url};
+				if ($macro_url =~ m{^/}) {
+					my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
+					$macro_url = $opl_base . $macro_url;
+				}
+				$c->log->info("Fetching macro $macro->{name}: $macro_url");
+				my $macro_tx = $c->ua->get($macro_url);
+				if ($macro_tx->result->is_success) {
+					# If OPL redirected us, extract the canonical hash from the final URL
+					my $final_url = $macro_tx->req->url->to_string;
+					if ($final_url =~ m{/api/macros/(sha256:[0-9a-f]+)$}) {
+						my $redirected_hash = $1;
+						if ($redirected_hash ne $macro->{hash}) {
+							$c->log->info("Macro $macro->{name}: redirected $macro->{hash} → $redirected_hash");
+							$cache_hash = $redirected_hash;
+						}
+					}
+					Renderer::ContentCache::stage_macro($cache_hash, $macro_tx->result->body);
+				} else {
+					$c->log->warn("ContentCache: failed to fetch macro $macro->{name}");
+				}
+			}
+		}
+
+		push @macros_to_link, { name => $macro->{name}, hash => $cache_hash };
+	}
+
+	# Stage the problem
+	Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
+	Renderer::ContentCache::save_url_index($url, $fetched_hash);
+	$c->log->info("ContentCache STAGED: $fetched_hash from $url");
+	$c->stash(_cache_status => 'miss_200');
+
+	return ($raw_source, $fetched_hash);
 }
 
 # Legacy fetch: returns promise resolving to $raw_source only.
