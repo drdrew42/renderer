@@ -4,6 +4,7 @@ use warnings;
 use File::Temp qw(tempdir);
 use File::Path qw(make_path);
 use File::Spec;
+use Mojo::JSON;
 use Test::More;
 
 # ContentCache reads $ENV{RENDER_ROOT} at compile time, so set it first.
@@ -103,29 +104,104 @@ subtest 'stage_macro idempotent' => sub {
 	is($content, $source, 'macro content unchanged after idempotent call');
 };
 
-# --- stage_problem with macros creates symlinks ---
+# --- stage_problem writes a manifest.json (WW3-R11) ---
 
-subtest 'stage_problem with macro symlinks' => sub {
-	my $macro_hash = 'macro_for_symlink_test';
-	my $macro_src  = 'sub linked { 1 }';
+subtest 'stage_problem writes manifest.json with macro entries' => sub {
+	my $macro1_hash = 'macro_manifest_test_1';
+	my $macro1_src  = 'sub one { 1 }';
+	my $macro2_hash = 'macro_manifest_test_2';
+	my $macro2_src  = 'sub two { 2 }';
+	Renderer::ContentCache::stage_macro($macro1_hash, $macro1_src);
+	Renderer::ContentCache::stage_macro($macro2_hash, $macro2_src);
+
+	my $pg_hash = 'problem_manifest_test';
+	my $source  = "DOCUMENT();\nloadMacros('custom.pl', 'override.pl');\nENDDOCUMENT();";
+	my @macros  = (
+		{ name => 'custom.pl',   hash => $macro1_hash, source_type => 'custom' },
+		{ name => 'override.pl', hash => $macro2_hash, source_type => 'override' },
+	);
+
+	ok(Renderer::ContentCache::stage_problem($pg_hash, $source, \@macros), 'stage_problem succeeds');
+
+	# Manifest written, JSON parse, expected shape
+	my $manifest_path = File::Spec->catfile($RENDER_ROOT, 'private', 'problems', $pg_hash, 'manifest.json');
+	ok(-f $manifest_path, 'manifest.json exists');
+	ok(!-f "$manifest_path.tmp", 'tmp file was renamed away (atomic install)');
+
+	open my $fh, '<', $manifest_path or die "Cannot read manifest: $!";
+	local $/;
+	my $body = <$fh>;
+	close $fh;
+	my $parsed = Mojo::JSON::decode_json($body);
+	is(ref $parsed, 'ARRAY', 'manifest is a JSON array');
+	is(scalar @$parsed, 2, 'two entries');
+	is($parsed->[0]{name}, 'custom.pl',   'order preserved (entry 0)');
+	is($parsed->[1]{name}, 'override.pl', 'order preserved (entry 1)');
+	is($parsed->[0]{source_type}, 'custom',   'source_type captured verbatim (entry 0)');
+	is($parsed->[1]{source_type}, 'override', 'source_type captured verbatim (entry 1)');
+
+	# Reader returns macros injected by name
+	my $injected = Renderer::ContentCache::get_injected_macros($pg_hash);
+	is($injected->{'custom.pl'},   $macro1_src, 'manifest reader resolves entry 0');
+	is($injected->{'override.pl'}, $macro2_src, 'manifest reader resolves entry 1');
+};
+
+# Capturing source_type verbatim — even values the renderer's filter doesn't
+# currently act on land in the manifest. (See `_parse_and_stage_response` for
+# the filter that decides which source_types get fetched + staged in the
+# first place; entries that arrive here have already passed that filter.)
+subtest 'stage_problem omits source_type field when not provided' => sub {
+	my $macro_hash = 'macro_no_source_type';
+	my $macro_src  = 'sub plain { 1 }';
 	Renderer::ContentCache::stage_macro($macro_hash, $macro_src);
 
-	my $pg_hash = 'problem_with_macros_test';
-	my $source  = "DOCUMENT();\nloadMacros('custom.pl');\nENDDOCUMENT();";
-	my @macros  = ({ name => 'custom.pl', hash => $macro_hash });
+	my $pg_hash = 'problem_no_source_type';
+	my $source  = 'DOCUMENT(); ENDDOCUMENT();';
+	my @macros  = ({ name => 'plain.pl', hash => $macro_hash });
 
-	ok(Renderer::ContentCache::stage_problem($pg_hash, $source, \@macros), 'stage_problem with macros succeeds');
+	ok(Renderer::ContentCache::stage_problem($pg_hash, $source, \@macros), 'stage_problem succeeds');
 
-	my $link_path = File::Spec->catfile($RENDER_ROOT, 'private', 'problems', $pg_hash, 'custom.pl');
-	ok(-l $link_path, 'symlink created for custom macro');
-	ok(-f $link_path, 'symlink resolves to existing file');
-
-	# Read through the symlink
-	open my $fh, '<', $link_path or die "Cannot read through symlink: $!";
+	my $manifest_path = File::Spec->catfile($RENDER_ROOT, 'private', 'problems', $pg_hash, 'manifest.json');
+	open my $fh, '<', $manifest_path or die "Cannot read manifest: $!";
 	local $/;
-	my $content = <$fh>;
+	my $body = <$fh>;
 	close $fh;
-	is($content, $macro_src, 'symlink resolves to correct macro source');
+	my $parsed = Mojo::JSON::decode_json($body);
+	ok(!exists $parsed->[0]{source_type}, 'source_type absent when caller did not supply it');
+};
+
+# --- Backward-compat: legacy symlink-shape problem dirs still read ---
+
+subtest 'get_injected_macros falls back to symlink shape when no manifest' => sub {
+	# Pre-create a problem dir in the legacy shape: a problem.pg + a symlink
+	# pointing into ../../macros/<hash>. No manifest.json. Reader should
+	# still return the macro via the symlink fallback. This is the
+	# transition path for problem dirs staged before R11.
+	my $macro_hash = 'macro_for_legacy_test';
+	my $macro_src  = 'sub legacy { 1 }';
+	Renderer::ContentCache::stage_macro($macro_hash, $macro_src);
+
+	my $pg_hash    = 'problem_legacy_shape';
+	my $problem_dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $pg_hash);
+	make_path($problem_dir);
+
+	# Write problem.pg by hand
+	my $pg_file = File::Spec->catfile($problem_dir, 'problem.pg');
+	open my $pfh, '>:encoding(UTF-8)', $pg_file or die $!;
+	print $pfh 'DOCUMENT(); ENDDOCUMENT();';
+	close $pfh;
+
+	# Create the legacy symlink
+	my $link_target = File::Spec->catfile('..', '..', 'macros', $macro_hash);
+	my $link_path   = File::Spec->catfile($problem_dir, 'legacy.pl');
+	symlink($link_target, $link_path) or die "Cannot create symlink: $!";
+
+	ok(!-f File::Spec->catfile($problem_dir, 'manifest.json'),
+		'sanity: no manifest in this fixture');
+
+	my $injected = Renderer::ContentCache::get_injected_macros($pg_hash);
+	is($injected->{'legacy.pl'}, $macro_src,
+		'symlink-shape reader returns macro source via fallback path');
 };
 
 done_testing();

@@ -7,7 +7,7 @@ use Digest::SHA qw(sha256_hex);
 use File::Path  qw(make_path remove_tree);
 use File::Spec;
 use Mojo::Log;
-use Mojo::JSON qw(encode_json);
+use Mojo::JSON qw(encode_json decode_json);
 use Mojo::Date;
 
 # Base directory for all content-addressed storage
@@ -57,8 +57,26 @@ sub has_problem {
 	return -d _problem_dir($pg_hash);
 }
 
-# Write problem source and symlink macros into the cache.
-# $macros_aref is an arrayref of hashrefs: [{ name => '...', hash => '...' }, ...]
+# Write problem source and a manifest of its macro dependencies (WW3-R11).
+# $macros_aref is an arrayref of hashrefs: each entry carries `name`, `hash`,
+# and (optionally) `source_type` — captured verbatim from OPL's response so
+# the renderer doesn't own the source-type vocabulary. The current renderer
+# filtering rule (which source_types get fetched + cached + injected) lives
+# in Render.pm:_parse_and_stage_response and is a code-level concern, not a
+# format-level one.
+#
+# Manifest format at $dir/manifest.json:
+#   [ { "name": "...", "hash": "sha256:...", "source_type": "..." }, ... ]
+# Array preserves the order OPL sent. Future per-problem metadata (timestamps,
+# fetch URL, etc.) would wrap as { macros: [...], metadata: {...} } — not
+# done now (YAGNI).
+#
+# Atomic write: tmp + rename. Concurrency note: two concurrent renders of the
+# same uncached pg_hash race to write the manifest. Contents are deterministic
+# from the OPL response, so last-rename-wins is harmless. If a future failure
+# mode surfaces as "manifest references a hash whose macro file is mid-write,"
+# the right fix is atomic-rename in `stage_macro` (currently a plain open-write).
+# Pre-emptive note for the maintainer; not blocking R11.
 sub stage_problem {
 	my ($pg_hash, $raw_source, $macros_aref) = @_;
 	my $dir = _problem_dir($pg_hash);
@@ -71,14 +89,27 @@ sub stage_problem {
 	print $fh $raw_source;
 	close $fh;
 
-	# Symlink each custom macro into the problem directory
+	# Build manifest entries. Capture source_type verbatim if provided.
+	my @entries;
 	for my $macro (@{ $macros_aref // [] }) {
-		my $macro_file = File::Spec->catfile($PRIVATE, 'macros', $macro->{hash});
-		next unless -f $macro_file;
-		my $link = File::Spec->catfile($dir, $macro->{name});
-		# Relative symlink: ../../macros/{hash}
-		my $target = File::Spec->catfile('..', '..', 'macros', $macro->{hash});
-		symlink($target, $link) unless -e $link;
+		next unless $macro->{name} && $macro->{hash};
+		push @entries, {
+			name => $macro->{name},
+			hash => $macro->{hash},
+			(defined $macro->{source_type} ? (source_type => $macro->{source_type}) : ()),
+		};
+	}
+
+	my $manifest_path = File::Spec->catfile($dir, 'manifest.json');
+	my $tmp_path      = "$manifest_path.tmp";
+	open my $mfh, '>:encoding(UTF-8)', $tmp_path
+		or do { $log->warn("Cannot write manifest tmp for $pg_hash: $!"); return };
+	print $mfh encode_json(\@entries);
+	close $mfh;
+	unless (rename $tmp_path, $manifest_path) {
+		$log->warn("Cannot install manifest for $pg_hash: $!");
+		unlink $tmp_path;
+		return;
 	}
 
 	return 1;
@@ -140,13 +171,58 @@ sub save_path_index {
 }
 
 # Build the injectedMacros hash for a cached problem.
-# Scans the problem directory for .pl symlinks pointing into macros/,
-# reads the macro source, and returns { macro_name => source_code }.
-# Returns empty hashref if no macros or problem not cached.
+# Returns { macro_name => source_code } or empty hashref if no macros/cache.
+#
+# Two storage shapes are supported (WW3-R11 transition):
+#   * manifest.json (current) — read entries, slurp each macro by hash from
+#     $PRIVATE/macros/<hash>.
+#   * legacy symlinks (pre-R11 problem dirs) — fall back to readdir+readlink.
+#     Lifetime: the fallback dies naturally as the cache rotates per
+#     CACHE_TTL_HOURS (default 168h = 1 week). Follow-up ticket WW3-R13
+#     should remove the fallback ~2 weeks post-deploy.
 sub get_injected_macros {
 	my ($pg_hash) = @_;
 	my $dir = _problem_dir($pg_hash);
 	return {} unless -d $dir;
+
+	my $manifest_path = File::Spec->catfile($dir, 'manifest.json');
+	if (-f $manifest_path) {
+		return _read_manifest_macros($dir, $manifest_path);
+	}
+	return _read_symlink_macros($dir);
+}
+
+sub _read_manifest_macros {
+	my ($dir, $manifest_path) = @_;
+
+	open my $fh, '<:encoding(UTF-8)', $manifest_path or return {};
+	local $/;
+	my $body = <$fh>;
+	close $fh;
+
+	my $entries = eval { decode_json($body) };
+	if ($@ || ref $entries ne 'ARRAY') {
+		$log->warn("Manifest at $manifest_path is not a JSON array; ignoring");
+		return {};
+	}
+
+	my %injected;
+	for my $entry (@$entries) {
+		next unless ref $entry eq 'HASH' && $entry->{name} && $entry->{hash};
+		my $macro_path = File::Spec->catfile($PRIVATE, 'macros', $entry->{hash});
+		next unless -f $macro_path;
+		open my $mfh, '<:encoding(UTF-8)', $macro_path or next;
+		local $/;
+		$injected{ $entry->{name} } = <$mfh>;
+		close $mfh;
+	}
+	return \%injected;
+}
+
+# Legacy reader for problem dirs staged before R11 (no manifest.json).
+# Removed by WW3-R13 once the cache has rotated past the legacy entries.
+sub _read_symlink_macros {
+	my ($dir) = @_;
 
 	my %injected;
 	opendir my $dh, $dir or return {};
@@ -155,7 +231,6 @@ sub get_injected_macros {
 		my $link_path = File::Spec->catfile($dir, $entry);
 		next unless -l $link_path;    # only symlinks (not regular .pl files)
 
-		# Resolve the symlink and read the macro source
 		my $target = readlink($link_path);
 		my $abs_target = File::Spec->rel2abs($target, $dir);
 		next unless -f $abs_target;

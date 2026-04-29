@@ -592,7 +592,11 @@ sub _parse_and_stage_response ($c, $res, $url) {
 			}
 		}
 
-		push @macros_to_link, { name => $macro->{name}, hash => $cache_hash };
+		push @macros_to_link, {
+			name        => $macro->{name},
+			hash        => $cache_hash,
+			source_type => $macro->{source_type},
+		};
 	}
 
 	# Stage the problem
