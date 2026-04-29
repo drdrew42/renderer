@@ -25,6 +25,7 @@ print "using root directory: $ENV{RENDER_ROOT}\n";
 use Mojo::JSON;
 use Renderer::Model::Problem;
 use Renderer::Identity;
+use Renderer::OPLClient;
 use Renderer::Telemetry;
 use Renderer::Registration;
 use Renderer::Version;
@@ -193,6 +194,16 @@ sub startup ($self) {
 
 	# Models
 	$self->helper(newProblem => sub { shift; Renderer::Model::Problem->new(@_) });
+
+	# OPL HTTP client (single instance per app; closes over $self->ua at init time).
+	{
+		my $client = Renderer::OPLClient->new(
+			ua       => $self->ua,
+			base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
+			log      => $self->log,
+		);
+		$self->helper(opl_client => sub { $client });
+	}
 
 	# Helpers
 	$self->helper(format          => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });

@@ -357,8 +357,7 @@ sub parseRequest ($c) {
 		# Mirrors the existing precedence: $params{problemSource} present
 		# means "use this source verbatim, don't go to network."
 		unless (defined $params{problemSource}) {
-			my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
-			$params{problemSourceURL} = "$opl_base/api/problems/hash/$pg_hash";
+			$params{problemSourceURL} = $c->opl_client->problem_url_by_hash($pg_hash);
 		}
 
 		# Render permissions are attempt-wide flags. Apply just the renderer-
@@ -483,109 +482,68 @@ sub fetchRemoteSource_p ($c, $url, $pg_hash_hint = undef) {
 # Content-addressed fetch: conditional GET, stage problem + macros on 200.
 # Returns promise resolving to ($raw_source, $pg_hash).
 sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
+	my %meta = (
+		origin   => $c->req->headers->origin,
+		referrer => $c->req->headers->referrer,
+	);
 
-	my $req_origin   = $c->req->headers->origin   || 'no origin';
-	my $req_referrer = $c->req->headers->referrer || 'no referrer';
-	my $header       = {
-		Accept    => 'application/json;charset=utf-8',
-		Requester => $req_origin,
-		Referrer  => $req_referrer,
-	};
-	$header->{'If-None-Match'} = $pg_hash if $pg_hash;
+	my $client = $c->opl_client;
+	return $client->fetch_problem_p($url, etag => $pg_hash, request_meta => \%meta)->then(sub {
+		my $result = shift;
 
-	return $c->ua->max_redirects(5)->request_timeout(10)->get_p($url => $header)->then(sub {
-		my $tx  = shift;
-		my $res = $tx->result;
-
-		# 304 Not Modified — use cached source
-		if ($res->code == 304 && $pg_hash) {
+		# 304 Not Modified — use cached source.
+		if ($result->{not_modified} && $pg_hash) {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
 				$c->log->info("ContentCache 304: $pg_hash");
 				$c->stash(_cache_status => 'miss_304');
 				return ($cached_source, $pg_hash);
 			}
-			# Cache index thought we had it (sent If-None-Match) but the
-			# bytes are missing on disk. Recover by retrying without the
-			# conditional header so OPL returns the full 200 + body. The
-			# previous "fall-through to error" path was a bug — the warn
-			# said "re-fetching" but no actual retry happened.
+			# Cache index thought we had it (we sent If-None-Match) but the
+			# bytes are missing on disk. Force an unconditional re-fetch.
 			$c->log->warn("ContentCache 304 but disk miss for $pg_hash — retrying unconditional");
-			my $retry_header = { %$header };
-			delete $retry_header->{'If-None-Match'};
-			return $c->ua->max_redirects(5)->request_timeout(10)->get_p($url => $retry_header)->then(sub {
-				my $retry_tx  = shift;
-				my $retry_res = $retry_tx->result;
-				unless ($retry_res->is_success) {
-					$c->log->error("fetchRemoteSource retry: Request to $url failed - " . $retry_res->message);
-					return (undef, undef);
-				}
-				return _parse_and_stage_response($c, $retry_res, $url);
+			return $client->fetch_problem_p($url, request_meta => \%meta)->then(sub {
+				my $retry = shift;
+				return (undef, undef) if $retry->{error} || $retry->{not_modified};
+				return _stage_problem_response($c, $retry, $url);
 			});
 		}
 
-		unless ($res->is_success) {
-			$c->log->error("fetchRemoteSource: Request to $url failed - " . $res->message);
+		if ($result->{error}) {
 			return (undef, undef);
 		}
 
-		return _parse_and_stage_response($c, $res, $url);
-	})->catch(sub {
-		my $err = shift;
-		$c->stash(message => $err);
-		$c->log->error("Problem source: Request to $url failed with error - $err");
-		return (undef, undef);
+		return _stage_problem_response($c, $result, $url);
 	});
 }
 
-# Parse the OPL JSON response, stage macros + problem to disk cache,
-# return (raw_source, fetched_hash). Extracted from _fetch_content_addressed_p
-# so the 200-path AND the 304-with-disk-miss retry path can share it.
-sub _parse_and_stage_response ($c, $res, $url) {
-	my $obj;
-	eval { $obj = decode_json($res->body); 1; } or do {
-		$c->log->error('fetchRemoteSource: Failed to parse JSON', $res->body);
-		return (undef, undef);
-	};
+# Stage the OPL response into the disk cache and return (raw_source, hash).
+# Filters macros by source_type before staging — current renderer-side semantic
+# is "inject custom + override only." The filtering rule lives here, not in
+# OPLClient (per R12 design: client captures verbatim, controller decides what
+# to do with it).
+sub _stage_problem_response ($c, $result, $url) {
+	my $raw_source   = $result->{raw_source};
+	my $fetched_hash = $result->{pg_hash};
+	my $client       = $c->opl_client;
 
-	my $raw_source   = $obj->{raw_source};
-	my $fetched_hash = $obj->{pg_hash} || $res->headers->header('ETag');
-
-	unless ($raw_source && $fetched_hash) {
-		$c->log->warn("ContentCache: response missing raw_source or pg_hash");
-		return ($raw_source, undef);
-	}
-
-	# Stage macros first (they must exist before problem symlinks)
 	my @macros_to_link;
-	for my $macro (@{ $obj->{macros} // [] }) {
+	for my $macro (@{ $result->{macros} // [] }) {
 		next unless $macro->{hash} && $macro->{source_type}
 			&& ($macro->{source_type} eq 'custom' || $macro->{source_type} eq 'override');
 
 		my $cache_hash = $macro->{hash};
 
-		# Fetch macro if not already cached
 		unless (-f "$ENV{RENDER_ROOT}/private/macros/$cache_hash") {
 			if ($macro->{url}) {
-				# Macro URL may be relative (/api/macros/...) — resolve against OPL base
-				my $macro_url = $macro->{url};
-				if ($macro_url =~ m{^/}) {
-					my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
-					$macro_url = $opl_base . $macro_url;
-				}
-				$c->log->info("Fetching macro $macro->{name}: $macro_url");
-				my $macro_tx = $c->ua->get($macro_url);
-				if ($macro_tx->result->is_success) {
-					# If OPL redirected us, extract the canonical hash from the final URL
-					my $final_url = $macro_tx->req->url->to_string;
-					if ($final_url =~ m{/api/macros/(sha256:[0-9a-f]+)$}) {
-						my $redirected_hash = $1;
-						if ($redirected_hash ne $macro->{hash}) {
-							$c->log->info("Macro $macro->{name}: redirected $macro->{hash} → $redirected_hash");
-							$cache_hash = $redirected_hash;
-						}
+				$c->log->info("Fetching macro $macro->{name}: $macro->{url}");
+				my ($source_bytes, $canonical_hash) = $client->fetch_macro($macro->{url});
+				if (defined $source_bytes) {
+					if ($canonical_hash && $canonical_hash ne $macro->{hash}) {
+						$c->log->info("Macro $macro->{name}: redirected $macro->{hash} → $canonical_hash");
+						$cache_hash = $canonical_hash;
 					}
-					Renderer::ContentCache::stage_macro($cache_hash, $macro_tx->result->body);
+					Renderer::ContentCache::stage_macro($cache_hash, $source_bytes);
 				} else {
 					$c->log->warn("ContentCache: failed to fetch macro $macro->{name}");
 				}
@@ -599,7 +557,6 @@ sub _parse_and_stage_response ($c, $res, $url) {
 		};
 	}
 
-	# Stage the problem
 	Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
 	Renderer::ContentCache::save_url_index($url, $fetched_hash);
 	$c->log->info("ContentCache STAGED: $fetched_hash from $url");
@@ -608,36 +565,17 @@ sub _parse_and_stage_response ($c, $res, $url) {
 	return ($raw_source, $fetched_hash);
 }
 
-# Legacy fetch: returns promise resolving to $raw_source only.
+# Legacy fetch: no caching, no macro staging — just the raw_source field
+# from a JSON response. Returns a promise resolving to source bytes or undef.
 sub _fetch_legacy_p ($c, $url) {
-
-	my $req_origin   = $c->req->headers->origin   || 'no origin';
-	my $req_referrer = $c->req->headers->referrer || 'no referrer';
-	my $header       = {
-		Accept    => 'application/json;charset=utf-8',
-		Requester => $req_origin,
-		Referrer  => $req_referrer,
-	};
-
-	return $c->ua->max_redirects(5)->request_timeout(10)->get_p($url => $header)->then(sub {
-		my $tx  = shift;
-		my $res = $tx->result;
-		unless ($res->is_success) {
-			$c->log->error("fetchRemoteSource: Request to $url failed with error - " . $res->message);
-			return;
-		}
-		# library responses are JSON formatted with expected 'raw_source'
-		my $obj;
-		eval { $obj = decode_json($res->body); 1; } or do {
-			$c->log->error('fetchRemoteSource: Failed to parse JSON', $res->body);
-			return $c->croak($@, 3);
-		};
-		return ($obj && $obj->{raw_source}) ? $obj->{raw_source} : undef;
-	})->catch(sub {
-		my $err = shift;
-		$c->stash(message => $err);
-		$c->log->error("Problem source: Request to $url failed with error - $err");
-		return;
+	my %meta = (
+		origin   => $c->req->headers->origin,
+		referrer => $c->req->headers->referrer,
+	);
+	return $c->opl_client->fetch_problem_p($url, request_meta => \%meta)->then(sub {
+		my $result = shift;
+		return undef if $result->{error} || $result->{not_modified};
+		return $result->{raw_source};
 	});
 }
 
@@ -659,9 +597,8 @@ sub resolveSourceFilePath_p ($c, $file_path, $pg_hash_hint = undef) {
 		}
 	}
 
-	# 2. OPL lookup — construct URL and delegate to existing fetch flow
-	my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
-	my $opl_url  = "$opl_base/api/problems/path/$normalized";
+	# 2. OPL lookup — delegate to existing fetch flow with client-built URL
+	my $opl_url = $c->opl_client->problem_url_by_path($normalized);
 
 	$c->log->info("sourceFilePath OPL lookup: $opl_url");
 
