@@ -643,15 +643,7 @@ sub resolveSourceFilePath_p ($c, $file_path, $pg_hash_hint = undef) {
 	my $normalized = $file_path;
 	$normalized =~ s!^private/!!;
 
-	# 1. Disk check — graceful transition while volume is still mounted
-	my $disk_path = "$ENV{RENDER_ROOT}/private/$normalized";
-	if (-f $disk_path) {
-		$c->log->info("sourceFilePath disk HIT: $normalized");
-		$c->stash(_cache_status => 'disk');
-		return Mojo::Promise->resolve(undef, undef, "private/$normalized");
-	}
-
-	# 2. Path index + cache — zero network (unless noCache)
+	# 1. Path index + cache — zero network (unless noCache)
 	my $no_cache = $c->stash('_no_cache');
 	my $pg_hash = $no_cache ? undef : ($pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized));
 	if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
@@ -663,7 +655,7 @@ sub resolveSourceFilePath_p ($c, $file_path, $pg_hash_hint = undef) {
 		}
 	}
 
-	# 3. OPL lookup — construct URL and delegate to existing fetch flow
+	# 2. OPL lookup — construct URL and delegate to existing fetch flow
 	my $opl_base = $ENV{OPL_API_URL} || 'http://webwork-opl:3000';
 	my $opl_url  = "$opl_base/api/problems/path/$normalized";
 
