@@ -1004,13 +1004,13 @@ async sub post_to_answer_url ($c, $url, $body, %opts) {
 	return $response;
 }
 
-# Encode a response hashref as the JS-safe JSON string that goes into
-# JWTanswerURLstatus. The single-quote escape is required because the value
-# is later embedded as a JS string literal in default.html.ep.
+# Encode a response hashref as the JSON string that goes into the
+# JWTanswerURLstatus hidden form field. Mojo's `hidden_field` helper handles
+# HTML-attribute escaping in default.html.ep — no JS-source-literal escape
+# is needed: the client reads `.value` and JSON.parses, so single quotes in
+# the payload round-trip unmolested.
 sub encodeAnswerStatus ($response) {
-	my $encoded = encode_json($response);
-	$encoded =~ s/'/\\'/g;
-	return $encoded;
+	return encode_json($response);
 }
 
 sub exception ($c, $message, $status, @extra) {

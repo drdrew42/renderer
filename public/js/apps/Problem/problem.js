@@ -37,7 +37,6 @@
 	// if there is a JWTanswerURLstatus element, report it to parent
 	const status = document.getElementById('JWTanswerURLstatus')?.value;
 	if (status) {
-		console.log('problem status updated:', JSON.parse(status));
 		window.parent.postMessage(status, parentOrigin);
 	}
 
