@@ -178,8 +178,8 @@ sub save_path_index {
 #     $PRIVATE/macros/<hash>.
 #   * legacy symlinks (pre-R11 problem dirs) — fall back to readdir+readlink.
 #     Lifetime: the fallback dies naturally as the cache rotates per
-#     CACHE_TTL_HOURS (default 168h = 1 week). Follow-up ticket WW3-R13
-#     should remove the fallback ~2 weeks post-deploy.
+#     CACHE_TTL_HOURS (default 168h = 1 week). Remove the fallback as a
+#     R11 follow-up once the cache has rotated past the legacy entries.
 sub get_injected_macros {
 	my ($pg_hash) = @_;
 	my $dir = _problem_dir($pg_hash);
@@ -220,7 +220,8 @@ sub _read_manifest_macros {
 }
 
 # Legacy reader for problem dirs staged before R11 (no manifest.json).
-# Removed by WW3-R13 once the cache has rotated past the legacy entries.
+# Removed as a R11 follow-up once the cache has rotated past the legacy
+# entries (~2 weeks post-deploy).
 sub _read_symlink_macros {
 	my ($dir) = @_;
 
