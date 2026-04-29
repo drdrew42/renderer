@@ -129,9 +129,10 @@ EXPOSE 3000
 
 HEALTHCHECK CMD curl -I localhost:3000/health
 
-# RSERVE_HOST env var overrides pg_config.yml default (webwork-rserve) at startup.
-# Used for AWS service discovery hostnames (rserve.webwork.{env}.local).
-CMD if [ -n "$RSERVE_HOST" ]; then \
-      sed -i "s/host: webwork-rserve/host: $RSERVE_HOST/" lib/PG/conf/pg_config.yml; \
-    fi && \
-    hypnotoad -f ./script/renderer
+# Entrypoint handles pre-launch tasks: cache wipe (opt out with PRESERVE_CACHE)
+# and RSERVE_HOST substitution into pg_config.yml. The CMD is then exec'd so
+# signals propagate cleanly to hypnotoad.
+COPY docker-entrypoint.sh /usr/app/docker-entrypoint.sh
+RUN chmod +x /usr/app/docker-entrypoint.sh
+ENTRYPOINT ["/usr/app/docker-entrypoint.sh"]
+CMD ["hypnotoad", "-f", "./script/renderer"]
