@@ -369,6 +369,11 @@ sub parseRequest ($c) {
 			$params{$k} = $claims->{$k} if defined $claims->{$k};
 		}
 
+		# Declarative UI hide-list (WW3-R01). challengeJWT does not bulk-merge
+		# claims into %params (unlike problemJWT), so propagate explicitly.
+		$params{hideElements} = $claims->{hideElements}
+			if ref $claims->{hideElements} eq 'ARRAY';
+
 		# Stamp the answer endpoint so submissionJWTs land at the orchestrator,
 		# not at any legacy answerURL the client might have tried to inject.
 		return $c->exception('challengeJWT missing answer_url.', 400)

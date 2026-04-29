@@ -239,6 +239,18 @@ sub formatRenderedProblem {
 		return $c->render(data => encode_json($debug));
 	}
 
+	# Declarative element-hiding via JWT claim (WW3-R01). Caller's JWT envelope
+	# may carry hideElements => [<selector>, ...]; we splice an inline <style>
+	# block into <head> so target elements are never present in the initial
+	# paint — closes the flash window between PG render and css-message.js
+	# postMessage styling. Selectors arrive via JWT (trusted-but-not-trustworthy);
+	# xml_escape defends the splice against caller-controlled markup.
+	my $hideElementsCSS = '';
+	if (ref $inputs_ref->{hideElements} eq 'ARRAY' && @{ $inputs_ref->{hideElements} }) {
+		my $selectors = join(', ', map { xml_escape($_) } @{ $inputs_ref->{hideElements} });
+		$hideElementsCSS = "<style>$selectors { display: none !important; }</style>";
+	}
+
 	# Setup and render the appropriate template in the templates/RPCRenderFormats folder depending on the outputformat.
 	# "ptx" has a special template.  "json" uses the default json template.  All others use the default html template.
 	my %template_params = (
@@ -258,6 +270,7 @@ sub formatRenderedProblem {
 		extra_js_files           => \@extra_js_files,
 		problemText              => $problemText,
 		extra_header_text        => $inputs_ref->{extra_header_text} // '',
+		hideElementsCSS          => $hideElementsCSS,
 		resultSummary            => $resultSummary,
 		showSummary              => $showSummary,
 		showScoreSummary         => $submitMode && !$renderErrorOccurred && !$previewMode && $problemResult,

@@ -21,6 +21,8 @@
 	% for (@$extra_css_files) {
 		%= stylesheet $_->{file}
 	% }
+	%# Declarative hideElements (WW3-R01) — empty string when no claim, no markup leaks.
+	%== $hideElementsCSS
 	% for (@$third_party_js) {
 		%= javascript $_->[0], %{ $_->[1] // {} }
 	% }
