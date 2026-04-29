@@ -728,12 +728,12 @@ async sub problem ($c) {
 		if ($return_object->{submissionJWT}) {
 			# challengeJWT path: POST {type, session_jwt, submission_jwt} envelope
 			# to challengeJWT.answer_url (per Answer-URL Contract).
-			my $resp = await sendSubmissionEnvelope(
-				$c,
-				$inputs_ref->{JWTanswerURL},
-				$return_object->{sessionJWT},
-				$return_object->{submissionJWT},
-			);
+			my $envelope_body = encode_json({
+				type           => 'submission',
+				session_jwt    => $return_object->{sessionJWT},
+				submission_jwt => $return_object->{submissionJWT},
+			});
+			my $resp = await post_to_answer_url($c, $inputs_ref->{JWTanswerURL}, $envelope_body);
 
 			# Post-answer-URL verdict fold (WW3-053). When the orchestrator
 			# returns verdict_signed alongside the verdict, mint
@@ -769,9 +769,15 @@ async sub problem ($c) {
 
 			$return_object->{JWTanswerURLstatus} = encodeAnswerStatus($resp);
 		} else {
-			# Legacy problemJWT path: POST raw answerJWT to JWTanswerURL.
-			$return_object->{JWTanswerURLstatus} =
-				await sendAnswerJWT($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT});
+			# Legacy problemJWT path: POST raw answerJWT to JWTanswerURL as
+			# text/plain. The body is the JWT string itself (not a JSON envelope).
+			my $resp = await post_to_answer_url(
+				$c,
+				$inputs_ref->{JWTanswerURL},
+				$return_object->{answerJWT},
+				content_type => 'text/plain',
+			);
+			$return_object->{JWTanswerURLstatus} = encodeAnswerStatus($resp);
 		}
 	}
 
@@ -956,66 +962,20 @@ async sub render_ptx ($c) {
 	return $c->render(template => 'RPCRenderFormats/ptx', %$res);
 }
 
-async sub sendAnswerJWT ($c, $JWTanswerURL, $answerJWT) {
-
-	# default response hash
-	my $answerJWTresponse = {
-		subject => ANSWER_RESPONSE_SUBJECT,
-		message => ANSWER_RESPONSE_DEFAULT_MESSAGE,
-	};
-	my $header = {
-		Origin         => $ENV{SITE_HOST},
-		'Content-Type' => 'text/plain',
-	};
-
-	$c->log->info("sending answerJWT to $JWTanswerURL");
-	await $c->ua->max_redirects(5)->request_timeout(7)->post_p($JWTanswerURL, $header, $answerJWT)->then(sub {
-		my $response = shift->result;
-
-		$answerJWTresponse->{status} = int($response->code);
-		# answerURL responses are expected to be JSON
-		if ($response->json) {
-			# munge data with default response object
-			$answerJWTresponse = { %$answerJWTresponse, %{ $response->json } };
-		} else {
-			# otherwise throw the whole body as the message
-			$answerJWTresponse->{message} = $response->body;
-		}
-	})->catch(sub {
-		my $err = shift;
-		$c->log->error($err);
-
-		$answerJWTresponse->{status}  = 500;
-		$answerJWTresponse->{message} = '[' . $c->logID . '] ' . $err;
-	});
-
-	$answerJWTresponse = encode_json($answerJWTresponse);
-	# this will become a string literal, so single-quote characters must be escaped
-	$answerJWTresponse =~ s/'/\\'/g;
-	$c->log->info("answerJWT response " . $answerJWTresponse);
-	return $answerJWTresponse;
-}
-
-# challengeJWT path: POST a JSON envelope { type, session_jwt, submission_jwt }
-# to challengeJWT.answer_url. The orchestrator (WW3) runs atom evaluation and
-# returns a verdict; we surface the response so the post-POST verdict fold
-# (WW3-053) can mint sessionJWT_{k+1} in the caller, and the JS-safe encoded
-# form ends up in JWTanswerURLstatus for the rendered HTML.
+# Single helper for the renderer's answer-URL POSTs. Both lanes — legacy
+# problemJWT (raw JWT body, text/plain) and challengeJWT (JSON envelope,
+# application/json) — share the same UA setup, default-response shape, and
+# success/failure handling. The only differences are the body format and
+# content-type, both controlled by callers.
 #
-# Returns a response HASHREF. Caller is responsible for encoding it for
-# downstream consumers (see encodeAnswerStatus). This contract differs from
-# sendAnswerJWT (legacy lane), which returns a pre-encoded string — the
-# challengeJWT lane needs structured access to verdict_signed for the fold.
-async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt) {
-	my $envelope = {
-		type           => 'submission',
-		session_jwt    => $session_jwt,
-		submission_jwt => $submission_jwt,
-	};
-	my $body   = encode_json($envelope);
-	my $header = {
+# Always resolves to a hashref. Caller decides what to do with it:
+# legacy lane runs encodeAnswerStatus and stores the JS-safe string in
+# JWTanswerURLstatus; challengeJWT lane consults $resp->{verdict_signed}
+# for the post-POST fold before encoding.
+async sub post_to_answer_url ($c, $url, $body, %opts) {
+	my $headers = {
 		Origin         => $ENV{SITE_HOST},
-		'Content-Type' => 'application/json',
+		'Content-Type' => $opts{content_type} // 'application/json',
 	};
 
 	my $response = {
@@ -1023,10 +983,11 @@ async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt
 		message => ANSWER_RESPONSE_DEFAULT_MESSAGE,
 	};
 
-	$c->log->info("sending submissionJWT envelope to $answer_url");
-	await $c->ua->max_redirects(5)->request_timeout(7)->post_p($answer_url, $header, $body)->then(sub {
+	$c->log->info("POSTing to $url");
+	await $c->ua->max_redirects(5)->request_timeout(7)->post_p($url, $headers, $body)->then(sub {
 		my $tx = shift->result;
 		$response->{status} = int($tx->code);
+		# answerURL responses are expected to be JSON; fall back to body-as-message.
 		if ($tx->json) {
 			$response = { %$response, %{ $tx->json } };
 		} else {
@@ -1039,7 +1000,7 @@ async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt
 		$response->{message} = '[' . $c->logID . '] ' . $err;
 	});
 
-	$c->log->info("submission envelope response " . encode_json($response));
+	$c->log->info("answer-URL response " . encode_json($response));
 	return $response;
 }
 
