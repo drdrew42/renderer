@@ -23,7 +23,6 @@ use lib "$main::libname";
 print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Mojo::JSON;
-use Renderer::Model::Problem;
 use Renderer::Identity;
 use Renderer::OPLClient;
 use Renderer::Telemetry;
@@ -191,9 +190,6 @@ sub startup ($self) {
 		my $evicted = Renderer::ContentCache::sweep();
 		$self->log->info("ContentCache sweep: evicted $evicted stale problem(s)") if $evicted;
 	}
-
-	# Models
-	$self->helper(newProblem => sub { shift; Renderer::Model::Problem->new(@_) });
 
 	# OPL HTTP client (single instance per app; closes over $self->ua at init time).
 	{

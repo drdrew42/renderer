@@ -58,7 +58,7 @@ sub UNIVERSAL::TO_JSON {
 #######################################################################
 
 sub process_pg_file {
-	my ($problem, $inputs_ref) = @_;
+	my ($r_source, $inputs_ref) = @_;
 
 	# just make sure we have the fundamentals covered...
 	$inputs_ref->{displayMode}  ||= 'MathJax';
@@ -72,7 +72,7 @@ sub process_pg_file {
 	my $pg_start         = time;
 	my $memory_use_start = get_current_process_memory();
 
-	my ($return_object, $error_flag, $error_string) = process_problem($problem, $inputs_ref);
+	my ($return_object, $error_flag, $error_string) = process_problem($r_source, $inputs_ref);
 
 	my $pg_stop        = time;
 	my $pg_duration    = $pg_stop - $pg_start;
@@ -93,7 +93,7 @@ sub process_pg_file {
 	delete $return_object->{flags}{compoundProblem}{grader}
 		if $return_object->{flags}{compoundProblem}{grader};
 
-	$return_object->{tags} = WeBWorK::Utils::Tags->new($inputs_ref->{sourceFilePath}, $problem->source)
+	$return_object->{tags} = WeBWorK::Utils::Tags->new($inputs_ref->{sourceFilePath}, $$r_source)
 		if ($inputs_ref->{includeTags});
 
 	my $json = encode_json($return_object);
@@ -105,9 +105,9 @@ sub process_pg_file {
 #######################################################################
 
 sub process_problem {
-	my ($problem, $inputs_ref) = @_;
+	my ($r_source, $inputs_ref) = @_;
 
-	my $source    = $problem->{problem_contents};
+	my $source    = $$r_source;
 	my $file_path = $inputs_ref->{sourceFilePath} || $inputs_ref->{problemSourceURL};
 	my ($raw_metadata_text, $problemUUID);
 

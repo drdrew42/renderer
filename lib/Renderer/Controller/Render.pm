@@ -14,6 +14,7 @@ use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
 use Renderer::ContentCache;
 use Renderer::Registration;
 use Renderer::Telemetry;
+use Renderer::Render::Subprocess qw(render_in_subprocess);
 use Renderer::Constants qw(
 	SENSITIVE_PARAMS
 	ANSWER_RESPONSE_SUBJECT
@@ -628,7 +629,7 @@ async sub problem ($c) {
 		if ($inputs_ref->{problemSource}) {
 			# Editor preview: use the editor's source but resolve the path
 			# for macro dependencies (pg_hash → injectedMacros at render time).
-			my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
+			my (undef, $pg_hash) = await resolveSourceFilePath_p(
 				$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}
 			);
 			if ($pg_hash) {
@@ -638,12 +639,10 @@ async sub problem ($c) {
 			# problemSource stays as-is (the editor's live edit)
 		} else {
 			# Normal content-addressed render: fetch source + macros from OPL.
-			my ($source, $pg_hash, $disk_path) = await resolveSourceFilePath_p(
+			my ($source, $pg_hash) = await resolveSourceFilePath_p(
 				$c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash}
 			);
-			if ($disk_path) {
-				$inputs_ref->{sourceFilePath} = $disk_path;
-			} elsif ($source && $pg_hash) {
+			if ($source && $pg_hash) {
 				$inputs_ref->{problemSource}  = $source;
 				$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);
 				$inputs_ref->{pg_hash}        = $pg_hash;
@@ -677,14 +676,11 @@ async sub problem ($c) {
 		$problem_contents = $inputs_ref->{problemSource};
 	}
 
-	my $problem = $c->newProblem({
-		log              => $c->log,
-		read_path        => $file_path,
-		random_seed      => $random_seed,
-		problem_contents => $problem_contents
-	});
-	unless ($problem->success()) {
-		return $c->exception($problem->{_message}, $problem->{status});
+	unless (defined $problem_contents && $problem_contents =~ /\S/) {
+		return $c->exception('Cannot render without problem source.', 400);
+	}
+	unless (defined $random_seed && $random_seed =~ /^\d+$/) {
+		return $c->exception('You must provide a positive integer for the random seed.', 400);
 	}
 
 	# Inject cached custom macro source into envir for PG's loadMacros().
@@ -698,13 +694,11 @@ async sub problem ($c) {
 	}
 
 	$c->render_later;    # tell Mojo that this might take a while
-	my $ww_return_json;
-	{
-		$ww_return_json = await $problem->render($inputs_ref);
+	my $log_id = $inputs_ref->{pg_hash} || $file_path || '(no-source-id)';
+	my $ww_return_json = await render_in_subprocess(\$problem_contents, $inputs_ref, $log_id, $c->log);
 
-		unless ($problem->success()) {
-			return $c->exception($problem->{_message}, $problem->{status});
-		}
+	if (ref $ww_return_json eq 'HASH' && $ww_return_json->{_error}) {
+		return $c->exception($ww_return_json->{_error}{message}, $ww_return_json->{_error}{status});
 	}
 
 	my $return_object;
@@ -801,9 +795,10 @@ async sub problem ($c) {
 	# ─── Telemetry ──────────────────────────────────────────────────────────
 	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{pg_hash} && !$inputs_ref->{isInstructor}) {
 		my $render_ms = int((time - $render_start) * 1000);
-		my $outcome   = $problem->success()
-			? (@{ $return_object->{warning_messages} // [] } ? 'warning' : 'success')
-			: 'error';
+		# By this point we've passed the render's _error early-return, so the
+		# only remaining outcome distinction is "warning" vs "success" based on
+		# whether PG emitted warning_messages during the run.
+		my $outcome = @{ $return_object->{warning_messages} // [] } ? 'warning' : 'success';
 		my $is_first  = $c->stash('_is_first_render');
 
 		# LT-010: compute html_hash on first successful render for seed diversity
@@ -913,26 +908,22 @@ async sub callback ($c) {
 		isInstructor  => 0,
 	);
 
-	my $problem = eval {
-		$c->newProblem({
-			log              => $c->log,
-			read_path        => 'callback',
-			random_seed      => $inputs{problemSeed},
-			problem_contents => $inputs{problemSource},
-		});
-	};
-
-	unless ($problem && $problem->success()) {
+	unless (defined $inputs{problemSource} && $inputs{problemSource} =~ /\S/) {
 		$CALLBACK_SEMAPHORE--;
-		my $msg = $problem ? $problem->{_message} : $@;
-		return $c->render(json => { outcome => 'error', warnings => 0, error => "$msg" }, status => 200);
+		return $c->render(json => { outcome => 'error', warnings => 0, error => 'missing pg_source' }, status => 200);
 	}
 
-	my $ww_return_json = eval { await $problem->render(\%inputs) };
+	my $ww_return_json = eval {
+		await render_in_subprocess(\$inputs{problemSource}, \%inputs, 'callback', $c->log);
+	};
+	my $eval_err = $@;
 	$CALLBACK_SEMAPHORE--;
 
-	unless ($problem->success()) {
-		return $c->render(json => { outcome => 'error', warnings => 0, error => $problem->{_message} }, status => 200);
+	if ($eval_err) {
+		return $c->render(json => { outcome => 'error', warnings => 0, error => "$eval_err" }, status => 200);
+	}
+	if (ref $ww_return_json eq 'HASH' && $ww_return_json->{_error}) {
+		return $c->render(json => { outcome => 'error', warnings => 0, error => $ww_return_json->{_error}{message} }, status => 200);
 	}
 
 	my $return_object;
