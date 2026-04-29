@@ -2,7 +2,6 @@ package Renderer::Controller::IO;
 use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 use File::Spec::Functions qw(splitdir);
 use File::Find            qw(find);
-use MIME::Base64          qw(decode_base64);
 use Mojo::JSON            qw(decode_json);
 use Mojolicious::Validator;
 use Math::Random::Secure qw( rand );
