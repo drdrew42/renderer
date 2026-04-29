@@ -225,9 +225,11 @@ sub parseRequest ($c) {
 
 		# Security-sensitive claims from the session always win over raw params.
 		# Prevents students from injecting isLocked=0 or isInstructor=1 via POST.
-		# showCorrectAnswers is the reveal trigger (solutions ride along);
-		# once the session records a reveal, the caller can't claw it back.
-		for (qw(isLocked isInstructor showCorrectAnswers answersSubmitted)) {
+		# answersRevealed is the soft-ratchet flag — once the session records
+		# a reveal, the caller can't claw it back. showCorrectAnswers stays in
+		# the list for backward-compat with sessionJWTs minted before the
+		# answersRevealed ratchet landed.
+		for (qw(isLocked isInstructor showCorrectAnswers answersRevealed answersSubmitted)) {
 			$params{$_} = $claims->{$_} if exists $claims->{$_};
 		}
 
@@ -237,6 +239,12 @@ sub parseRequest ($c) {
 		foreach my $key (keys %$claims) {
 			$params{$key} //= $claims->{$key};
 		}
+
+		# Hoist the answersRevealed ratchet back to the showCorrectAnswers
+		# directive — once a session has recorded reveal, every subsequent
+		# render forces the iframe to keep showing answers, regardless of
+		# whether the form-data carries showCorrectAnswers=1 this round.
+		$params{showCorrectAnswers} = 1 if $params{answersRevealed};
 
 		# Hoist the embedded challenge_jwt (snake_case JWT claim, per
 		# Artifact Shape §sessionJWT) to the camelCase form param so the

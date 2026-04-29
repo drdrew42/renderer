@@ -268,8 +268,8 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 		token => $sessionJWT,
 		key   => $ENV{webworkJWTsecret},
 	);
-	is($claims->{isLocked},            1, 'session locked by showCorrectAnswers');
-	is($claims->{showCorrectAnswers},  1, 'showCorrectAnswers claim persisted');
+	is($claims->{isLocked},        1, 'session locked by showCorrectAnswers');
+	is($claims->{answersRevealed}, 1, 'reveal records the answersRevealed ratchet');
 
 	# Subsequent request should not produce an answerJWT
 	$t->post_ok('/render-api' => form => {

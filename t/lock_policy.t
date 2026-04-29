@@ -75,20 +75,21 @@ sub submit_and_decode {
 	return decode_jwt(token => $session, key => $ENV{webworkJWTsecret});
 }
 
-# ─── Default: both knobs on (preserves historical behavior) ────────────────
+# ─── Defaults: both knobs on (preserves historical lock-on-reveal behavior) ─
 
-subtest 'defaults: perfect score → isLocked=1' => sub {
-	# No env override. Default LOCK_ON_PERFECT=1.
+subtest 'defaults: perfect score → isLocked=1, no reveal' => sub {
 	my $claims = submit_and_decode(AnSwEr0001 => '42');
-	is($claims->{isLocked}, 1, 'perfect score locks under default config');
+	is($claims->{isLocked},        1,     'perfect score locks');
+	ok(!$claims->{answersRevealed}, 'perfect score alone does not set answersRevealed');
 };
 
-subtest 'defaults: showCorrectAnswers → isLocked=1' => sub {
+subtest 'defaults: showCorrectAnswers → answersRevealed=1 AND isLocked=1' => sub {
 	my $claims = submit_and_decode(
 		AnSwEr0001         => '41',
 		showCorrectAnswers => 1,
 	);
-	is($claims->{isLocked}, 1, 'showCorrectAnswers locks under default config');
+	is($claims->{answersRevealed}, 1, 'reveal sets the soft ratchet');
+	is($claims->{isLocked},        1, 'reveal also triggers the hard ratchet under default config');
 };
 
 # ─── LOCK_ON_PERFECT=0 ─────────────────────────────────────────────────────
@@ -99,29 +100,31 @@ subtest 'LOCK_ON_PERFECT=0: perfect score does NOT lock' => sub {
 	ok(!$claims->{isLocked}, 'perfect score leaves session unlocked');
 };
 
-subtest 'LOCK_ON_PERFECT=0: showCorrectAnswers still locks' => sub {
-	# Knob is independent — only perfect-trigger is suppressed.
+subtest 'LOCK_ON_PERFECT=0: showCorrectAnswers still sets both ratchets' => sub {
+	# Knobs are independent — only the perfect-trigger is suppressed; reveal
+	# semantics under LOCK_ON_SHOW_ANSWERS=1 default are unaffected.
 	local $ENV{LOCK_ON_PERFECT} = 0;
 	my $claims = submit_and_decode(
 		AnSwEr0001         => '41',
 		showCorrectAnswers => 1,
 	);
-	is($claims->{isLocked}, 1, 'showCorrectAnswers still triggers lock');
+	is($claims->{answersRevealed}, 1, 'soft ratchet still fires');
+	is($claims->{isLocked},        1, 'hard ratchet still fires (LOCK_ON_SHOW_ANSWERS still on)');
 };
 
 # ─── LOCK_ON_SHOW_ANSWERS=0 ────────────────────────────────────────────────
 
-subtest 'LOCK_ON_SHOW_ANSWERS=0: reveal is ephemeral (no lock, no session persistence)' => sub {
-	# Under this config, showCorrectAnswers applies to the current request
-	# only — neither the lock side-effect nor the session-state persistence
-	# carries forward. Next render with no claim returns to normal.
+subtest 'LOCK_ON_SHOW_ANSWERS=0: reveal sets soft ratchet only (no lock)' => sub {
+	# The fact of reveal is independent of LOCK policy. answersRevealed
+	# fires; the LMS sees the signal in the answerJWT and decides what to
+	# do next. The session remains writable for further interaction.
 	local $ENV{LOCK_ON_SHOW_ANSWERS} = 0;
 	my $claims = submit_and_decode(
 		AnSwEr0001         => '41',
 		showCorrectAnswers => 1,
 	);
-	ok(!$claims->{isLocked}, 'reveal does not lock');
-	ok(!$claims->{showCorrectAnswers}, 'reveal does not persist into session state');
+	is($claims->{answersRevealed}, 1, 'soft ratchet fires regardless of LOCK policy');
+	ok(!$claims->{isLocked},          'hard ratchet does not fire under LOCK_ON_SHOW_ANSWERS=0');
 };
 
 subtest 'LOCK_ON_SHOW_ANSWERS=0: perfect score still locks' => sub {
@@ -132,7 +135,7 @@ subtest 'LOCK_ON_SHOW_ANSWERS=0: perfect score still locks' => sub {
 
 # ─── Both knobs flipped ───────────────────────────────────────────────────
 
-subtest 'both knobs off: renderer never auto-locks' => sub {
+subtest 'both knobs off: renderer never auto-locks; soft ratchet still fires' => sub {
 	local $ENV{LOCK_ON_PERFECT}      = 0;
 	local $ENV{LOCK_ON_SHOW_ANSWERS} = 0;
 
@@ -143,7 +146,45 @@ subtest 'both knobs off: renderer never auto-locks' => sub {
 		AnSwEr0001         => '41',
 		showCorrectAnswers => 1,
 	);
-	ok(!$reveal->{isLocked}, 'showCorrectAnswers does not lock');
+	ok(!$reveal->{isLocked},          'showCorrectAnswers does not lock');
+	is($reveal->{answersRevealed}, 1, 'soft ratchet still fires (independent of LOCK policy)');
+};
+
+# ─── Round-trip: answersRevealed in sessionJWT forces reveal next render ───
+
+subtest 'answersRevealed ratchet hoists to showCorrectAnswers on next render' => sub {
+	# Under LOCK_ON_SHOW_ANSWERS=0 we get a session with answersRevealed=1
+	# but no isLocked — so a follow-up submit can flow. That follow-up
+	# request carries the sessionJWT but no showCorrectAnswers form-data.
+	# parseRequest must hoist answersRevealed back to showCorrectAnswers
+	# so the iframe keeps revealing answers.
+	local $ENV{LOCK_ON_SHOW_ANSWERS} = 0;
+
+	# First submit: reveal (no lock under this config).
+	my $first = submit_and_decode(
+		AnSwEr0001         => '41',
+		showCorrectAnswers => 1,
+	);
+	is($first->{answersRevealed}, 1, 'first submit sets answersRevealed');
+	ok(!$first->{isLocked},          'first submit does not lock');
+	my $first_session = $t->tx->res->json->{rh_result}{sessionJWT};
+
+	# Second submit: same session, NO showCorrectAnswers form-data this round.
+	# The hoist should re-fire showCorrectAnswers from the session ratchet,
+	# and answersRevealed must persist forward (the security-sensitive claim
+	# list keeps the session value from being clobbered).
+	$t->post_ok('/render-api' => form => {
+		problemJWT    => upstream_problem_jwt(),
+		problemSource => $pg_source,
+		sessionJWT    => $first_session,
+		outputFormat  => 'raw',
+		problemSeed   => 1234,
+		submitAnswers => 1,
+		AnSwEr0001    => '40',
+	})->status_is(200);
+	my $second_session = $t->tx->res->json->{rh_result}{sessionJWT};
+	my $second_claims  = decode_jwt(token => $second_session, key => $ENV{webworkJWTsecret});
+	is($second_claims->{answersRevealed}, 1, 'answersRevealed persists across renders (ratchet)');
 };
 
 done_testing();

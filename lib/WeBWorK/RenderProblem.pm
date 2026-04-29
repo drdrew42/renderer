@@ -391,23 +391,35 @@ sub generateJWTs {
 		result  => $pg->{problem_result}{score},
 		answers => unbless($pg->{answers}),
 	};
-	# Lock the session when the interaction is over (non-instructor only).
-	# Two configurable triggers — both default on (preserving historical
-	# behavior); flip via env to suit deployment policy. After lock: no
-	# further answerJWTs, no session updates. The user can still re-render
-	# the locked problem to review their last submission state.
-	#   LOCK_ON_PERFECT      = 1 (default) — score == 1 → lock
-	#   LOCK_ON_SHOW_ANSWERS = 1 (default) — showCorrectAnswers → lock
+	# Two ratchets, set independently (non-instructor only):
+	#
+	#   answersRevealed — soft ratchet. Once the student has been shown the
+	#       correct answers (via showCorrectAnswers), this flag persists in
+	#       session state. The answerURL recipient sees it (signal: "answers
+	#       were revealed in the course of producing this response"). On
+	#       subsequent renders, parseRequest hoists it back to the
+	#       showCorrectAnswers directive so the iframe keeps showing
+	#       answers. Always set when showCorrectAnswers is requested — the
+	#       fact of reveal is independent of LOCK policy.
+	#
+	#   isLocked — hard ratchet. Stops recording further interaction: no
+	#       new answerJWTs, no session updates. Whether a locked session
+	#       can be "reused" to continue interacting is the LMS's decision,
+	#       not the renderer's. Triggered by either of two configurable
+	#       conditions:
+	#         LOCK_ON_PERFECT      = 1 (default) — score == 1 → lock
+	#         LOCK_ON_SHOW_ANSWERS = 1 (default) — showCorrectAnswers → lock
+	#       Set 0 to suppress that trigger; the answersRevealed ratchet
+	#       still fires, just without the harder consequence.
 	if (!$inputs_ref->{isInstructor}) {
-		my $perfect = ($ENV{LOCK_ON_PERFECT} // 1)
+		$sessionHash->{answersRevealed} = 1 if $inputs_ref->{showCorrectAnswers};
+
+		my $perfect_lock = ($ENV{LOCK_ON_PERFECT} // 1)
 			&& defined $pg->{problem_result}{score}
 			&& $pg->{problem_result}{score} >= 1;
-		my $reveal = ($ENV{LOCK_ON_SHOW_ANSWERS} // 1)
+		my $reveal_lock = ($ENV{LOCK_ON_SHOW_ANSWERS} // 1)
 			&& $inputs_ref->{showCorrectAnswers};
-		if ($reveal || $perfect) {
-			$sessionHash->{showCorrectAnswers} = 1 if $inputs_ref->{showCorrectAnswers};
-			$sessionHash->{isLocked}           = 1;
-		}
+		$sessionHash->{isLocked} = 1 if $reveal_lock || $perfect_lock;
 	}
 
 	# store the current answer/response state for each entry
