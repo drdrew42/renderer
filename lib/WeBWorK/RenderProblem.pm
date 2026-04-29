@@ -16,6 +16,7 @@ use lib "$ENV{PG_ROOT}/lib";
 
 use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
+use Renderer::Constants qw( PLATFORM_NAME );
 
 ##################################################
 # create log files :: expendable
@@ -441,7 +442,7 @@ sub generateJWTs {
 		problemJWT => $inputs_ref->{problemJWT},
 		sessionJWT => $sessionJWT,
 		isLocked   => $sessionHash->{isLocked} ? 1 : 0,
-		platform   => 'standaloneRenderer'
+		platform   => PLATFORM_NAME,
 	};
 
 	my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);

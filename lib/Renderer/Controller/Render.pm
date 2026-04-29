@@ -14,6 +14,11 @@ use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
 use Renderer::ContentCache;
 use Renderer::Registration;
 use Renderer::Telemetry;
+use Renderer::Constants qw(
+	SENSITIVE_PARAMS
+	ANSWER_RESPONSE_SUBJECT
+	ANSWER_RESPONSE_DEFAULT_MESSAGE
+);
 
 sub parseRequest ($c) {
 	my %params = %{ $c->req->params->to_hash };
@@ -198,7 +203,7 @@ sub parseRequest ($c) {
 	$c->stash(_no_cache => $params{noCache} ? 1 : 0);
 
 	# ensure that these params are only provided by trusted source
-	for (qw(JWTanswerURL sessionID numCorrect numIncorrect parent_origin)) {
+	for (SENSITIVE_PARAMS) {
 		delete $params{$_};
 	}
 
@@ -1005,8 +1010,8 @@ async sub sendAnswerJWT ($c, $JWTanswerURL, $answerJWT) {
 
 	# default response hash
 	my $answerJWTresponse = {
-		subject => 'webwork.result',
-		message => 'initial message'
+		subject => ANSWER_RESPONSE_SUBJECT,
+		message => ANSWER_RESPONSE_DEFAULT_MESSAGE,
 	};
 	my $header = {
 		Origin         => $ENV{SITE_HOST},
@@ -1064,8 +1069,8 @@ async sub sendSubmissionEnvelope ($c, $answer_url, $session_jwt, $submission_jwt
 	};
 
 	my $response = {
-		subject => 'webwork.result',
-		message => 'initial message',
+		subject => ANSWER_RESPONSE_SUBJECT,
+		message => ANSWER_RESPONSE_DEFAULT_MESSAGE,
 	};
 
 	$c->log->info("sending submissionJWT envelope to $answer_url");
