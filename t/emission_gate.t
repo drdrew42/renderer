@@ -1,0 +1,164 @@
+use strict;
+use warnings;
+
+use File::Path qw(make_path);
+use Test::More;
+
+# Render.pm uses -async_await which requires Future::AsyncAwait (Docker-only).
+BEGIN {
+	eval { require Future::AsyncAwait; 1; }
+		or plan skip_all => 'Future::AsyncAwait not available (Docker-only) — skipping emission_gate tests';
+}
+
+use Test::Mojo;
+use Crypt::Ed25519;
+use Crypt::JWT   qw(encode_jwt);
+use MIME::Base64 qw(encode_base64);
+use Mojo::JSON   qw(encode_json);
+use Mojo::Parameters;
+
+# Generate a peer keypair before the Renderer boots — Registration.pm reads
+# RENDERER_PEERS at startup.
+my ($peer_pub, $peer_sec) = Crypt::Ed25519::generate_keypair();
+
+$ENV{problemJWTsecret} //= 'test-problem-secret';
+$ENV{webworkJWTsecret} //= 'test-session-secret';
+$ENV{SITE_HOST}        //= 'https://test.example.com';
+
+$ENV{RENDERER_PEERS} = encode_json([
+	{ name => 'test-editor', public_key => encode_base64($peer_pub, '') },
+]);
+
+delete $ENV{STRICT_JWT};
+delete $ENV{OPL_API_URL};
+
+my $t = Test::Mojo->new('Renderer');
+my $render_root = $ENV{RENDER_ROOT};
+make_path("$render_root/private") unless -d "$render_root/private";
+make_path("$render_root/logs")    unless -d "$render_root/logs";
+unless (-f "$render_root/logs/resource_usage.log") {
+	open my $fh, '>>', "$render_root/logs/resource_usage.log" or die $!;
+	close $fh;
+}
+
+sub peer_headers {
+	my ($method, $path, $body) = @_;
+	my $ts = time;
+	my $canonical = "$method\n$path\n$ts\n$body";
+	utf8::encode($canonical);
+	my $sig = Crypt::Ed25519::sign($canonical, $peer_pub, $peer_sec);
+	return {
+		'Content-Type'     => 'application/x-www-form-urlencoded',
+		'X-Peer-Name'      => 'test-editor',
+		'X-Peer-Timestamp' => $ts,
+		'X-Peer-Signature' => encode_base64($sig, ''),
+	};
+}
+
+sub form_body {
+	my (%fields) = @_;
+	return Mojo::Parameters->new(%fields)->to_string;
+}
+
+sub make_problem_jwt {
+	my (%claims) = @_;
+	return encode_jwt(
+		payload => {
+			aud => $ENV{SITE_HOST},
+			iss => $ENV{SITE_HOST},
+			%claims,
+		},
+		key => $ENV{problemJWTsecret},
+		alg => 'HS256',
+	);
+}
+
+my $pg_source = <<'PG';
+DOCUMENT();
+loadMacros("PGstandard.pl", "PGML.pl");
+BEGIN_PGML
+Emission gate test problem
+END_PGML
+ENDDOCUMENT();
+PG
+
+# ─── Self-mint lane ────────────────────────────────────────────────────────
+
+subtest 'self-mint: submitAnswers without grounding → 403' => sub {
+	# Ungrounded request (no JWT, no peer signature) with submitAnswers=1.
+	# The early guard in parseRequest must reject before PG forks.
+	local $ENV{STRICT_JWT} = 0;  # admit ungrounded so we hit the emission gate, not the entry gate
+	$t->post_ok('/render-api' => form => {
+		problemSource => $pg_source,
+		outputFormat  => 'default',
+		problemSeed   => 1234,
+		submitAnswers => 1,
+		AnSwEr0001    => '42',
+	})->status_is(403)
+	  ->content_like(qr/Submit requires/i, 'rejection message names the requirement');
+};
+
+subtest 'self-mint: render without submitAnswers proceeds normally' => sub {
+	# Sanity: the early guard fires only on submit; plain renders still work.
+	local $ENV{STRICT_JWT} = 0;
+	$t->post_ok('/render-api' => form => {
+		problemSource => $pg_source,
+		outputFormat  => 'default',
+		problemSeed   => 1234,
+	})->status_is(200);
+};
+
+# ─── Peer-signed lane ──────────────────────────────────────────────────────
+
+subtest 'peer-signed: submitAnswers → 403 (one-shot lane, no submit)' => sub {
+	# Peer-signed admits the request but does not set _can_emit_answer_jwt
+	# (the one-shot rule — peer-signed renders don't continue, don't submit).
+	# The early guard rejects before PG forks.
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+		submitAnswers => 1,
+		AnSwEr0001    => '42',
+	);
+	my $headers = peer_headers('POST', '/render-api', $body);
+
+	$t->post_ok('/render-api', $headers, $body)
+		->status_is(403)
+		->content_like(qr/Submit requires/i);
+};
+
+subtest 'peer-signed: render without submitAnswers proceeds normally' => sub {
+	# Sanity check — peer-signed renders are unaffected when not submitting.
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+	);
+	my $headers = peer_headers('POST', '/render-api', $body);
+
+	$t->post_ok('/render-api', $headers, $body)
+		->status_is(200);
+};
+
+# ─── problemJWT lane (control) ─────────────────────────────────────────────
+
+subtest 'problemJWT: submitAnswers proceeds (sets _can_emit_answer_jwt)' => sub {
+	# Control: the JWT lane sets _can_emit_answer_jwt, so the early guard
+	# passes and the existing render path runs. (Existing permissions.t
+	# covers the full submit-flow; this is just a smoke check that the new
+	# guard didn't break the happy path.)
+	my $jwt = make_problem_jwt(
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+	);
+
+	$t->post_ok('/render-api' => form => {
+		problemJWT    => $jwt,
+		outputFormat  => 'default',
+		submitAnswers => 1,
+		AnSwEr0001    => '42',
+	})->status_is(200);
+};
+
+done_testing();

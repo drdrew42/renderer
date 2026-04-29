@@ -430,6 +430,18 @@ sub parseRequest ($c) {
 	# the peer-signed lane has no such merge, so we reapply explicitly.
 	$params{parent_origin} //= $peer_parent_origin if defined $peer_parent_origin;
 
+	# Emission gate, fail-fast (WW3-R03). Reject submits that arrived without
+	# upstream grounding before the PG fork, rather than after a full render.
+	# _can_emit_answer_jwt is set only by problemJWT / challengeJWT / sessionJWT
+	# carrying upstream context — self-mint and peer-signed lanes never set it.
+	# A late belt-and-suspenders check survives at the dispatch site; this one
+	# is the primary gate.
+	if ($params{submitAnswers} && !$c->stash('_can_emit_answer_jwt')) {
+		return $c->exception(
+			'Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403,
+		);
+	}
+
 	return \%params;
 }
 
@@ -767,12 +779,13 @@ async sub problem ($c) {
 	# isInstructor is the orchestrator's concern, not ours.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
 		&& !$inputs_ref->{isLocked}) {
-		# Emission gate: an answerJWT/submissionJWT is only produced when the
-		# request arrived with an upstream-minted problemJWT, challengeJWT, or
-		# sessionJWT carrying one. Self-minted JWTs do not qualify — see
-		# parseRequest. This gate is orthogonal to STRICT_JWT, which governs
-		# whether ungrounded requests are accepted at all.
-		# Ref: WeBWorK3/Config and Secrets Evolution.
+		# Emission gate (belt-and-suspenders). The primary guard fires earlier
+		# in parseRequest (WW3-R03) so ungrounded submits don't pay the PG-fork
+		# cost; this re-check survives as defense-in-depth in case some future
+		# lane plumbs JWTanswerURL into %params without setting the stash flag.
+		# Self-minted JWTs do not qualify — see parseRequest. This gate is
+		# orthogonal to STRICT_JWT, which governs whether ungrounded requests
+		# are accepted at all. Ref: WeBWorK3/Config and Secrets Evolution.
 		unless ($c->stash('_can_emit_answer_jwt')) {
 			$c->log->error('Student submit without upstream JWT — rejecting answer emission.');
 			return $c->exception('Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403);
