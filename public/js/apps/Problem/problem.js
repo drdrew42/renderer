@@ -159,6 +159,13 @@
 		}
 	});
 
+	// creditModal is PG-emitted UI (no renderer template / lib renders these IDs).
+	// A PG macro somewhere in OPL emits #creditModal, #creditForm, #creditModalEmail,
+	// #creditModalSubmitBtn into $problemText; this block wires up the modal
+	// behavior. Owner of the macro is unknown as of 2026-04-29 — do not remove
+	// without first confirming nothing in OPL still emits this content.
+	// Architectural fix: move this glue into the emitting macro itself. Deferred
+	// to upstream PG cleanup.
 	const modal = document.getElementById('creditModal');
 	if (modal) {
 		const bsModal = new bootstrap.Modal(modal);
