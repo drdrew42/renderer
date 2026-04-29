@@ -63,7 +63,8 @@ package WeBWorK::VerdictJWT;
 use strict;
 use warnings;
 
-use Crypt::JWT qw(encode_jwt decode_jwt);
+use Crypt::JWT qw(decode_jwt);
+use Renderer::Util::JWT qw(mint_jwt);
 use Exporter qw(import);
 
 our @EXPORT_OK = qw(verifyAndFoldVerdict);
@@ -172,16 +173,9 @@ sub verifyAndFoldVerdict {
 		answersSubmitted => $answers_submitted,
 	};
 
-	my $new_session_jwt = eval {
-		encode_jwt(
-			payload  => $payload,
-			alg      => 'HS256',
-			key      => $renderer_secret,
-			auto_iat => 1,
-		);
-	};
+	my $new_session_jwt = eval { mint_jwt($renderer_secret, $payload) };
 	if ($@) {
-		return (undef, "encode_jwt failed ($@)");
+		return (undef, "mint_jwt failed ($@)");
 	}
 
 	return ($new_session_jwt, undef);

@@ -2,7 +2,7 @@ package Renderer::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 use Mojo::JSON   qw(encode_json decode_json);
-use Crypt::JWT   qw(encode_jwt decode_jwt);
+use Crypt::JWT   qw(decode_jwt);
 use Time::HiRes  qw(time);
 use Digest::SHA  qw(sha256_hex);
 
@@ -15,6 +15,7 @@ use Renderer::ContentCache;
 use Renderer::Registration;
 use Renderer::Telemetry;
 use Renderer::Render::Subprocess qw(render_in_subprocess);
+use Renderer::Util::JWT qw(mint_jwt);
 use Renderer::Constants qw(
 	SENSITIVE_PARAMS
 	ANSWER_RESPONSE_SUBJECT
@@ -421,14 +422,11 @@ sub parseRequest ($c) {
 			$params{aud} = $ENV{SITE_HOST};
 			$params{isInstructor} //= 0;
 			$params{sessionID} ||= time;
-			my $req_jwt = encode_jwt(
-				payload  => \%params,
-				key      => $ENV{problemJWTsecret},
-				alg      => 'PBES2-HS512+A256KW',
-				enc      => 'A256GCM',
-				auto_iat => 1
+			$params{problemJWT} = mint_jwt(
+				$ENV{problemJWTsecret}, \%params,
+				alg => 'PBES2-HS512+A256KW',
+				enc => 'A256GCM',
 			);
-			$params{problemJWT} = $req_jwt;
 		}
 	}
 	$params{originIP} = $originIP if $originIP;
@@ -1086,27 +1084,18 @@ sub jweFromRequest ($c) {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 	$inputs_ref->{aud} = $ENV{SITE_HOST};
-	my $req_jwt = encode_jwt(
-		payload  => $inputs_ref,
-		key      => $ENV{problemJWTsecret},
-		alg      => 'PBES2-HS512+A256KW',
-		enc      => 'A256GCM',
-		auto_iat => 1
-	);
-	return $c->render(text => $req_jwt);
+	return $c->render(text => mint_jwt(
+		$ENV{problemJWTsecret}, $inputs_ref,
+		alg => 'PBES2-HS512+A256KW',
+		enc => 'A256GCM',
+	));
 }
 
 sub jwtFromRequest ($c) {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 	$inputs_ref->{aud} = $ENV{SITE_HOST};
-	my $req_jwt = encode_jwt(
-		payload  => $inputs_ref,
-		key      => $ENV{problemJWTsecret},
-		alg      => 'HS256',
-		auto_iat => 1
-	);
-	return $c->render(text => $req_jwt);
+	return $c->render(text => mint_jwt($ENV{problemJWTsecret}, $inputs_ref));
 }
 
 1;

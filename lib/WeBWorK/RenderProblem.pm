@@ -9,7 +9,6 @@ use Proc::ProcessTable;
 use Date::Format;
 
 use Mojo::JSON  qw( encode_json );
-use Crypt::JWT  qw( encode_jwt );
 use Digest::MD5 qw( md5_hex );
 
 use lib "$ENV{PG_ROOT}/lib";
@@ -17,6 +16,7 @@ use lib "$ENV{PG_ROOT}/lib";
 use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
 use Renderer::Constants qw( PLATFORM_NAME );
+use Renderer::Util::JWT qw( mint_jwt );
 
 ##################################################
 # create log files :: expendable
@@ -439,7 +439,7 @@ sub generateJWTs {
 		: ($inputs_ref->{numIncorrect} // 0);
 
 	# create the session JWT
-	my $sessionJWT = encode_jwt(payload => $sessionHash, auto_iat => 1, alg => 'HS256', key => $ENV{webworkJWTsecret});
+	my $sessionJWT = mint_jwt($ENV{webworkJWTsecret}, $sessionHash);
 
 	# Skip answerJWT when session was ALREADY locked on entry — this is a replay.
 	# But if the lock was just triggered THIS request, send the final answerJWT
@@ -464,7 +464,7 @@ sub generateJWTs {
 		platform   => PLATFORM_NAME,
 	};
 
-	my $answerJWT = encode_jwt(payload => $responseHash, alg => 'HS256', key => $ENV{problemJWTsecret}, auto_iat => 1);
+	my $answerJWT = mint_jwt($ENV{problemJWTsecret}, $responseHash);
 	return ($sessionJWT, $answerJWT);
 }
 
@@ -531,12 +531,7 @@ sub generatePlaySessionJWT {
 		mint_sequence => $next_seq,
 	};
 
-	return encode_jwt(
-		payload  => $payload,
-		alg      => 'HS256',
-		key      => $ENV{webworkJWTsecret},
-		auto_iat => 1,
-	);
+	return mint_jwt($ENV{webworkJWTsecret}, $payload);
 }
 
 # Mint the per-submission submissionJWT. Self-audienced (renderer reads it
@@ -597,12 +592,7 @@ sub generateSubmissionJWT {
 		submitted_at => $submitted_at,
 	};
 
-	return encode_jwt(
-		payload  => $payload,
-		alg      => 'HS256',
-		key      => $ENV{problemJWTsecret},
-		auto_iat => 1,
-	);
+	return mint_jwt($ENV{problemJWTsecret}, $payload);
 }
 
 sub writeRenderLogEntry($) {
