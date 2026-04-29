@@ -242,11 +242,13 @@ sub parseRequest ($c) {
 			$params{$key} //= $claims->{$key};
 		}
 
-		# Hoist the answersRevealed ratchet back to the showCorrectAnswers
-		# directive — once a session has recorded reveal, every subsequent
-		# render forces the iframe to keep showing answers, regardless of
-		# whether the form-data carries showCorrectAnswers=1 this round.
-		$params{showCorrectAnswers} = 1 if $params{answersRevealed};
+		# answersRevealed propagates as session state (visible to LMS via
+		# answerJWT, sticky across renders) but does NOT force the
+		# showCorrectAnswers directive on subsequent renders — cross-render
+		# directive-persistence is a caller concern. If the LMS wants
+		# persistent reveal in the iframe, it re-sets showCorrectAnswers=1
+		# in form-data on the next render. See [[Reveal Persistence Model]]
+		# and WW3-R18 for the reasoning.
 
 		# Hoist the embedded challenge_jwt (snake_case JWT claim, per
 		# Artifact Shape §sessionJWT) to the camelCase form param so the

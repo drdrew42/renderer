@@ -412,7 +412,15 @@ sub generateJWTs {
 	#       Set 0 to suppress that trigger; the answersRevealed ratchet
 	#       still fires, just without the harder consequence.
 	if (!$inputs_ref->{isInstructor}) {
-		$sessionHash->{answersRevealed} = 1 if $inputs_ref->{showCorrectAnswers};
+		# answersRevealed is a sticky ratchet — once set, it carries across
+		# renders. The trigger is either the current request (reveal-just-
+		# happened) or the inbound sessionJWT claim (reveal happened on a
+		# prior render). Pre-WW3-R18 the parseRequest hoist secretly kept
+		# this sticky by forcing showCorrectAnswers=1 from the session
+		# ratchet — that mechanism is gone now, so the propagation has to
+		# happen explicitly here. See [[Reveal Persistence Model]].
+		$sessionHash->{answersRevealed} = 1
+			if $inputs_ref->{showCorrectAnswers} || $inputs_ref->{answersRevealed};
 
 		my $perfect_lock = ($ENV{LOCK_ON_PERFECT} // 1)
 			&& defined $pg->{problem_result}{score}
@@ -455,13 +463,14 @@ sub generateJWTs {
 	# as an embedded claim so it remains self-contained as a restart token;
 	# the duplication is intentional for the legacy path.
 	my $responseHash = {
-		iss        => $ENV{SITE_HOST},
-		aud        => $inputs_ref->{JWTanswerURL},
-		score      => $scoreHash,
-		problemJWT => $inputs_ref->{problemJWT},
-		sessionJWT => $sessionJWT,
-		isLocked   => $sessionHash->{isLocked} ? 1 : 0,
-		platform   => PLATFORM_NAME,
+		iss             => $ENV{SITE_HOST},
+		aud             => $inputs_ref->{JWTanswerURL},
+		score           => $scoreHash,
+		problemJWT      => $inputs_ref->{problemJWT},
+		sessionJWT      => $sessionJWT,
+		isLocked        => $sessionHash->{isLocked}        ? 1 : 0,
+		answersRevealed => $sessionHash->{answersRevealed} ? 1 : 0,
+		platform        => PLATFORM_NAME,
 	};
 
 	my $answerJWT = mint_jwt($ENV{problemJWTsecret}, $responseHash);

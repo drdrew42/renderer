@@ -152,12 +152,14 @@ subtest 'both knobs off: renderer never auto-locks; soft ratchet still fires' =>
 
 # ─── Round-trip: answersRevealed in sessionJWT forces reveal next render ───
 
-subtest 'answersRevealed ratchet hoists to showCorrectAnswers on next render' => sub {
+subtest 'answersRevealed: ratchet persists, hoist does NOT force showCorrectAnswers (WW3-R18)' => sub {
 	# Under LOCK_ON_SHOW_ANSWERS=0 we get a session with answersRevealed=1
-	# but no isLocked — so a follow-up submit can flow. That follow-up
-	# request carries the sessionJWT but no showCorrectAnswers form-data.
-	# parseRequest must hoist answersRevealed back to showCorrectAnswers
-	# so the iframe keeps revealing answers.
+	# but no isLocked — so a follow-up submit can flow. The R18 model says:
+	# the fact-of-reveal propagates as session state (visible to LMS, sticky)
+	# but the showCorrectAnswers DIRECTIVE does NOT auto-fire from session
+	# state — cross-render directive-persistence is a caller concern. If
+	# the LMS wants persistent reveal it re-sets showCorrectAnswers in form
+	# data. See [[Reveal Persistence Model]].
 	local $ENV{LOCK_ON_SHOW_ANSWERS} = 0;
 
 	# First submit: reveal (no lock under this config).
@@ -170,9 +172,8 @@ subtest 'answersRevealed ratchet hoists to showCorrectAnswers on next render' =>
 	my $first_session = $t->tx->res->json->{rh_result}{sessionJWT};
 
 	# Second submit: same session, NO showCorrectAnswers form-data this round.
-	# The hoist should re-fire showCorrectAnswers from the session ratchet,
-	# and answersRevealed must persist forward (the security-sensitive claim
-	# list keeps the session value from being clobbered).
+	# Pre-R18: the hoist re-fired showCorrectAnswers from the session.
+	# Post-R18: it does not — the directive must come from form-data fresh.
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => upstream_problem_jwt(),
 		problemSource => $pg_source,
@@ -182,9 +183,31 @@ subtest 'answersRevealed ratchet hoists to showCorrectAnswers on next render' =>
 		submitAnswers => 1,
 		AnSwEr0001    => '40',
 	})->status_is(200);
-	my $second_session = $t->tx->res->json->{rh_result}{sessionJWT};
+	my $second_raw     = $t->tx->res->json->{rh_result};
+	my $second_inputs  = $second_raw->{inputs_ref};
+	my $second_session = $second_raw->{sessionJWT};
 	my $second_claims  = decode_jwt(token => $second_session, key => $ENV{webworkJWTsecret});
-	is($second_claims->{answersRevealed}, 1, 'answersRevealed persists across renders (ratchet)');
+
+	# Hoist gone: parseRequest no longer synthesizes showCorrectAnswers from
+	# the session ratchet, so the directive is absent on the second render.
+	ok(!$second_inputs->{showCorrectAnswers},
+		'showCorrectAnswers directive is NOT auto-fired from session ratchet (hoist removed)');
+
+	# Soft ratchet still rides forward (session-state property).
+	is($second_claims->{answersRevealed}, 1,
+		'answersRevealed persists across renders (sticky session state)');
+
+	# Answer-emission gate: answerJWT carries answersRevealed at top level
+	# (R18 addition) — the LMS sees the reveal-happened signal on every
+	# subsequent answerJWT, not just the first one after reveal.
+	my $second_answer = $second_raw->{answerJWT};
+	ok($second_answer, 'second submit produces an answerJWT (LOCK_ON_SHOW_ANSWERS=0 keeps session writable)');
+	my $second_answer_claims = decode_jwt(
+		token => $second_answer,
+		key   => $ENV{problemJWTsecret},
+	);
+	is($second_answer_claims->{answersRevealed}, 1,
+		'answerJWT carries answersRevealed=1 at top level after reveal');
 };
 
 done_testing();
