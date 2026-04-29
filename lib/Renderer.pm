@@ -27,7 +27,6 @@ print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Mojo::JSON;
 use Renderer::Model::Problem;
-use Renderer::Controller::IO;
 use Renderer::Identity;
 use Renderer::Telemetry;
 use Renderer::Registration;
@@ -200,7 +199,6 @@ sub startup ($self) {
 
 	# Helpers
 	$self->helper(format          => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
-	$self->helper(validateRequest => sub { Renderer::Controller::IO::validate(@_) });
 	$self->helper(parseRequest    => sub { Renderer::Controller::Render::parseRequest(@_) });
 	$self->helper(croak           => sub { Renderer::Controller::Render::croak(@_) });
 	$self->helper(logID           => sub { shift->req->request_id });
@@ -275,32 +273,13 @@ sub startup ($self) {
 }
 
 sub supplementalRoutes ($r) {
-
-	# UI
-	$r->any('/')->to('pages#twocolumn');
-	$r->any('/opl')->to('pages#oplUI');
-
 	# Testing
 	$r->any('/die'     => sub { die "what did you expect, flowers?" });
 	$r->any('/timeout' => sub { timeout(@_) });
 
-	# JWT Convenience
+	# JWT Convenience (hand-testing helpers)
 	$r->any('/render-api/jwt')->to('render#jwtFromRequest');
 	$r->any('/render-api/jwe')->to('render#jweFromRequest');
-
-	# Library Actions
-	$r->any('/render-api/tap')->to('IO#raw');
-	$r->post('/render-api/can')->to('IO#writer');
-	$r->any('/render-api/cat')->to('IO#catalog');
-	$r->any('/render-api/find')->to('IO#search');
-	$r->post('/render-api/upload')->to('IO#upload');
-	$r->delete('/render-api/remove')->to('IO#remove');
-	$r->post('/render-api/clone')->to('IO#clone');
-	$r->post('/render-api/tags')->to('IO#setTags');
-
-	# ShowMeAnother Support Functions
-	$r->post('/render-api/sma')->to('IO#findNewVersion');
-	$r->post('/render-api/unique')->to('IO#findUniqueSeeds');
 }
 
 sub timeout ($c) {
