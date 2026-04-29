@@ -3,7 +3,6 @@ package Renderer::Model::Problem;
 use strict;
 use warnings;
 
-use Mojo::File;
 use Mojo::IOLoop;
 use Mojo::JSON qw( encode_json );
 use Mojo::Base -async_await, -signatures;
@@ -12,8 +11,7 @@ use WeBWorK::RenderProblem;
 
 ##### Problem params: #####
 # = random_seed      (set randomization for rendering)
-# = read_path        (path to existing problem for edit/render)
-# = write_path       (path for updating existing problem/saving new problem)
+# = read_path        (path identity for rendered problem)
 # = problem_contents (source code for problem)
 
 ##### Problem methods: #####
@@ -21,11 +19,8 @@ use WeBWorK::RenderProblem;
 # - source (read/update problem_contents)
 # - seed   (read/update random_seed)
 # - path   (read/update read_path)
-# - target (read/update write_path)
 ## IO methods
 # - render (generate rendered html + pg info)
-# - save   (write problem_contents to file at write_path)
-# - load   (overwrite problem_contents with contents of file at read_path)
 ## Error handling
 # - success (checks for internal errors, populates status and _message fields)
 
@@ -45,25 +40,15 @@ sub _init ($self, $args) {
 	$self->{log} = $args->{log} if $args->{log};
 
 	my $read_path        = $args->{read_path}        || '';
-	my $write_path       = $args->{write_path}       || '';
 	my $problem_contents = $args->{problem_contents} || '';
 	my $random_seed      = $args->{random_seed}      || '';
-	$self->{_error} = { status => 400, message => 'Cannot create problem without either path or contents!' }
-		unless ($problem_contents =~ /\S/ || $read_path =~ /\S/);
+	$self->{_error} = { status => 400, message => 'Cannot create problem without problem source!' }
+		unless ($problem_contents =~ /\S/);
 
-	# sourcecode takes precedence over reading from file path
-	if ($problem_contents =~ /\S/) {
-		$self->source($problem_contents);
-		$self->{code_origin} = 'pg source (' . ($self->path($read_path, 'force') || 'no path provided') . ')';
-		# set read_path without failing for !-e
-		# this supports images in problems via editor
-	} else {
-		$self->{code_origin} = $self->path($read_path);
-		$self->load;
-	}
+	$self->source($problem_contents) if $problem_contents =~ /\S/;
+	$self->{code_origin} = 'pg source (' . ($self->path($read_path) || 'no path provided') . ')';
 
-	$self->target($write_path) if $write_path  =~ /\S/;
-	$self->seed($random_seed)  if $random_seed =~ /\S/;
+	$self->seed($random_seed) if $random_seed =~ /\S/;
 
 	my $path_info = $self->{code_origin};
 	my $seed_info = $args->{random_seed} ? "random seed #" . $args->{random_seed} : "no random seed.";
@@ -92,96 +77,8 @@ sub seed ($self, @rest) {
 }
 
 sub path ($self, @rest) {
-	if (@rest >= 1) {
-		my $read_path = $rest[0];
-		my $force     = $rest[1];
-		$read_path =~ s!\s+|\.\./!!g;    # prevent backtracking and whitespace
-		my $opl_root = $ENV{OPL_DIRECTORY};
-		if ($read_path =~ m!^Library/!) {
-			$read_path =~ s!^Library/!$opl_root/OpenProblemLibrary/!;
-			$self->{write_allowed} = 0;
-		} elsif ($read_path =~ m!^Contrib!) {
-			$read_path =~ s!^Contrib/!$opl_root/Contrib/!;
-			$self->{write_allowed} = 0;    # eventually reconsider this?
-		} else {
-			# TODO: consider steps in pipeline towards OPL
-			# these problems are not in OPL or Contrib yet
-
-			# do not require "private/" for non-OPL problems
-			$read_path =~ s|^((?!private/).*)|private/$1|;
-			$self->{write_allowed} = 1;
-		}
-		$self->{_error} = { status => 404, message => 'I cannot find a problem with that file path.' }
-			unless (-e $read_path || $force);
-		# if we objectify an empty string, it becomes truth-y -- AVOID!
-		$self->{read_path} = Mojo::File->new($read_path) if $read_path;
-	}
+	$self->{read_path} = $rest[0] if @rest >= 1 && defined $rest[0] && length $rest[0];
 	return $self->{read_path};
-}
-
-sub target ($self, @rest) {
-	if (@rest == 1) {
-		my $write_path = $rest[0];
-		$write_path =~ s!\s+|\.\./!!g;    # prevent backtracking and whitespace
-		my $opl_root = $ENV{OPL_DIRECTORY};
-		if ($write_path =~ m!^Library/!) {
-			$write_path =~ s!^Library/!$opl_root/OpenProblemLibrary/!;
-		} elsif ($write_path =~ m!^Contrib!) {
-			$write_path =~ s!^Contrib/!$opl_root/Contrib/!;
-		}
-
-		# TODO: include permission check to write to this path...
-		$self->{write_allowed} = ($write_path =~ m/^private\/(?:[^\s])*\.pg$/) ? 1 : 0;
-		$self->{write_path}    = Mojo::File->new($write_path);
-	}
-	return $self->{write_path};
-}
-
-# RETURNS PROMISE
-sub save ($self) {
-	my $success    = 0;
-	my $write_path = ($self->{write_path} =~ /\S/) ? $self->{write_path} : $self->{read_path};
-
-	$self->{action} = 'save to ' . $self->{write_path};
-
-	$self->{_error} = { status => 400, message => 'Nothing to write!' }
-		unless ($self->{problem_contents} =~ m/\S/);
-	$self->{_error} = { status => 412, message => 'No file paths specified.' }
-		unless ($write_path =~ m/\S/);
-	$self->{_error} = { status => 403, message => 'You are not allowed to write to that path.' }
-		unless $self->{write_allowed};
-
-	my $errs;
-	Mojo::File::make_path($self->{write_path}->dirname, { error => $errs })
-		if !(-e $write_path);
-	if ($errs) {
-		$self->log->warn(join("\n", @$errs))                                        if $errs;
-		$self->{_error} = { status => 405, message => join("\n", @$errs) } if $errs;
-	}
-
-	my $savePromise = Mojo::IOLoop->subprocess->run_p(sub {
-		$write_path->spew(Encode::encode('UTF-8', $self->{problem_contents}));
-		$self->path($write_path);    # update the read_path to match
-		return $self->success();
-	})->catch(sub {
-		$self->{exception} = Mojo::Exception->new(shift)->trace;
-		$self->{_error}    = { status => 500, message => 'Write failed: ' . $self->{exception}->message };
-		return $self->success();
-	});
-
-	return $savePromise;
-}
-
-sub load ($self) {
-	my $success   = 0;
-	my $read_path = $self->{read_path};
-	if (-r $read_path) {
-		$self->{problem_contents} = Encode::decode("UTF-8", $read_path->slurp);
-		$success = 1;
-	} else {
-		$self->{_error} = { status => 404, message => "Problem set with un-read-able read_path: $read_path" };
-	}
-	return $success;
 }
 
 # RETURNS PROMISE

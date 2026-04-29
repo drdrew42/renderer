@@ -12,9 +12,6 @@ BEGIN {
 	# PG_ROOT is required for PG/lib/PGEnvironment.pm
 	$ENV{PG_ROOT} = $main::libname . '/PG';
 
-	# Used for reconstructing library paths from sym-links.
-	$ENV{OPL_DIRECTORY} = "$ENV{RENDER_ROOT}/webwork-open-problem-library";
-
 	$ENV{MOJO_CONFIG} =
 		(-r "$ENV{RENDER_ROOT}/renderer.conf")
 		? "$ENV{RENDER_ROOT}/renderer.conf"
