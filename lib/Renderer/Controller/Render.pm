@@ -2,7 +2,6 @@ package Renderer::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 use Mojo::JSON   qw(encode_json decode_json);
-use Crypt::JWT   qw(decode_jwt);
 use Time::HiRes  qw(time);
 use Digest::SHA  qw(sha256_hex);
 
@@ -16,6 +15,11 @@ use Renderer::Registration;
 use Renderer::Telemetry;
 use Renderer::Render::Subprocess qw(render_in_subprocess);
 use Renderer::Util::JWT qw(mint_jwt);
+use Renderer::Lane::Session;
+use Renderer::Lane::Problem;
+use Renderer::Lane::Challenge;
+use Renderer::Lane::Peer;
+use Renderer::Lane::Ungrounded;
 use Renderer::Constants qw(
 	SENSITIVE_PARAMS
 	ANSWER_RESPONSE_SUBJECT
@@ -29,32 +33,16 @@ sub parseRequest ($c) {
 		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
 	$originIP ||= $c->tx->remote_address || 'unknown-origin';
 
-	# Three knobs govern renderer access:
-	#   1. Entry gate    (STRICT_JWT)            — may this ungrounded request render at all?
-	#   2. Session UX    (SELF_MINT_DISABLED)    — should we wrap this render in a self-minted JWT?
+	# Three knobs govern renderer access (see Lane::Ungrounded for STRICT_JWT
+	# and SELF_MINT_DISABLED, parseRequest's tail for the emission gate):
+	#   1. Entry gate    (STRICT_JWT)            — may an ungrounded request render at all?
+	#   2. Session UX    (SELF_MINT_DISABLED)    — wrap an admitted ungrounded request in a self-minted JWT?
 	#   3. Emission gate (_can_emit_answer_jwt)  — may this request produce an answerJWT?
-	#
-	# (1) STRICT_JWT=1 rejects ungrounded requests at the door (public/student instances
-	# that expect all callers to arrive with a peer-minted problemJWT or sessionJWT).
-	# STRICT_JWT=0 admits ungrounded requests — typically paired with a network-isolated
-	# deployment (e.g. ADAPT's VPC-only editor renderer) that treats the network as the
-	# trust boundary.
-	#
-	# (2) Self-minting is the renderer's UX opinion: when an ungrounded request is
-	# admitted, encapsulate its inputs in a problemJWT so subsequent renders flow
-	# through the standard sessionJWT round-trip without the consumer re-mailing
-	# every parameter (isInstructor, sessionID, etc.). Default ON. Set
-	# SELF_MINT_DISABLED=1 for raw-passthrough deployments that don't want a JWT
-	# materialized on their behalf.
-	#
-	# (3) The emission gate is always active: only requests carrying an upstream JWT
-	# can produce answerJWTs. Self-minted JWTs cannot carry JWTanswerURL (it's
-	# stripped from raw params and only re-injected from upstream claims), so they
-	# can't ground answer emission even after a sessionJWT round-trip.
-	#
 	# See WeBWorK3/Config and Secrets Evolution for rationale.
 
-	# protect against DOM manipulation
+	# ─── Pre-dispatch validations ───────────────────────────────────────────
+
+	# Protect against DOM manipulation.
 	if (defined $params{submitAnswers} && defined $params{previewAnswers}) {
 		$c->log->error('Simultaneous submit and preview! JWT: ', $params{problemJWT} // {});
 		return $c->exception('Malformed request.', 400);
@@ -63,7 +51,7 @@ sub parseRequest ($c) {
 	# Treat empty-string JWT params as not-present. Hidden form fields whose
 	# backing value was undef render as `value=""`, which is `defined` but empty;
 	# Crypt::JWT::decode_jwt rejects empty tokens with "missing token". Strip
-	# them up front so the elsif chain below dispatches as if they weren't sent.
+	# them up front so the dispatcher below sees a clean envelope shape.
 	for my $k (qw(problemJWT sessionJWT challengeJWT verdict_signed initial_state)) {
 		delete $params{$k} if defined $params{$k} && !length $params{$k};
 	}
@@ -72,10 +60,8 @@ sub parseRequest ($c) {
 	# navigation state (next_available, current_focus, draws[], finalization,
 	# started_at). Per Lifecycle.md, the portal hands challenge_jwt +
 	# initial_state to the renderer for sessionJWT_0 minting on first render.
-	# Without this, the renderer's first mint has no prior state to copy and
-	# emits empty next_available — atom-evaluated state is lost.
-	# Decoded into $params{state} so generatePlaySessionJWT's prior_state
-	# read picks it up uniformly with the sessionJWT-decoded path.
+	# Decoded into $params{state} so generatePlaySessionJWT picks it up
+	# uniformly with the sessionJWT-decoded path.
 	if (defined $params{initial_state} && !defined $params{sessionJWT}) {
 		eval {
 			my $decoded = decode_json($params{initial_state});
@@ -88,27 +74,22 @@ sub parseRequest ($c) {
 	}
 
 	# challengeJWT and problemJWT are sibling trust lanes — never both at once.
-	# challengeJWT is the play-level definition (WW3 orchestrator-minted);
-	# problemJWT is the legacy per-problem envelope (LibreTexts/ADAPT).
-	# Pick one.
 	if (defined $params{challengeJWT} && defined $params{problemJWT}) {
 		return $c->exception('Ambiguous envelope: both challengeJWT and problemJWT present.', 400);
 	}
 
 	# Render-time verdict fold (WW3-053). When the portal threads
-	# verdict_signed through a render request — typically on the RESUME path,
+	# verdict_signed through a render request — typically on the RESUME path
 	# where /play/launch handed the portal session_jwt + verdict_signed — the
 	# renderer mints sessionJWT_{k+1} folding the verdict before downstream
-	# processing reads state. This is essential for open-mode plays where
-	# state.draws[] must include the just-allocated draw before the renderer
-	# can resolve the seed for current_focus. For closed-mode it keeps the
-	# trust envelope coherent: sessionJWT.state matches the position the
-	# portal asked us to render. The fold replaces $params{sessionJWT} so
-	# the existing sessionJWT decode (below) sees verdict-folded state.
+	# processing reads state. Replaces $params{sessionJWT} so Lane::Session's
+	# decode below sees the verdict-folded state.
 	#
-	# Requires both challengeJWT and sessionJWT to be present alongside
-	# verdict_signed — verdict_signed is meaningful only on the challengeJWT
-	# lane and only against an existing base session.
+	# Lives in parseRequest rather than Lane::Challenge because the fold
+	# mutates sessionJWT (which Lane::Session decodes), so the operation
+	# must run before the session prefix. It's a session-state concern that
+	# requires challengeJWT for the play_id cross-check, not a challenge-
+	# lane operation per se.
 	if (defined $params{verdict_signed}) {
 		return $c->exception('verdict_signed requires sessionJWT.', 400)
 			unless defined $params{sessionJWT};
@@ -127,15 +108,12 @@ sub parseRequest ($c) {
 		}
 		$params{sessionJWT} = $folded;
 		$c->stash(_verdict_folded => 1);
-		# verdict_signed was a one-shot input; remove from params so it
-		# doesn't accidentally shadow downstream reads or get logged.
 		delete $params{verdict_signed};
 	}
 
-	# Reject raw-param pg_hash paired with raw-param problemSource when no upstream
-	# JWT is present. Legitimate callers carry pg_hash inside the JWT; this combo
-	# in the clear suggests an attempt to render attacker-chosen source under a
-	# cached problem's identity.
+	# Reject raw-param pg_hash + problemSource without an upstream JWT —
+	# legitimate callers carry pg_hash inside the JWT; the bare combo is
+	# attacker-shaped (rendering chosen source under a cached identity).
 	if (defined $params{pg_hash} && defined $params{problemSource}
 		&& !defined $params{problemJWT} && !defined $params{sessionJWT})
 	{
@@ -143,52 +121,22 @@ sub parseRequest ($c) {
 		return $c->exception('Malformed request.', 400);
 	}
 
-	# Peer-signed lane (Stage 1): verify X-Peer-Signature header over the canonical
-	# request form. On success, this request is trusted as coming from a registered
-	# mesh peer — it bypasses the JWT entry gate but NOT the answerJWT emission gate.
-	# Raw problemSource arriving on this lane is one-shot: no sessionJWT, no
-	# answerJWT, no pg_hash leak to the browser. See
-	# [[WeBWorK/Renderer/Trust Model and Editor Flow]].
-	{
-		my $peer_name = $c->req->headers->header('X-Peer-Name');
-		my $peer_ts   = $c->req->headers->header('X-Peer-Timestamp');
-		my $peer_sig  = $c->req->headers->header('X-Peer-Signature');
-		if (defined $peer_name || defined $peer_ts || defined $peer_sig) {
-			my %result = Renderer::Registration::verify_peer_signature(
-				method    => $c->req->method,
-				path      => $c->req->url->path->to_string,
-				timestamp => $peer_ts // '',
-				body      => $c->req->body,
-				peer_name => $peer_name // '',
-				signature => $peer_sig // '',
-			);
-			unless ($result{ok}) {
-				$c->log->error("Peer signature verification failed: $result{reason}");
-				return $c->exception("Peer signature rejected: $result{reason}", 401);
-			}
-			$c->log->info("Peer-signed request accepted from '$peer_name'");
-			$c->stash(_peer_signed => $peer_name);
-		}
-	}
+	# Peer-signed verification. Runs early (before SENSITIVE_PARAMS strip and
+	# Lane::Session) so peer-signed parent_origin can be captured before the
+	# strip. On bad signature, returns a 401 exception.
+	Renderer::Lane::Peer::verify($c) or return;
 
-	# Translate the peer-facing `formAction` field to the internal `formURL` name
-	# honored by FormatRenderedProblem. This lets editor-providers specify
-	# "send form submits back to me" in a name that matches their mental model.
-	# Applies to any request; unused formAction would otherwise leak into
-	# downstream params / telemetry.
+	# Translate the peer-facing `formAction` field to the internal `formURL`
+	# name honored by FormatRenderedProblem. Editor-providers specify "send
+	# form submits back to me" in their mental model.
 	if (defined $params{formAction}) {
 		$params{formURL} //= delete $params{formAction};
 	}
 
-	# parent_origin declares where the rendered iframe's postMessage broadcasts
-	# are authorized to target (portal URL / editor-provider origin). Only
-	# accepted from trusted sources:
-	#   - Peer-signed lane: carried in the signed body form-data; captured here
-	#     before the param strip below and restored after JWT processing.
-	#   - JWT lane: carried as a claim; merged into $params via the generic
-	#     claim merge below (no special handling needed).
-	# Raw URL/body params without a trust signal are stripped alongside the
-	# other security-sensitive claims below.
+	# parent_origin: peer-signed lane carries it in the signed body; capture
+	# before the SENSITIVE_PARAMS strip and restore after dispatch. JWT lane
+	# recovers it via Lane::Problem's claim merge (claim wins) — no special
+	# handling needed there.
 	my $peer_parent_origin = $c->stash('_peer_signed') ? delete $params{parent_origin} : undef;
 
 	# Normalize common lowercase query params to camelCase before JWT processing.
@@ -196,241 +144,42 @@ sub parseRequest ($c) {
 	$params{displayMode}   //= delete $params{displaymode}   if exists $params{displaymode};
 	$params{problemSeed}   //= delete $params{problemseed}   if exists $params{problemseed};
 
-	# Stash first-render flag for seed diversity telemetry (LT-010).
-	# A request without sessionJWT is the student's first view of this problem.
+	# Stash flags consumed by downstream phases.
 	$c->stash(_is_first_render => !defined $params{sessionJWT} ? 1 : 0);
+	$c->stash(_no_cache        => $params{noCache} ? 1 : 0);
 
-	# Force-reload: skip content cache and re-fetch from OPL.
-	# Useful after macro updates or to diagnose cache issues.
-	$c->stash(_no_cache => $params{noCache} ? 1 : 0);
-
-	# ensure that these params are only provided by trusted source
+	# Strip security-sensitive params. Anything in this list can ONLY be
+	# (re)introduced via a trusted source (JWT claim, peer-signed body).
 	for (SENSITIVE_PARAMS) {
 		delete $params{$_};
 	}
 
-	# set session-specific info (previous attempts, correct/incorrect count)
+	# ─── Session prefix ─────────────────────────────────────────────────────
+	# sessionJWT decode + claim merge. Combines with any body lane.
+
 	if (defined $params{sessionJWT}) {
-		$c->log->info("Received JWT: using sessionJWT");
-		my $sessionJWT = $params{sessionJWT};
-		my $claims;
-		eval {
-			$claims = decode_jwt(
-				token      => $sessionJWT,
-				key        => $ENV{webworkJWTsecret},
-				verify_iss => $ENV{SITE_HOST},
-			);
-			1;
-		} or do {
-			return $c->croak($@, 3);
-		};
-
-		# Security-sensitive claims from the session always win over raw params.
-		# Prevents students from injecting isLocked=0 or isInstructor=1 via POST.
-		# answersRevealed is the soft-ratchet flag — once the session records
-		# a reveal, the caller can't claw it back. showCorrectAnswers stays in
-		# the list for backward-compat with sessionJWTs minted before the
-		# answersRevealed ratchet landed.
-		for (qw(isLocked isInstructor showCorrectAnswers answersRevealed answersSubmitted)) {
-			$params{$_} = $claims->{$_} if exists $claims->{$_};
-		}
-
-		# For all other claims, raw params win (e.g. current responses vs prior).
-		# problemJWT must come from session to maintain consistency.
-		delete $params{problemJWT};
-		foreach my $key (keys %$claims) {
-			$params{$key} //= $claims->{$key};
-		}
-
-		# answersRevealed propagates as session state (visible to LMS via
-		# answerJWT, sticky across renders) but does NOT force the
-		# showCorrectAnswers directive on subsequent renders — cross-render
-		# directive-persistence is a caller concern. If the LMS wants
-		# persistent reveal in the iframe, it re-sets showCorrectAnswers=1
-		# in form-data on the next render. See [[Reveal Persistence Model]]
-		# and WW3-R18 for the reasoning.
-
-		# Hoist the embedded challenge_jwt (snake_case JWT claim, per
-		# Artifact Shape §sessionJWT) to the camelCase form param so the
-		# challengeJWT-lane elsif below picks it up. Without this, on form
-		# submit the sessionJWT carries challenge_jwt as a claim but the
-		# dispatch never recognizes it as a challengeJWT request — falls
-		# through to the entry gate, pg_hash never gets resolved,
-		# problemSourceURL never gets synthesized, and sub problem fails
-		# with an empty sourceFilePath.
-		#
-		# Initial render works because the portal passes challengeJWT as a
-		# query param directly. Form-submit re-render only carries
-		# sessionJWT, so the embedded challenge_jwt is the only path back
-		# to pg_hash.
-		if (!defined $params{challengeJWT} && defined $params{challenge_jwt}) {
-			$params{challengeJWT} = $params{challenge_jwt};
-		}
+		Renderer::Lane::Session::apply_prefix($c, \%params) or return;
 	}
 
-	# problemJWT sets basic problem request configuration and rendering options
+	# ─── Body-lane dispatch ─────────────────────────────────────────────────
+	# Envelope shape selects the body lane. Order matches the historical
+	# elsif chain: problemJWT and challengeJWT are mutually exclusive
+	# (rejected pre-dispatch); peer-signed body fires when peer-verified
+	# AND no JWT body; ungrounded covers the rest unless outputFormat=ptx
+	# (PTX path skips body-lane entirely — no JWT minted, no defaults).
+
 	if (defined $params{problemJWT}) {
-		$c->log->info("Received JWT: using problemJWT");
-		my $problemJWT = $params{problemJWT};
-		my $claims;
-		eval {
-			$claims = decode_jwt(
-				token      => $problemJWT,
-				key        => $ENV{problemJWTsecret},
-				verify_aud => $ENV{SITE_HOST},
-			);
-			1;
-		} or do {
-			return $c->croak($@, 3);
-		};
-		# LibreTexts uses provider name as key for problemJWT claims
-		$claims = $claims->{webwork} if defined $claims->{webwork};
-		# override key-values in params with those provided in the JWT
-		@params{ keys %$claims } = values %$claims;
-		# Mark this request as upstream-JWT-bearing — required to produce answerJWTs.
-		$c->stash(_can_emit_answer_jwt => 1);
+		Renderer::Lane::Problem::apply($c, \%params) or return;
 	} elsif (defined $params{challengeJWT}) {
-		# challengeJWT trust lane (WW3-032). The challengeJWT is the static play
-		# definition minted by the WW3 orchestrator; we decode, locate the
-		# requested position, and hoist its render context. Atom evaluation lives
-		# orchestrator-side (Architecture B), so `mode` and `constraints` are
-		# carried but not consumed here. The portal supplies `position` to pick
-		# which problem in the pool to render.
-		$c->log->info("Received JWT: using challengeJWT");
-		my $claims;
-		eval {
-			$claims = decode_jwt(
-				token      => $params{challengeJWT},
-				key        => $ENV{problemJWTsecret},
-				verify_aud => $ENV{SITE_HOST},
-			);
-			1;
-		} or do {
-			return $c->croak($@, 3);
-		};
-
-		# Position must come from the URL/form. Initial render gets it as a
-		# URL param from the portal's iframe mount; form-submit re-render
-		# carries it as a hidden form field in default.html.ep. Render-
-		# context belongs in the form, not in sessionJWT state — student_picks
-		# mode deliberately keeps state.current_focus null, so it can't be
-		# the carrier.
-		my $position = $params{position};
-		return $c->exception('challengeJWT requires a position parameter.', 400)
-			unless defined $position && $position =~ /^\d+$/;
-
-		my $problems = $claims->{problems} // [];
-		return $c->exception("position $position out of range (have @{[ scalar @$problems ]} problems).", 400)
-			if $position >= scalar @$problems;
-
-		my $entry = $problems->[$position];
-		my $pg_hash = $entry->{pg_hash}
-			or return $c->exception('challengeJWT problem entry missing pg_hash.', 400);
-
-		# Seed resolution: closed challenges carry the seed in the JWT;
-		# open challenges carry "*" and the resolved seed lives in the
-		# inbound sessionJWT's state.draws[draw_position == position] entry.
-		my $seed = $entry->{seed};
-		if (!defined $seed || $seed eq '*') {
-			my $draws = $params{state} && ref $params{state} eq 'HASH'
-				? ($params{state}{draws} // [])
-				: [];
-			my ($draw) = grep { defined $_->{draw_position} && $_->{draw_position} == $position } @$draws;
-			return $c->exception("Open challenge: no draw recorded for position $position.", 400)
-				unless $draw && defined $draw->{seed};
-			$seed = $draw->{seed};
-			# In open mode the active pg_hash also lives on the draw record
-			# (the pool entry is one of many; the draw pinned which one).
-			$pg_hash = $draw->{pg_hash} if defined $draw->{pg_hash};
-		}
-
-		# Hoist render context.
-		$params{pg_hash}     = $pg_hash;
-		$params{problemSeed} = $seed;
-
-		# challengeJWT carries pg_hash but no source URL — synthesize one from
-		# OPL's content-addressed hash route. Mirrors the problemJWT flow
-		# (commit 2575e78 in ww3) which builds problemSourceURL from pg_hash
-		# for the same reason. Without this, sub problem has neither
-		# problemSourceURL nor sourceFilePath and can't fetch the source.
-		# OPL exposes /api/problems/hash/<pg_hash> for content-hash lookup
-		# (Library.pm:281-282). Caller can override OPL_API_URL via env.
-		#
-		# Skip when the caller supplied raw problemSource — that path is the
-		# editor preview / test bypass and shouldn't trigger an OPL fetch.
-		# Mirrors the existing precedence: $params{problemSource} present
-		# means "use this source verbatim, don't go to network."
-		unless (defined $params{problemSource}) {
-			$params{problemSourceURL} = $c->opl_client->problem_url_by_hash($pg_hash);
-		}
-
-		# Render permissions are attempt-wide flags. Apply just the renderer-
-		# visible fields; everything else (e.g. duration_anchor) is orchestrator
-		# concern. Permission claims override raw form values — same precedence
-		# as the problemJWT path.
-		if (my $rp = $claims->{render_permissions}) {
-			for my $k (qw(isInstructor showCorrectAnswers showHints showSolutions)) {
-				$params{$k} = $rp->{$k} if defined $rp->{$k};
-			}
-		}
-		$params{isInstructor} //= 0;
-
-		# Identity claims propagate into the submissionJWT.
-		for my $k (qw(play_id challenge_id chain_student_id assignment_id)) {
-			$params{$k} = $claims->{$k} if defined $claims->{$k};
-		}
-
-		# Declarative UI hide-list (WW3-R01). challengeJWT does not bulk-merge
-		# claims into %params (unlike problemJWT), so propagate explicitly.
-		$params{hideElements} = $claims->{hideElements}
-			if ref $claims->{hideElements} eq 'ARRAY';
-
-		# Stamp the answer endpoint so submissionJWTs land at the orchestrator,
-		# not at any legacy answerURL the client might have tried to inject.
-		return $c->exception('challengeJWT missing answer_url.', 400)
-			unless defined $claims->{answer_url};
-		$params{JWTanswerURL} = $claims->{answer_url};
-
-		# outputFormat lock: WW3-028 deliberately ships challengeJWT WITHOUT an
-		# outputFormat claim (preserves the 99bc18f leak fix). The challengeJWT
-		# path is iframe-render-only; "simple" is the only safe value. Lock it
-		# here, overriding any URL-injected value.
-		$params{outputFormat} = 'simple';
-
-		# Mark this request as upstream-JWT-bearing — required to emit
-		# submissionJWTs (the challengeJWT-path analog of answerJWTs).
-		$c->stash(_can_emit_answer_jwt => 1);
+		Renderer::Lane::Challenge::apply($c, \%params) or return;
 	} elsif ($c->stash('_peer_signed')) {
-		# Peer-signed lane: the peer authorized this render directly. No JWT needed
-		# and none is minted — peer-signed raw-source renders are one-shot with no
-		# browser-carried continuation token. _can_emit_answer_jwt stays unset.
-		# Set aud for any downstream code that reads it.
-		$params{aud} = $ENV{SITE_HOST};
-		$params{isInstructor} //= 0;
-		$params{sessionID} ||= time;
+		Renderer::Lane::Peer::apply_body($c, \%params) or return;
 	} elsif ($params{outputFormat} ne 'ptx') {
-		# Entry gate (STRICT_JWT): block ungrounded requests at the door for
-		# instances that only serve authorized upstream consumers.
-		if ($ENV{STRICT_JWT}) {
-			return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401);
-		}
-		# Session UX (default on; SELF_MINT_DISABLED=1 to opt out): wrap the
-		# inbound params in a self-minted problemJWT so the next render flows
-		# through the standard sessionJWT round-trip without the consumer
-		# re-mailing isInstructor / sessionID / etc. Self-minted JWTs carry no
-		# JWTanswerURL, so _can_emit_answer_jwt stays unset and answerJWTs
-		# cannot be produced even after round-tripping.
-		unless ($ENV{SELF_MINT_DISABLED}) {
-			$params{aud} = $ENV{SITE_HOST};
-			$params{isInstructor} //= 0;
-			$params{sessionID} ||= time;
-			$params{problemJWT} = mint_jwt(
-				$ENV{problemJWTsecret}, \%params,
-				alg => 'PBES2-HS512+A256KW',
-				enc => 'A256GCM',
-			);
-		}
+		Renderer::Lane::Ungrounded::apply($c, \%params) or return;
 	}
+
+	# ─── Post-dispatch ──────────────────────────────────────────────────────
+
 	$params{originIP} = $originIP if $originIP;
 
 	# Restore peer-signed parent_origin (captured before the strip above).
