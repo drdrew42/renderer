@@ -76,6 +76,31 @@
   # in development mode. NOT recommended for public-facing deployments.
   FULL_APP_INSECURE => 0,
 
+  # --- Static asset list (third-party CSS/JS injected into rendered pages) ---
+  # Renderer-bundled libraries served from public/ at render time. Modify only
+  # when adding/removing libraries the renderer ships with (e.g. swapping out
+  # the math typesetter or adding a new toolbar). Per-problem assets come from
+  # PG via ADD_CSS_FILE / extra_css_files / extra_js_files flags and stay in
+  # the formatter — those are per-render, this list is process-wide.
+  #
+  # Defaults baked into Renderer.pm's startup; commenting these keys out (or
+  # deleting them from a customized renderer.conf) restores the defaults.
+  third_party_css => [
+    'css/bootstrap.css',
+    'node_modules/jquery-ui-dist/jquery-ui.min.css',
+    'node_modules/@fortawesome/fontawesome-free/css/all.min.css',
+  ],
+  third_party_js => [
+    [ 'node_modules/jquery/dist/jquery.min.js',                            {} ],
+    [ 'node_modules/jquery-ui-dist/jquery-ui.min.js',                      {} ],
+    [ 'js/apps/MathJaxConfig/mathjax-config.js',                { defer => undef } ],
+    [ 'node_modules/mathjax/es5/tex-svg.js',                    { defer => undef, id => 'MathJax-script' } ],
+    [ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js', { defer => undef } ],
+    [ 'js/apps/Problem/problem.js',                             { defer => undef } ],
+    [ 'js/apps/Problem/submithelper.js',                        { defer => undef } ],
+    [ 'js/apps/CSSMessage/css-message.js',                      { defer => undef } ],
+  ],
+
   # --- Logging ---
   # INTERACTION_LOG: When enabled, logs each render/submit interaction to
   # logs/interactions.log with timing data.

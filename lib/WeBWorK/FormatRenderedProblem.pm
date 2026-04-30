@@ -56,12 +56,10 @@ sub formatRenderedProblem {
 	# HTML document language setting
 	my $formLanguage = $inputs_ref->{language} // 'en';
 
-	# Third party CSS
-	my @third_party_css = map { getAssetURL($formLanguage, $_->[0]) } (
-		[ 'css/bootstrap.css', ],
-		[ 'node_modules/jquery-ui-dist/jquery-ui.min.css', ],
-		['node_modules/@fortawesome/fontawesome-free/css/all.min.css'],
-	);
+	# Third party CSS — config-driven (WW3-R24). Defaults baked into
+	# Renderer.pm startup; per-language asset resolution still happens here.
+	my $css_list = $c->config('third_party_css') // [];
+	my @third_party_css = map { getAssetURL($formLanguage, $_) } @$css_list;
 
 	# Add CSS files requested by problems via ADD_CSS_FILE() in the PG file
 	# or via a setting of $ce->{pg}{specialPGEnvironmentVars}{extra_css_files}
@@ -82,18 +80,11 @@ sub formatRenderedProblem {
 		}
 	}
 
-	# Third party JavaScript
-	# The second element is a hash containing the necessary attributes for the script tag.
-	my @third_party_js = map { [ getAssetURL($formLanguage, $_->[0]), $_->[1] ] } (
-		[ 'node_modules/jquery/dist/jquery.min.js',                            {} ],
-		[ 'node_modules/jquery-ui-dist/jquery-ui.min.js',                      {} ],
-		[ "js/apps/MathJaxConfig/mathjax-config.js",                { defer => undef } ],
-		[ 'node_modules/mathjax/es5/tex-svg.js',                    { defer => undef, id => 'MathJax-script' } ],
-		[ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js', { defer => undef } ],
-		[ "js/apps/Problem/problem.js",                             { defer => undef } ],
-		[ "js/apps/Problem/submithelper.js",                        { defer => undef } ],
-		[ "js/apps/CSSMessage/css-message.js",                      { defer => undef } ],
-	);
+	# Third party JavaScript — config-driven (WW3-R24). Each entry is
+	# [path, attrs-hash]; attrs hash carries `defer`, `id`, etc. Defaults
+	# baked into Renderer.pm startup.
+	my $js_list = $c->config('third_party_js') // [];
+	my @third_party_js = map { [ getAssetURL($formLanguage, $_->[0]), $_->[1] ] } @$js_list;
 
 	# Get the requested format. (outputFormat or outputformat)
 	my $formatName = $inputs_ref->{outputFormat} || 'default';

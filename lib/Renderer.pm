@@ -40,6 +40,28 @@ sub startup ($self) {
 		$ENV{$_} //= $self->config($_);
 	}
 
+	# Static asset list (third-party CSS/JS) — config-driven with baked-in
+	# fallbacks so deployments using a customized renderer.conf that predates
+	# WW3-R24 keep rendering. Replaces the hardcoded lists previously in
+	# WeBWorK::FormatRenderedProblem. Per-problem assets (PG's
+	# extra_css_files / extra_js_files) stay in the formatter; this is the
+	# process-wide library list only.
+	$self->config->{third_party_css} //= [
+		'css/bootstrap.css',
+		'node_modules/jquery-ui-dist/jquery-ui.min.css',
+		'node_modules/@fortawesome/fontawesome-free/css/all.min.css',
+	];
+	$self->config->{third_party_js} //= [
+		[ 'node_modules/jquery/dist/jquery.min.js',                            {} ],
+		[ 'node_modules/jquery-ui-dist/jquery-ui.min.js',                      {} ],
+		[ 'js/apps/MathJaxConfig/mathjax-config.js',                { defer => undef } ],
+		[ 'node_modules/mathjax/es5/tex-svg.js',                    { defer => undef, id => 'MathJax-script' } ],
+		[ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js', { defer => undef } ],
+		[ 'js/apps/Problem/problem.js',                             { defer => undef } ],
+		[ 'js/apps/Problem/submithelper.js',                        { defer => undef } ],
+		[ 'js/apps/CSSMessage/css-message.js',                      { defer => undef } ],
+	];
+
 	# Refuse to start if shared secrets are still placeholders.
 	# Prevents silent fallback to conf-file defaults when a service forgets to
 	# pass the env var — see WeBWorK3/Config and Secrets Evolution for rationale.
