@@ -33,6 +33,8 @@ use Exporter qw(import);
 our @EXPORT_OK = qw(apply);
 
 sub apply ($c, $params) {
+	$c->stash(_trust_lane => 'ungrounded');
+
 	# Entry gate.
 	if ($ENV{STRICT_JWT}) {
 		return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401);

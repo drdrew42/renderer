@@ -122,6 +122,7 @@ sub apply ($c, $params) {
 	$params->{outputFormat} = 'default';
 
 	$c->stash(_can_emit_answer_jwt => 1);
+	$c->stash(_trust_lane         => 'challenge');
 	return 1;
 }
 

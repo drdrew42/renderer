@@ -2,9 +2,9 @@
 %
 <!DOCTYPE html>
 % if ($parent_origin) {
-<html <%== $COURSE_LANG_AND_DIR %> data-parent-origin="<%= $parent_origin %>">
+<html <%== $COURSE_LANG_AND_DIR %> data-parent-origin="<%= $parent_origin %>" data-trust-lane="<%= $trust_lane %>">
 % } else {
-<html <%== $COURSE_LANG_AND_DIR %>>
+<html <%== $COURSE_LANG_AND_DIR %> data-trust-lane="<%= $trust_lane %>">
 % }
 <head>
 	<meta charset='utf-8'>
@@ -33,7 +33,7 @@
 	%== $rh_result->{post_header_text} // ''
 	%== $extra_header_text
 </head>
-<body onLoad="window.parent.postMessage('loaded', '*')">
+<body>
 	<div class="container-fluid">
 		<div class="row g-0">
 			<div class="col-12 problem">

@@ -42,6 +42,7 @@ sub apply ($c, $params) {
 	@{$params}{ keys %$claims } = values %$claims;
 
 	$c->stash(_can_emit_answer_jwt => 1);
+	$c->stash(_trust_lane         => 'problem');
 	return 1;
 }
 

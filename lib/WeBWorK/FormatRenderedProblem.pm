@@ -44,6 +44,13 @@ sub formatRenderedProblem {
 	# attribute → problem.js falls back to wildcard '*' (preserves legacy behavior).
 	my $parent_origin = $inputs_ref->{parent_origin} // '';
 
+	# trust_lane: the lane the request entered through, set by Renderer::Lane::*
+	# on entry. Read by css-message.js (via data-trust-lane on <html>) to decide
+	# whether to warn when an inbound message arrives without parent_origin
+	# declared. Defaults to 'ungrounded' (PTX builds, direct callback paths,
+	# any code path that bypasses parseRequest's lane dispatcher).
+	my $trust_lane = $c->stash('_trust_lane') // 'ungrounded';
+
 	my $displayMode = $inputs_ref->{displayMode} // 'MathJax';
 
 	# HTML document language setting
@@ -268,6 +275,7 @@ sub formatRenderedProblem {
 		SITE_URL                 => $SITE_URL,
 		FORM_ACTION_URL          => $FORM_ACTION_URL,
 		parent_origin            => $parent_origin,
+		trust_lane               => $trust_lane,
 		COURSE_LANG_AND_DIR      => get_lang_and_dir($formLanguage),
 		PROBLEM_LANG_AND_DIR     => $PROBLEM_LANG_AND_DIR,
 		third_party_css          => \@third_party_css,

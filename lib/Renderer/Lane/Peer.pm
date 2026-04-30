@@ -49,6 +49,7 @@ sub verify ($c) {
 	}
 	$c->log->info("Peer-signed request accepted from '$peer_name'");
 	$c->stash(_peer_signed => $peer_name);
+	$c->stash(_trust_lane  => 'peer');
 	return 1;
 }
 

@@ -11,6 +11,17 @@
 	// expected or when the render path is unauthenticated preview).
 	const parentOrigin = document.documentElement.dataset.parentOrigin || '*';
 
+	// Lifecycle: announce that the iframe finished loading. Replaces the
+	// legacy bare-string `'loaded'` body-onLoad broadcast (WW3-R22). Carries
+	// `frame` so multi-iframe parents can route.
+	window.parent.postMessage(
+		JSON.stringify({
+			type: 'webwork.lifecycle.loaded',
+			frame: frame
+		}),
+		parentOrigin
+	);
+
 	// Activate the popovers in the results table.
 	document.querySelectorAll('.attemptResults .answer-preview[data-bs-toggle="popover"]').forEach((preview) => {
 		if (preview.dataset.bsContent) new bootstrap.Popover(preview);
@@ -34,10 +45,26 @@
 		);
 	}
 
-	// if there is a JWTanswerURLstatus element, report it to parent
-	const status = document.getElementById('JWTanswerURLstatus')?.value;
-	if (status) {
-		window.parent.postMessage(status, parentOrigin);
+	// If there is a JWTanswerURLstatus element, report it to parent. The element
+	// value is JSON (post-WW3-R16, encodeAnswerStatus emits plain encode_json).
+	// Wrap in the structured envelope (WW3-R22). Replaces the legacy raw-string
+	// passthrough; consumers must JSON.parse the .status field.
+	const statusValue = document.getElementById('JWTanswerURLstatus')?.value;
+	if (statusValue) {
+		let parsed;
+		try {
+			parsed = JSON.parse(statusValue);
+		} catch (e) {
+			parsed = statusValue; // last-ditch fallback; legacy non-JSON shouldn't happen
+		}
+		window.parent.postMessage(
+			JSON.stringify({
+				type: 'webwork.interaction.submitted',
+				status: parsed,
+				frame: frame
+			}),
+			parentOrigin
+		);
 	}
 
 	// fetch the problem-result-score and postMessage to parent
@@ -121,7 +148,8 @@
 		const button = messageQueue[1].id.replace(`-${id}`, '');
 		messageQueue.splice(0, 4, {
 			type: 'webwork.interaction.toolbar',
-			id: button
+			id: button,
+			frame: frame
 		});
 	}
 
