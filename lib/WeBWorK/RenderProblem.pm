@@ -15,8 +15,9 @@ use lib "$ENV{PG_ROOT}/lib";
 
 use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
-use Renderer::Constants qw( PLATFORM_NAME );
-use Renderer::Util::JWT qw( mint_jwt );
+use Renderer::Constants   qw( PLATFORM_NAME );
+use Renderer::Util::JWT   qw( mint_jwt );
+use Renderer::Permissions qw( resolve_permissions );
 
 ##################################################
 # create log files :: expendable
@@ -213,7 +214,6 @@ sub standaloneRenderer {
 
 	my $isPreview    = defined($inputs_ref->{previewAnswers}) ? 1 : 0;
 	my $isSubmit     = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
-	my $isInstructor = $inputs_ref->{isInstructor} ? 1 : 0;
 
 	# answersSubmitted is the cumulative "the student has submitted at some
 	# point in this play/session" flag — distinct from submitAnswers (this
@@ -227,42 +227,22 @@ sub standaloneRenderer {
 	# OR them together so any signal triggers it.
 	$inputs_ref->{answersSubmitted} ||= $isSubmit;
 
-	# Permission model — isInstructor is the mode switch.
-	#
-	# Instructor (preview): everything visible by default. Callers can
-	#   suppress individual flags to see the student view.
-	#
-	# Student (assessed): nothing revealed by default. showCorrectAnswers
-	#   is the primary reveal trigger (the "Show Correct Answers" button).
-	#   Solutions ride along with correct answers unless explicitly
-	#   suppressed (showSolutions=0). showSolutions alone without
-	#   showCorrectAnswers is ignored — solutions don't make sense without
-	#   the answers they explain. Hints are always available (PG's
-	#   showHints is a render gate, not security-sensitive).
+	# Permission model — see Renderer::Permissions for the full rule set.
+	# Single decision point; no defaulting logic in this function. PG's 0/2
+	# magic value for showCorrectAnswers is the only translation that stays
+	# here, at the WeBWorK::PG->new() call boundary below.
 	#
 	# Session lifecycle (non-instructor only):
 	# - answerJWTs flow on every submit. The LMS owns due-date / scoring.
-	# - Session locks when: student scores 100% OR showCorrectAnswers.
+	# - Session locks when: student scores 100% OR showCorrectAnswers
+	#   (config-gated, see WW3-R02 / generateJWTs in Render.pm).
 	# - After lock: no answerJWT, no session updates.
-	my $showCorrectAnswers;
-	my $showSolutions;
-	my $showHints;
+	my $perms = resolve_permissions($inputs_ref);
+	my $isInstructor       = $perms->{isInstructor};
+	my $showCorrectAnswers = $perms->{showCorrectAnswers};
+	my $showSolutions      = $perms->{showSolutions};
+	my $showHints          = $perms->{showHints};
 
-	if ($isInstructor) {
-		$showCorrectAnswers = defined $inputs_ref->{showCorrectAnswers}
-			? ($inputs_ref->{showCorrectAnswers} ? 1 : 0) : 1;
-		$showSolutions = defined $inputs_ref->{showSolutions}
-			? ($inputs_ref->{showSolutions} ? 1 : 0) : 1;
-		$showHints = defined $inputs_ref->{showHints}
-			? ($inputs_ref->{showHints} ? 1 : 0) : 1;
-	} else {
-		$showCorrectAnswers = $inputs_ref->{showCorrectAnswers} ? 1 : 0;
-		# Solutions ride with correct answers unless explicitly suppressed.
-		$showSolutions = $showCorrectAnswers
-			&& !(defined $inputs_ref->{showSolutions} && !$inputs_ref->{showSolutions});
-		$showHints = defined $inputs_ref->{showHints}
-			? ($inputs_ref->{showHints} ? 1 : 0) : 1;
-	}
 	my $displayResults = $inputs_ref->{answersSubmitted} && !$isPreview;
 	my $forceResults   = $displayResults                 && $inputs_ref->{showPartialCorrectAnswers};
 
@@ -288,7 +268,7 @@ sub standaloneRenderer {
 		displayMode             => $inputs_ref->{displayMode},
 		useMathQuill            => !defined $inputs_ref->{entryAssist} || $inputs_ref->{entryAssist} eq 'MathQuill',
 		answerPrefix            => $inputs_ref->{answerPrefix},
-		isInstructor            => $inputs_ref->{isInstructor},
+		isInstructor            => $isInstructor,
 		forceScaffoldsOpen      => $inputs_ref->{forceScaffoldsOpen},
 		psvn                    => $inputs_ref->{psvn},
 		problemUUID             => $inputs_ref->{problemUUID},
@@ -299,7 +279,7 @@ sub standaloneRenderer {
 		debuggingOptions        => {
 			show_resource_info          => $inputs_ref->{show_resource_info},
 			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info}
-				// $inputs_ref->{isInstructor},
+				// $isInstructor,
 			show_pg_info           => $inputs_ref->{show_pg_info},
 			show_answer_hash_info  => $inputs_ref->{show_answer_hash_info},
 			show_answer_group_info => $inputs_ref->{show_answer_group_info}
