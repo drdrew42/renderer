@@ -65,12 +65,12 @@ sub submit_and_decode {
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => upstream_problem_jwt(),
 		problemSource => $pg_source,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 1234,
 		submitAnswers => 1,
 		%form,
 	})->status_is(200);
-	my $session = $t->tx->res->json->{rh_result}{sessionJWT};
+	my $session = $t->tx->res->json->{tokens}{sessionJWT};
 	return undef unless $session;
 	return decode_jwt(token => $session, key => $ENV{webworkJWTsecret});
 }
@@ -169,7 +169,7 @@ subtest 'answersRevealed: ratchet persists, hoist does NOT force showCorrectAnsw
 	);
 	is($first->{answersRevealed}, 1, 'first submit sets answersRevealed');
 	ok(!$first->{isLocked},          'first submit does not lock');
-	my $first_session = $t->tx->res->json->{rh_result}{sessionJWT};
+	my $first_session = $t->tx->res->json->{tokens}{sessionJWT};
 
 	# Second submit: same session, NO showCorrectAnswers form-data this round.
 	# Pre-R18: the hoist re-fired showCorrectAnswers from the session.
@@ -178,14 +178,14 @@ subtest 'answersRevealed: ratchet persists, hoist does NOT force showCorrectAnsw
 		problemJWT    => upstream_problem_jwt(),
 		problemSource => $pg_source,
 		sessionJWT    => $first_session,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 1234,
 		submitAnswers => 1,
 		AnSwEr0001    => '40',
 	})->status_is(200);
-	my $second_raw     = $t->tx->res->json->{rh_result};
-	my $second_inputs  = $second_raw->{inputs_ref};
-	my $second_session = $second_raw->{sessionJWT};
+	my $second_resp    = $t->tx->res->json;
+	my $second_inputs  = $second_resp->{inputs_ref};
+	my $second_session = $second_resp->{tokens}{sessionJWT};
 	my $second_claims  = decode_jwt(token => $second_session, key => $ENV{webworkJWTsecret});
 
 	# Hoist gone: parseRequest no longer synthesizes showCorrectAnswers from
@@ -200,7 +200,7 @@ subtest 'answersRevealed: ratchet persists, hoist does NOT force showCorrectAnsw
 	# Answer-emission gate: answerJWT carries answersRevealed at top level
 	# (R18 addition) — the LMS sees the reveal-happened signal on every
 	# subsequent answerJWT, not just the first one after reveal.
-	my $second_answer = $second_raw->{answerJWT};
+	my $second_answer = $second_resp->{tokens}{answerJWT};
 	ok($second_answer, 'second submit produces an answerJWT (LOCK_ON_SHOW_ANSWERS=0 keeps session writable)');
 	my $second_answer_claims = decode_jwt(
 		token => $second_answer,

@@ -267,22 +267,21 @@ subtest 'mint_sequence increments from inbound sessionJWT' => sub {
 
 # ─── outputFormat lock ──────────────────────────────────────────────────────
 
-subtest 'outputFormat hardcoded to simple on challengeJWT path (URL ignored)' => sub {
+subtest 'outputFormat hardcoded to default on challengeJWT path (URL ignored)' => sub {
 	my $jwt = make_challenge_jwt();
-	# URL-injected raw should be ignored — challengeJWT path locks simple.
-	# We request JSON envelope back and confirm the JWT block is shaped for
-	# the new path (challenge present, answer absent), proving outputFormat
-	# was overridden (raw would have produced a different response shape).
+	# URL-injected outputFormat should be ignored — challengeJWT path locks
+	# the format. Inject `debug` (a real format with a distinct response
+	# shape — top-level `permissions` / `tokens` / etc) and confirm the
+	# response is the standard JSON envelope instead, proving the lock fired.
 	post_json({
 		challengeJWT  => $jwt,
 		position      => 0,
 		problemSource => $pg_source,
+		outputFormat  => 'debug',
 	})->status_is(200);
 	my $resp = decode_json($t->tx->res->body);
-	# raw outputFormat would have produced an `inputs_ref` top-level key with
-	# correct_ans inside; simple goes through the standard JSON envelope.
-	ok(exists $resp->{renderedHTML}, 'response is the standard JSON envelope (simple), not raw');
-	ok(!exists $resp->{rh_result},   'no raw-format leak (rh_result is the raw indicator)');
+	ok(exists $resp->{renderedHTML}, 'response is the standard JSON envelope (default), not debug');
+	ok(!exists $resp->{permissions}, 'no debug-format leak (permissions is the debug indicator)');
 };
 
 # ─── render_permissions ────────────────────────────────────────────────────

@@ -165,13 +165,13 @@ subtest 'hints suppressed by explicit showHints=0' => sub {
 subtest 'instructor gets no sessionJWT or answerJWT' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemSource => $pg_source,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 1234,
 		isInstructor  => 1,
 	})->status_is(200);
 	my $json = $t->tx->res->json;
-	ok(!$json->{rh_result}{sessionJWT}, 'no sessionJWT for instructor');
-	ok(!$json->{rh_result}{answerJWT},  'no answerJWT for instructor');
+	ok(!$json->{tokens}{sessionJWT}, 'no sessionJWT for instructor');
+	ok(!$json->{tokens}{answerJWT},  'no answerJWT for instructor');
 };
 
 # ─── Debug format ──────────────────────────────────────────────────────────
@@ -203,14 +203,14 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 1234,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
 	my $submit_raw = $t->tx->res->json;
-	my $sessionJWT = $submit_raw->{rh_result}{sessionJWT};
+	my $sessionJWT = $submit_raw->{tokens}{sessionJWT};
 	ok($sessionJWT, 'got sessionJWT after correct submission');
 
 	# Decode the sessionJWT to verify isLocked
@@ -221,7 +221,7 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 	is($session_claims->{isLocked}, 1, 'session is locked after 100% score');
 
 	# Verify answerJWT was still generated (this is the locking submit)
-	my $answerJWT = $submit_raw->{rh_result}{answerJWT};
+	my $answerJWT = $submit_raw->{tokens}{answerJWT};
 	ok($answerJWT, 'answerJWT present on the locking submit');
 
 	# Decode answerJWT to verify isLocked is exposed
@@ -236,14 +236,14 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
 		sessionJWT    => $sessionJWT,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 1234,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
 	my $locked_raw = $t->tx->res->json;
-	ok(!$locked_raw->{rh_result}{answerJWT}, 'no answerJWT from already-locked session');
+	ok(!$locked_raw->{tokens}{answerJWT}, 'no answerJWT from already-locked session');
 };
 
 subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
@@ -253,7 +253,7 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemJWT         => $problemJWT,
 		problemSource      => $pg_source,
-		outputFormat       => 'raw',
+		outputFormat       => 'debug',
 		problemSeed        => 9999,
 		submitAnswers      => 1,
 		showCorrectAnswers => 1,
@@ -261,7 +261,7 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 	})->status_is(200);
 
 	my $submit = $t->tx->res->json;
-	my $sessionJWT = $submit->{rh_result}{sessionJWT};
+	my $sessionJWT = $submit->{tokens}{sessionJWT};
 	ok($sessionJWT, 'got sessionJWT after showCorrectAnswers request');
 
 	my $claims = decode_jwt(
@@ -276,14 +276,14 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
 		sessionJWT    => $sessionJWT,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 9999,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
 	my $locked = $t->tx->res->json;
-	ok(!$locked->{rh_result}{answerJWT}, 'no answerJWT after showCorrectAnswers lock');
+	ok(!$locked->{tokens}{answerJWT}, 'no answerJWT after showCorrectAnswers lock');
 };
 
 subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
@@ -293,7 +293,7 @@ subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 8888,
 		submitAnswers => 1,
 		showSolutions => 1,
@@ -301,7 +301,7 @@ subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
 	})->status_is(200);
 
 	my $submit = $t->tx->res->json;
-	my $sessionJWT = $submit->{rh_result}{sessionJWT};
+	my $sessionJWT = $submit->{tokens}{sessionJWT};
 	ok($sessionJWT, 'got sessionJWT');
 
 	my $claims = decode_jwt(
@@ -320,13 +320,13 @@ subtest 'raw isLocked=0 cannot override locked sessionJWT' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 5678,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
-	my $locked_session = $t->tx->res->json->{rh_result}{sessionJWT};
+	my $locked_session = $t->tx->res->json->{tokens}{sessionJWT};
 	ok($locked_session, 'got locked sessionJWT');
 
 	# Try to bypass with raw isLocked=0
@@ -334,7 +334,7 @@ subtest 'raw isLocked=0 cannot override locked sessionJWT' => sub {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
 		sessionJWT    => $locked_session,
-		outputFormat  => 'raw',
+		outputFormat  => 'debug',
 		problemSeed   => 5678,
 		submitAnswers => 1,
 		isLocked      => 0,
@@ -342,7 +342,7 @@ subtest 'raw isLocked=0 cannot override locked sessionJWT' => sub {
 	})->status_is(200);
 
 	my $bypass_raw = $t->tx->res->json;
-	ok(!$bypass_raw->{rh_result}{answerJWT}, 'raw isLocked=0 did NOT bypass locked session');
+	ok(!$bypass_raw->{tokens}{answerJWT}, 'raw isLocked=0 did NOT bypass locked session');
 };
 
 done_testing();

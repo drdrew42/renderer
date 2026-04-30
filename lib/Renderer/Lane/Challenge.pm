@@ -14,7 +14,7 @@ package Renderer::Lane::Challenge;
 #   * Synthesize problemSourceURL from pg_hash via OPLClient (skip if
 #     caller supplied raw problemSource).
 #   * Apply render_permissions and identity claims.
-#   * Lock outputFormat to 'simple' (challengeJWT path is iframe-only).
+#   * Lock outputFormat to 'default' (challengeJWT path is iframe-only).
 #   * Set _can_emit_answer_jwt — upstream-grounded.
 #
 # Selectively merges (unlike Lane::Problem's bulk merge) — challengeJWT
@@ -115,9 +115,11 @@ sub apply ($c, $params) {
 	$params->{JWTanswerURL} = $claims->{answer_url};
 
 	# outputFormat lock: WW3-028 ships challengeJWT WITHOUT an outputFormat
-	# claim (preserves the 99bc18f leak fix). Iframe-render-only; "simple"
-	# is the only safe value. Override any URL-injected value.
-	$params->{outputFormat} = 'simple';
+	# claim (preserves the 99bc18f leak fix). Iframe-render-only — override
+	# any URL-injected value to the canonical default. Pre-WW3-R21 this
+	# locked to 'simple', which was an alias for 'default'; both still
+	# work post-R21 but 'default' is the post-collapse canonical.
+	$params->{outputFormat} = 'default';
 
 	$c->stash(_can_emit_answer_jwt => 1);
 	return 1;

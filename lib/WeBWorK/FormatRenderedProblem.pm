@@ -92,6 +92,20 @@ sub formatRenderedProblem {
 	# Get the requested format. (outputFormat or outputformat)
 	my $formatName = $inputs_ref->{outputFormat} || 'default';
 
+	# Collapse the default/simple/static alias cluster (WW3-R21). All three
+	# render the same template; they only differ in button visibility,
+	# which is now expressed via the explicit per-button flags. `simple`
+	# is a pure alias; `static` translates to "all three buttons hidden."
+	# Caller's explicit per-button flags always win — translate only when
+	# the flag isn't already set. Backward-compat: callers passing
+	# outputFormat=simple or =static continue to work unchanged.
+	if ($formatName eq 'static') {
+		$inputs_ref->{hidePreviewButton}        //= 1;
+		$inputs_ref->{hideCheckAnswersButton}   //= 1;
+		$inputs_ref->{showCorrectAnswersButton} //= '0';
+	}
+	$formatName = 'default' if $formatName eq 'simple' || $formatName eq 'static';
+
 	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
 	my @extra_js_files;
 	if (ref($rh_result->{flags}{extra_js_files}) eq 'ARRAY') {
@@ -173,36 +187,11 @@ sub formatRenderedProblem {
 
 	# Execute and return the interpolated problem template
 
-	# Raw format
-	# This format returns javascript object notation corresponding to the perl hash
-	# with everything that a client-side application could use to work with the problem.
-	# There is no wrapping HTML "_format" template.
-	if ($formatName eq 'raw') {
-		my $output = {};
-
-		# Everything that ships out with other formats can be constructed from these
-		$output->{rh_result}  = $rh_result;
-		$output->{inputs_ref} = $inputs_ref;
-
-		# The following could be constructed from the above, but this is a convenience
-		$output->{resultSummary}   = $resultSummary->to_string if $resultSummary;
-		$output->{lang}            = $PROBLEM_LANG_AND_DIR{lang};
-		$output->{dir}             = $PROBLEM_LANG_AND_DIR{dir};
-		$output->{extra_css_files} = \@extra_css_files;
-		$output->{extra_js_files}  = \@extra_js_files;
-
-		# Include third party css and javascript files.  Only jquery, jquery-ui, mathjax, and bootstrap are needed for
-		# PG.  See the comments before the subroutine definitions for load_css and load_js in pg/macros/PG.pl.
-		# The other files included are only needed to make themes work in the webwork2 formats.
-		$output->{third_party_css} = \@third_party_css;
-		$output->{third_party_js}  = \@third_party_js;
-
-		# Convert to JSON and render.
-		return $c->render(data => encode_json($output));
-	}
-
-	# Debug format: focused diagnostic view for troubleshooting render issues.
-	# Returns JSON with permission decisions, macro injection, cache state, and PG warnings.
+	# Debug format: diagnostic view for troubleshooting + test introspection.
+	# Returns JSON with permission decisions, macro injection, render state,
+	# the minted-token payload, and the resolved inputs_ref (post-claim-merge).
+	# This is the format the renderer's test suite uses to inspect rendered
+	# state — see t/permissions.t, t/lock_policy.t for example uses.
 	if ($formatName eq 'debug') {
 		my $debug = {
 			permissions => {
@@ -235,6 +224,23 @@ sub formatRenderedProblem {
 				},
 			},
 			render_error => $renderErrorOccurred ? 1 : 0,
+
+			# Continuation tokens the renderer minted for this request.
+			# Undef when the lane / config did not produce one — tests can
+			# assert presence/absence directly. Replaces the historical
+			# $rh_result->{sessionJWT} / answerJWT extraction from the now-
+			# retired `raw` outputFormat (WW3-R21).
+			tokens => {
+				sessionJWT    => $rh_result->{sessionJWT},
+				answerJWT     => $rh_result->{answerJWT},
+				submissionJWT => $rh_result->{submissionJWT},
+			},
+
+			# Echo of the resolved $inputs_ref after parseRequest's claim
+			# merge. Useful for tests that need to verify the post-merge
+			# shape (e.g. that a directive was or wasn't synthesized from
+			# session state).
+			inputs_ref => $inputs_ref,
 		};
 		return $c->render(data => encode_json($debug));
 	}

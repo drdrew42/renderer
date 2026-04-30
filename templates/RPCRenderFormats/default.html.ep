@@ -100,7 +100,14 @@
 					% if ($formatName eq 'debug' && $rh_result->{inputs_ref}{clientDebug}) {
 						%= hidden_field clientDebug => $rh_result->{inputs_ref}{clientDebug}
 					% }
-					% if ($formatName ne 'static') {
+					%# WW3-R21: container renders only when at least one button is
+					%# visible. Replaces the previous `formatName ne 'static'` magic-
+					%# string check; static now expresses itself via the three
+					%# button-hide flags set at the dispatcher boundary.
+					% my $any_button = ($showPreviewButton ne '0')
+					%               || ($showCheckAnswersButton ne '0')
+					%               || ($showCorrectAnswersButton ne '0');
+					% if ($any_button) {
 						<div class="submit-buttons-container col-12 mb-2">
 							% # Submit buttons (preview and submit are shown by default)
 							% if ($showPreviewButton ne '0') {
