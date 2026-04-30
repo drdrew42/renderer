@@ -187,9 +187,27 @@ subtest 'debug outputFormat returns diagnostic JSON' => sub {
 		->json_has('/problem')
 		->json_has('/macros')
 		->json_has('/result')
+		->json_is('/lane' => 'ungrounded')
 		->json_is('/permissions/isInstructor' => 1)
 		->json_is('/permissions/showCorrectAnswers' => 1)
-		->json_is('/render_error' => 0);
+		->json_is('/render_error' => 0)
+		->json_hasnt('/permissions/isLocked',
+			'isLocked omitted for ungrounded lane (Lane::Problem-only field, WW3-R27)');
+};
+
+subtest 'debug outputFormat: problem lane carries isLocked' => sub {
+	# Lane::Problem is the legacy lane that uses isLocked as terminal state.
+	# Per WW3-R27, isLocked appears in debug output ONLY for this lane.
+	my $jwt = upstream_problem_jwt();
+	$t->post_ok('/render-api' => form => {
+		problemJWT    => $jwt,
+		problemSource => $pg_source,
+		outputFormat  => 'debug',
+		problemSeed   => 1234,
+	})->status_is(200)
+	  ->json_is('/lane' => 'problem')
+	  ->json_has('/permissions/isLocked',
+		'isLocked surfaced for Lane::Problem');
 };
 
 # ─── Session lock ──────────────────────────────────────────────────────────

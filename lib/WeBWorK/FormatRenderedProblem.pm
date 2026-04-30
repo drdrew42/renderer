@@ -190,13 +190,21 @@ sub formatRenderedProblem {
 	# This is the format the renderer's test suite uses to inspect rendered
 	# state — see t/permissions.t, t/lock_policy.t for example uses.
 	if ($formatName eq 'debug') {
+		# isLocked is a Lane::Problem property only — the legacy lane's
+		# terminal-state mechanism. Lane::Challenge uses orchestrator-owned
+		# finalization (see Synthesis Theme 5 / S1); peer-signed and
+		# ungrounded lanes don't carry session state. Surface the field
+		# only for the lane where it's meaningful (WW3-R27).
 		my $debug = {
+			lane        => $trust_lane,
 			permissions => {
 				isInstructor       => $inputs_ref->{isInstructor} ? 1 : 0,
 				showCorrectAnswers => $inputs_ref->{showCorrectAnswers} ? 1 : 0,
 				showSolutions      => $rh_result->{flags}{showSolutions} // 0,
 				showHints          => $rh_result->{flags}{showHints} // 0,
-				isLocked           => $inputs_ref->{isLocked} ? 1 : 0,
+				($trust_lane eq 'problem'
+					? (isLocked => $inputs_ref->{isLocked} ? 1 : 0)
+					: ()),
 			},
 			problem => {
 				pg_hash        => $inputs_ref->{pg_hash} // '',
