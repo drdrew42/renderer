@@ -9,6 +9,7 @@ use Crypt::Ed25519;
 use MIME::Base64 qw(decode_base64);
 use File::Spec;
 use WeBWorK::PreTeXt;
+use WeBWorK::HintSolution;
 use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
 use Renderer::ContentCache;
 use Renderer::Registration;
@@ -709,6 +710,54 @@ async sub render_ptx ($c) {
 
 	$c->res->headers->content_type('text/xml; charset=utf-8');
 	return $c->render(template => 'RPCRenderFormats/ptx', %$res);
+}
+
+# POST /render-api/hint and POST /render-api/solution (WW3-R28).
+# Pure dumb content fetches: render with the appropriate flag, extract
+# just the hint/solution divs, return as JSON. Bypasses parseRequest;
+# mints nothing, POSTs nothing, emits no events. The LMS/orchestrator
+# gates user access at its own UI layer — the renderer is dumb about
+# who's allowed to read what. See WeBWorK::HintSolution for the
+# implementation and lib/WeBWorK/Renderer/Render-Only Hint and Solution
+# Modes.md for the design rationale.
+async sub hint ($c) {
+	$c->render_later;
+
+	my $params = $c->req->params->to_hash;
+	return $c->exception('Missing required parameter: problemSource', 400)
+		unless defined $params->{problemSource} && length $params->{problemSource};
+	return $c->exception('Missing required parameter: problemSeed', 400)
+		unless defined $params->{problemSeed};
+
+	my $res = await WeBWorK::HintSolution::render_hint({
+		problemSource => $params->{problemSource},
+		problemSeed   => $params->{problemSeed},
+	});
+
+	if (ref($res) eq 'HASH' && $res->{error}) {
+		return $c->exception($res->{error}, $res->{status} // 500);
+	}
+	return $c->render(json => $res);
+}
+
+async sub solution ($c) {
+	$c->render_later;
+
+	my $params = $c->req->params->to_hash;
+	return $c->exception('Missing required parameter: problemSource', 400)
+		unless defined $params->{problemSource} && length $params->{problemSource};
+	return $c->exception('Missing required parameter: problemSeed', 400)
+		unless defined $params->{problemSeed};
+
+	my $res = await WeBWorK::HintSolution::render_solution({
+		problemSource => $params->{problemSource},
+		problemSeed   => $params->{problemSeed},
+	});
+
+	if (ref($res) eq 'HASH' && $res->{error}) {
+		return $c->exception($res->{error}, $res->{status} // 500);
+	}
+	return $c->render(json => $res);
 }
 
 # Single helper for the renderer's answer-URL POSTs. Both lanes — legacy
