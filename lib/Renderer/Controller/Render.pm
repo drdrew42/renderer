@@ -462,8 +462,7 @@ async sub problem ($c) {
 	# problemJWT path) or submissionJWT envelope (challengeJWT path). The
 	# renderer is dumb here: a JWT-declared answerURL means "report back" —
 	# isInstructor is the orchestrator's concern, not ours.
-	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}
-		&& !$inputs_ref->{isLocked}) {
+	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}) {
 		# Emission gate (belt-and-suspenders). The primary guard fires earlier
 		# in parseRequest (WW3-R03) so ungrounded submits don't pay the PG-fork
 		# cost; this re-check survives as defense-in-depth in case some future

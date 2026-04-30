@@ -6,8 +6,9 @@ package Renderer::Lane::Session;
 #
 #   * Decode + verify_iss against $SITE_HOST under webworkJWTsecret.
 #   * Security-sensitive claims always win over raw params (prevents
-#     student-side claw-back of isLocked / isInstructor / answersRevealed
-#     / answersSubmitted, plus showCorrectAnswers backward-compat).
+#     student-side claw-back of isInstructor / answersRevealed /
+#     solutionsRevealed / answersSubmitted, plus showCorrectAnswers
+#     backward-compat).
 #   * For all other claims, raw params win (current responses vs prior).
 #   * problemJWT must come from session (deleted from raw params first).
 #   * Hoist embedded challenge_jwt → challengeJWT so the body-lane
@@ -51,7 +52,7 @@ sub apply_prefix ($c, $params) {
 	};
 
 	# Security-sensitive claims always win over raw params.
-	for (qw(isLocked isInstructor showCorrectAnswers answersRevealed solutionsRevealed answersSubmitted)) {
+	for (qw(isInstructor showCorrectAnswers answersRevealed solutionsRevealed answersSubmitted)) {
 		$params->{$_} = $claims->{$_} if exists $claims->{$_};
 	}
 

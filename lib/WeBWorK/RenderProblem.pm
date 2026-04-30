@@ -374,22 +374,22 @@ sub get_current_process_memory {
 
 # Generate sessionJWT (updated interaction state) and answerJWT (score report for LMS).
 #
-# The answerJWT is sent to the LMS answer URL on every student submission.
-# It contains: score, sessionJWT (opaque), isLocked, and platform.
+# The answerJWT is sent to the LMS answer URL on every student submission. It
+# carries: score, sessionJWT (opaque), per-render *Requested facts, cumulative
+# *Revealed history (inbound at submission time), and platform.
 #
-# Three states:
-#   1. Normal submit:  isLocked=0 on entry, not triggered. answerJWT sent, isLocked: 0.
-#   2. Locking submit: isLocked=0 on entry, triggered this request (100% or
-#      showCorrectAnswers). Final answerJWT sent with isLocked: 1.
-#   3. Already locked:  isLocked=1 on entry. No answerJWT generated or sent.
+# The renderer is dumb. It reports per-render facts and (for the legacy lane)
+# carries cumulative reveal history forward across renders. It does NOT
+# terminate sessions, lock submissions, or enforce scoring policy. The LMS
+# owns all decisions.
 #
 # Security contract for LMS integrators:
 #   The renderer is stateless. It cannot prevent session replay attacks.
 #   LMS implementations MUST:
 #   - Verify that (numCorrect + numIncorrect) is strictly increasing on each
 #     answerJWT received. A stale or equal sum indicates a replayed session.
-#   - Once an answerJWT arrives with isLocked=1, reject all further answerJWT
-#     updates for that student+problem. isLocked is irreversible.
+#   - Treat answersRevealed=1 / solutionsRevealed=1 as a signal that this
+#     submission was made post-reveal — apply scoring policy accordingly.
 #   - The answerJWT is a report, not a command. The LMS owns scoring policy.
 sub generateJWTs {
 	my $pg          = shift;
@@ -426,24 +426,11 @@ sub generateJWTs {
 	#       prior knowledge).
 	#   sessionJWT carries outbound cumulative (sticky-rolled with any new
 	#       ratchet from this render — propagates to next render).
-	#
-	# isLocked — hard ratchet, scheduled for retirement in WW3-R31. The two
-	#   triggers (LOCK_ON_PERFECT, LOCK_ON_SHOW_ANSWERS) and the dispatch-time
-	#   gate are kept here for one beat while R29 establishes the new
-	#   reporting model; R31 deletes them entirely.
 	my $reveal = _reveal_state($pg, $inputs_ref);
 
 	if (!$inputs_ref->{isInstructor}) {
-		# Cumulative outbound — what the next render's sessionJWT carries.
 		$sessionHash->{answersRevealed}   = $reveal->{answers_revealed_out}   if $reveal->{answers_revealed_out};
 		$sessionHash->{solutionsRevealed} = $reveal->{solutions_revealed_out} if $reveal->{solutions_revealed_out};
-
-		my $perfect_lock = ($ENV{LOCK_ON_PERFECT} // 1)
-			&& defined $pg->{problem_result}{score}
-			&& $pg->{problem_result}{score} >= 1;
-		my $reveal_lock = ($ENV{LOCK_ON_SHOW_ANSWERS} // 1)
-			&& $reveal->{answers_requested};
-		$sessionHash->{isLocked} = 1 if $reveal_lock || $perfect_lock;
 	}
 
 	# store the current answer/response state for each entry
@@ -465,31 +452,25 @@ sub generateJWTs {
 	# create the session JWT
 	my $sessionJWT = mint_jwt($ENV{webworkJWTsecret}, $sessionHash);
 
-	# Skip answerJWT when session was ALREADY locked on entry — this is a replay.
-	# But if the lock was just triggered THIS request, send the final answerJWT
-	# with isLocked=1 so the LMS knows to stop.
-	return ($sessionJWT, undef) if $inputs_ref->{isLocked};
-
-	# form answerJWT — this is the LMS-readable score report.
-	# isLocked signals the LMS to stop sending new interactions for this student+problem.
-	# Legacy answerJWT carries problemJWT and sessionJWT as siblings. The
-	# sessionJWT is signed with webworkJWTsecret (renderer-internal) so the
-	# recipient can't reach into it to recover the original problemJWT —
-	# we surface it directly here. The sessionJWT also retains problemJWT
-	# as an embedded claim so it remains self-contained as a restart token;
-	# the duplication is intentional for the legacy path.
+	# Form answerJWT — the LMS-readable score report. Legacy answerJWT carries
+	# problemJWT and sessionJWT as siblings. The sessionJWT is signed with
+	# webworkJWTsecret (renderer-internal) so the recipient can't reach into
+	# it to recover the original problemJWT — we surface it directly here.
+	# The sessionJWT also retains problemJWT as an embedded claim so it
+	# remains self-contained as a restart token; the duplication is
+	# intentional for the legacy path.
+	#
+	# answerJWT carries INBOUND cumulative reveal state (state-at-submission-
+	# time) and per-render *Requested facts. The OUTBOUND cumulative lives in
+	# the sessionJWT we just minted; the LMS reads inbound here so it knows
+	# whether the student's attempt this submission happened with prior
+	# reveal knowledge. (WW3-R29 dual-state model.)
 	my $responseHash = {
-		iss             => $ENV{SITE_HOST},
-		aud             => $inputs_ref->{JWTanswerURL},
-		score           => $scoreHash,
-		problemJWT      => $inputs_ref->{problemJWT},
-		sessionJWT      => $sessionJWT,
-		isLocked        => $sessionHash->{isLocked}        ? 1 : 0,
-		# answerJWT carries INBOUND cumulative (state-at-submission-time) and
-		# per-render *Requested facts. The OUTBOUND cumulative lives in the
-		# sessionJWT we just minted; the LMS reads inbound here so it knows
-		# whether the student's attempt this submission happened with prior
-		# reveal knowledge. (WW3-R29 dual-state model.)
+		iss                => $ENV{SITE_HOST},
+		aud                => $inputs_ref->{JWTanswerURL},
+		score              => $scoreHash,
+		problemJWT         => $inputs_ref->{problemJWT},
+		sessionJWT         => $sessionJWT,
 		answersRequested   => $reveal->{answers_requested},
 		solutionsRequested => $reveal->{solutions_requested},
 		answersRevealed    => $reveal->{answers_revealed_in},

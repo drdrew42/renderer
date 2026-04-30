@@ -177,6 +177,9 @@ subtest 'instructor gets no sessionJWT or answerJWT' => sub {
 # ─── Debug format ──────────────────────────────────────────────────────────
 
 subtest 'debug outputFormat returns diagnostic JSON' => sub {
+	# Post-R31: isLocked is gone entirely. The debug envelope still carries
+	# the top-level `lane` field (R27) and the resolved permissions; the
+	# lane-conditional isLocked block retired alongside the field.
 	$t->post_ok('/render-api' => form => {
 		problemSource      => $pg_source,
 		outputFormat       => 'debug',
@@ -192,12 +195,10 @@ subtest 'debug outputFormat returns diagnostic JSON' => sub {
 		->json_is('/permissions/showCorrectAnswers' => 1)
 		->json_is('/render_error' => 0)
 		->json_hasnt('/permissions/isLocked',
-			'isLocked omitted for ungrounded lane (Lane::Problem-only field, WW3-R27)');
+			'isLocked retired (WW3-R31) — never appears in debug output');
 };
 
-subtest 'debug outputFormat: problem lane carries isLocked' => sub {
-	# Lane::Problem is the legacy lane that uses isLocked as terminal state.
-	# Per WW3-R27, isLocked appears in debug output ONLY for this lane.
+subtest 'debug outputFormat: problem lane reports its lane identity' => sub {
 	my $jwt = upstream_problem_jwt();
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $jwt,
@@ -206,18 +207,20 @@ subtest 'debug outputFormat: problem lane carries isLocked' => sub {
 		problemSeed   => 1234,
 	})->status_is(200)
 	  ->json_is('/lane' => 'problem')
-	  ->json_has('/permissions/isLocked',
-		'isLocked surfaced for Lane::Problem');
+	  ->json_hasnt('/permissions/isLocked',
+		'isLocked retired across all lanes (WW3-R31)');
 };
 
-# ─── Session lock ──────────────────────────────────────────────────────────
+# ─── Reveal reporting (post-R31; renderer never terminates) ───────────────
 
-subtest 'session locks on 100% score (non-instructor)' => sub {
-	# Use an upstream-minted problemJWT carrying JWTanswerURL so the renderer
-	# mints session+answer JWTs (the persistence path).
+subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' => sub {
+	# Pre-R31 the renderer locked sessions on perfect score (LOCK_ON_PERFECT
+	# default on) and refused to emit subsequent answerJWTs. R31 retired that
+	# machinery — the renderer is dumb, the LMS decides scoring policy. A
+	# correct submit produces an answerJWT; a re-submit also produces an
+	# answerJWT. The LMS reads (numCorrect+numIncorrect) for replay defense.
 	my $problemJWT = upstream_problem_jwt();
 
-	# Submit the correct answer
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
@@ -227,47 +230,30 @@ subtest 'session locks on 100% score (non-instructor)' => sub {
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
-	my $submit_raw = $t->tx->res->json;
-	my $sessionJWT = $submit_raw->{tokens}{sessionJWT};
-	ok($sessionJWT, 'got sessionJWT after correct submission');
+	my $first = $t->tx->res->json;
+	ok($first->{tokens}{sessionJWT}, 'sessionJWT minted after correct submission');
+	ok($first->{tokens}{answerJWT},  'answerJWT minted after correct submission');
 
-	# Decode the sessionJWT to verify isLocked
-	my $session_claims = decode_jwt(
-		token => $sessionJWT,
-		key   => $ENV{webworkJWTsecret},
-	);
-	is($session_claims->{isLocked}, 1, 'session is locked after 100% score');
-
-	# Verify answerJWT was still generated (this is the locking submit)
-	my $answerJWT = $submit_raw->{tokens}{answerJWT};
-	ok($answerJWT, 'answerJWT present on the locking submit');
-
-	# Decode answerJWT to verify isLocked is exposed
-	my $answer_claims = decode_jwt(
-		token => $answerJWT,
-		key   => $ENV{problemJWTsecret},
-	);
-	is($answer_claims->{isLocked}, 1, 'answerJWT contains isLocked=1');
-
-	# Now submit again with the locked session — should get no answerJWT
+	# Re-submit with the post-earn sessionJWT — renderer keeps emitting.
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
-		sessionJWT    => $sessionJWT,
+		sessionJWT    => $first->{tokens}{sessionJWT},
 		outputFormat  => 'debug',
 		problemSeed   => 1234,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
-	my $locked_raw = $t->tx->res->json;
-	ok(!$locked_raw->{tokens}{answerJWT}, 'no answerJWT from already-locked session');
+	my $second = $t->tx->res->json;
+	ok($second->{tokens}{answerJWT},
+		'subsequent submit still produces answerJWT (renderer never terminates post-R31)');
 };
 
-subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
+subtest 'showCorrectAnswers: answersRevealed ratchets, renderer keeps emitting' => sub {
 	my $problemJWT = upstream_problem_jwt();
 
-	# Submit a wrong answer but request correct answers (implies solutions)
+	# Wrong answer + reveal → peek-before-earn → ratchet fires
 	$t->post_ok('/render-api' => form => {
 		problemJWT         => $problemJWT,
 		problemSource      => $pg_source,
@@ -280,16 +266,12 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 
 	my $submit = $t->tx->res->json;
 	my $sessionJWT = $submit->{tokens}{sessionJWT};
-	ok($sessionJWT, 'got sessionJWT after showCorrectAnswers request');
+	my $session_claims = decode_jwt(token => $sessionJWT, key => $ENV{webworkJWTsecret});
+	is($session_claims->{answersRevealed}, 1,
+		'sessionJWT carries the answersRevealed ratchet (peek-before-earn fired)');
 
-	my $claims = decode_jwt(
-		token => $sessionJWT,
-		key   => $ENV{webworkJWTsecret},
-	);
-	is($claims->{isLocked},        1, 'session locked by showCorrectAnswers');
-	is($claims->{answersRevealed}, 1, 'reveal records the answersRevealed ratchet');
-
-	# Subsequent request should not produce an answerJWT
+	# Subsequent submit — renderer keeps emitting; the answerJWT carries the
+	# inbound cumulative so the LMS sees this submission was post-reveal.
 	$t->post_ok('/render-api' => form => {
 		problemJWT    => $problemJWT,
 		problemSource => $pg_source,
@@ -300,67 +282,12 @@ subtest 'session locks on showCorrectAnswers (non-instructor)' => sub {
 		AnSwEr0001    => '42',
 	})->status_is(200);
 
-	my $locked = $t->tx->res->json;
-	ok(!$locked->{tokens}{answerJWT}, 'no answerJWT after showCorrectAnswers lock');
-};
-
-subtest 'showSolutions alone does NOT lock session (non-instructor)' => sub {
-	my $problemJWT = upstream_problem_jwt();
-
-	# Submit wrong answer with showSolutions but NOT showCorrectAnswers
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $problemJWT,
-		problemSource => $pg_source,
-		outputFormat  => 'debug',
-		problemSeed   => 8888,
-		submitAnswers => 1,
-		showSolutions => 1,
-		AnSwEr0001    => '41',
-	})->status_is(200);
-
-	my $submit = $t->tx->res->json;
-	my $sessionJWT = $submit->{tokens}{sessionJWT};
-	ok($sessionJWT, 'got sessionJWT');
-
-	my $claims = decode_jwt(
-		token => $sessionJWT,
-		key   => $ENV{webworkJWTsecret},
-	);
-	ok(!$claims->{isLocked}, 'session NOT locked by showSolutions alone');
-};
-
-# ─── Raw param injection blocked ──────────────────────────────────────────
-
-subtest 'raw isLocked=0 cannot override locked sessionJWT' => sub {
-	my $problemJWT = upstream_problem_jwt();
-
-	# Submit correct answer to lock
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $problemJWT,
-		problemSource => $pg_source,
-		outputFormat  => 'debug',
-		problemSeed   => 5678,
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	})->status_is(200);
-
-	my $locked_session = $t->tx->res->json->{tokens}{sessionJWT};
-	ok($locked_session, 'got locked sessionJWT');
-
-	# Try to bypass with raw isLocked=0
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $problemJWT,
-		problemSource => $pg_source,
-		sessionJWT    => $locked_session,
-		outputFormat  => 'debug',
-		problemSeed   => 5678,
-		submitAnswers => 1,
-		isLocked      => 0,
-		AnSwEr0001    => '42',
-	})->status_is(200);
-
-	my $bypass_raw = $t->tx->res->json;
-	ok(!$bypass_raw->{tokens}{answerJWT}, 'raw isLocked=0 did NOT bypass locked session');
+	my $follow_up = $t->tx->res->json;
+	my $answer = $follow_up->{tokens}{answerJWT};
+	ok($answer, 'follow-up submit still produces answerJWT (no terminal state)');
+	my $answer_claims = decode_jwt(token => $answer, key => $ENV{problemJWTsecret});
+	is($answer_claims->{answersRevealed}, 1,
+		'answerJWT carries inbound cumulative — LMS sees the submission was post-reveal');
 };
 
 done_testing();
