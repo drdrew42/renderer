@@ -19,6 +19,42 @@ use Renderer::Constants   qw( PLATFORM_NAME );
 use Renderer::Util::JWT   qw( mint_jwt );
 use Renderer::Permissions qw( resolve_permissions );
 
+# Helper: compute the four reveal-reporting facts for the current render.
+# Returns a hashref with:
+#   answers_requested   — per-render, effective showCorrectAnswers
+#   solutions_requested — per-render, effective showSolutions
+#   answers_revealed_in   — inbound cumulative (state-at-submission-time)
+#   solutions_revealed_in — inbound cumulative
+#   answers_revealed_out  — outbound cumulative (sticky one-way: prior OR newly ratcheted)
+#   solutions_revealed_out — outbound cumulative
+# Per WW3-R29: the ratchet only flips 0→1 when *_requested fires AND post-render
+# is still incomplete (recorded_score < 1). Earned-then-peek doesn't ratchet.
+sub _reveal_state {
+	my ($pg, $inputs_ref) = @_;
+	my $perms = resolve_permissions($inputs_ref);
+	my $answers_requested   = $perms->{showCorrectAnswers};
+	my $solutions_requested = $perms->{showSolutions};
+
+	my $answers_revealed_in   = $inputs_ref->{answersRevealed}   ? 1 : 0;
+	my $solutions_revealed_in = $inputs_ref->{solutionsRevealed} ? 1 : 0;
+
+	my $earned = ($pg->{problem_state}{recorded_score} // 0) >= 1;
+
+	my $answers_revealed_out =
+		($answers_revealed_in || ($answers_requested && !$earned)) ? 1 : 0;
+	my $solutions_revealed_out =
+		($solutions_revealed_in || ($solutions_requested && !$earned)) ? 1 : 0;
+
+	return {
+		answers_requested      => $answers_requested,
+		solutions_requested    => $solutions_requested,
+		answers_revealed_in    => $answers_revealed_in,
+		solutions_revealed_in  => $solutions_revealed_in,
+		answers_revealed_out   => $answers_revealed_out,
+		solutions_revealed_out => $solutions_revealed_out,
+	};
+}
+
 ##################################################
 # create log files :: expendable
 ##################################################
@@ -371,42 +407,42 @@ sub generateJWTs {
 		result  => $pg->{problem_result}{score},
 		answers => unbless($pg->{answers}),
 	};
-	# Two ratchets, set independently (non-instructor only):
+	# Reveal reporting (WW3-R29 dual-state model):
 	#
-	#   answersRevealed — soft ratchet. Once the student has been shown the
-	#       correct answers (via showCorrectAnswers), this flag persists in
-	#       session state. The answerURL recipient sees it (signal: "answers
-	#       were revealed in the course of producing this response"). On
-	#       subsequent renders, parseRequest hoists it back to the
-	#       showCorrectAnswers directive so the iframe keeps showing
-	#       answers. Always set when showCorrectAnswers is requested — the
-	#       fact of reveal is independent of LOCK policy.
+	#   *Requested — per-render fact: this render exposed correct answers /
+	#       solutions to the student. Effective value (from resolve_permissions)
+	#       so it reflects what was ACTUALLY rendered, not just what the caller
+	#       asked.
 	#
-	#   isLocked — hard ratchet. Stops recording further interaction: no
-	#       new answerJWTs, no session updates. Whether a locked session
-	#       can be "reused" to continue interacting is the LMS's decision,
-	#       not the renderer's. Triggered by either of two configurable
-	#       conditions:
-	#         LOCK_ON_PERFECT      = 1 (default) — score == 1 → lock
-	#         LOCK_ON_SHOW_ANSWERS = 1 (default) — showCorrectAnswers → lock
-	#       Set 0 to suppress that trigger; the answersRevealed ratchet
-	#       still fires, just without the harder consequence.
+	#   *Revealed — cumulative sticky one-way ratchet. The 0→1 flip happens
+	#       only when *Requested fires AND post-render recorded_score < 1
+	#       (the student saw the canonical answer/solution while it could
+	#       still affect their score). Earned-then-peek doesn't ratchet —
+	#       no concern if the student already got there on their own.
+	#
+	# Temporal correctness:
+	#   answerJWT carries inbound cumulative (state-at-submission-time —
+	#       the student's attempt this submission was made with this much
+	#       prior knowledge).
+	#   sessionJWT carries outbound cumulative (sticky-rolled with any new
+	#       ratchet from this render — propagates to next render).
+	#
+	# isLocked — hard ratchet, scheduled for retirement in WW3-R31. The two
+	#   triggers (LOCK_ON_PERFECT, LOCK_ON_SHOW_ANSWERS) and the dispatch-time
+	#   gate are kept here for one beat while R29 establishes the new
+	#   reporting model; R31 deletes them entirely.
+	my $reveal = _reveal_state($pg, $inputs_ref);
+
 	if (!$inputs_ref->{isInstructor}) {
-		# answersRevealed is a sticky ratchet — once set, it carries across
-		# renders. The trigger is either the current request (reveal-just-
-		# happened) or the inbound sessionJWT claim (reveal happened on a
-		# prior render). Pre-WW3-R18 the parseRequest hoist secretly kept
-		# this sticky by forcing showCorrectAnswers=1 from the session
-		# ratchet — that mechanism is gone now, so the propagation has to
-		# happen explicitly here. See [[Reveal Persistence Model]].
-		$sessionHash->{answersRevealed} = 1
-			if $inputs_ref->{showCorrectAnswers} || $inputs_ref->{answersRevealed};
+		# Cumulative outbound — what the next render's sessionJWT carries.
+		$sessionHash->{answersRevealed}   = $reveal->{answers_revealed_out}   if $reveal->{answers_revealed_out};
+		$sessionHash->{solutionsRevealed} = $reveal->{solutions_revealed_out} if $reveal->{solutions_revealed_out};
 
 		my $perfect_lock = ($ENV{LOCK_ON_PERFECT} // 1)
 			&& defined $pg->{problem_result}{score}
 			&& $pg->{problem_result}{score} >= 1;
 		my $reveal_lock = ($ENV{LOCK_ON_SHOW_ANSWERS} // 1)
-			&& $inputs_ref->{showCorrectAnswers};
+			&& $reveal->{answers_requested};
 		$sessionHash->{isLocked} = 1 if $reveal_lock || $perfect_lock;
 	}
 
@@ -449,8 +485,16 @@ sub generateJWTs {
 		problemJWT      => $inputs_ref->{problemJWT},
 		sessionJWT      => $sessionJWT,
 		isLocked        => $sessionHash->{isLocked}        ? 1 : 0,
-		answersRevealed => $sessionHash->{answersRevealed} ? 1 : 0,
-		platform        => PLATFORM_NAME,
+		# answerJWT carries INBOUND cumulative (state-at-submission-time) and
+		# per-render *Requested facts. The OUTBOUND cumulative lives in the
+		# sessionJWT we just minted; the LMS reads inbound here so it knows
+		# whether the student's attempt this submission happened with prior
+		# reveal knowledge. (WW3-R29 dual-state model.)
+		answersRequested   => $reveal->{answers_requested},
+		solutionsRequested => $reveal->{solutions_requested},
+		answersRevealed    => $reveal->{answers_revealed_in},
+		solutionsRevealed  => $reveal->{solutions_revealed_in},
+		platform           => PLATFORM_NAME,
 	};
 
 	my $answerJWT = mint_jwt($ENV{problemJWTsecret}, $responseHash);
@@ -562,6 +606,12 @@ sub generateSubmissionJWT {
 	my $submitted_at = sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ',
 		$t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
 
+	# WW3-R29: per-render reveal facts in the modern lane. Only *_requested
+	# (per-render); cumulative *_revealed lives in the orchestrator's chain
+	# entries, queried by mode atoms when policy needs history. play_sessionJWT
+	# carries nothing reveal-related — navigation state only.
+	my $reveal = _reveal_state($pg, $inputs_ref);
+
 	my $payload = {
 		iss => $ENV{SITE_HOST},
 		aud => $ENV{SITE_HOST},
@@ -577,6 +627,12 @@ sub generateSubmissionJWT {
 		submitted_answers => \%submitted_answers,
 		part_scores       => \@part_scores,
 		score             => ($pg->{problem_result}{score} // 0) + 0,
+
+		# Per-render reveal facts (snake_case to match existing submissionJWT
+		# field convention). The orchestrator records to chain entries; mode
+		# atoms read history from chain when needed.
+		answers_requested   => $reveal->{answers_requested},
+		solutions_requested => $reveal->{solutions_requested},
 
 		submitted_at => $submitted_at,
 	};

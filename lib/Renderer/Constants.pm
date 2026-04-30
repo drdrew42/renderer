@@ -22,6 +22,10 @@ use constant SENSITIVE_PARAMS => qw(
 	numCorrect
 	numIncorrect
 	parent_origin
+	answersRequested
+	solutionsRequested
+	answersRevealed
+	solutionsRevealed
 );
 
 # answerJWT response envelope defaults (legacy lane sendAnswerJWT and

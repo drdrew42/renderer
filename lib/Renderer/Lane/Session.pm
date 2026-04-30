@@ -13,11 +13,11 @@ package Renderer::Lane::Session;
 #   * Hoist embedded challenge_jwt → challengeJWT so the body-lane
 #     dispatcher recognizes form-submit re-renders as challengeJWT-lane.
 #
-# answersRevealed propagates as session state (visible to LMS via
-# answerJWT, sticky across renders) but does NOT auto-fire the
-# showCorrectAnswers directive on subsequent renders. Cross-render
-# directive-persistence is a caller concern. See [[Reveal Persistence
-# Model]] / WW3-R18.
+# answersRevealed / solutionsRevealed propagate as session state (visible
+# to LMS via answerJWT, sticky across renders) but do NOT auto-fire any
+# directive on subsequent renders. Cross-render directive-persistence is
+# a caller concern. The cumulative ratchet semantics live in
+# WeBWorK::RenderProblem::generateJWTs (WW3-R29 dual-state model).
 
 use strict;
 use warnings;
@@ -51,7 +51,7 @@ sub apply_prefix ($c, $params) {
 	};
 
 	# Security-sensitive claims always win over raw params.
-	for (qw(isLocked isInstructor showCorrectAnswers answersRevealed answersSubmitted)) {
+	for (qw(isLocked isInstructor showCorrectAnswers answersRevealed solutionsRevealed answersSubmitted)) {
 		$params->{$_} = $claims->{$_} if exists $claims->{$_};
 	}
 
