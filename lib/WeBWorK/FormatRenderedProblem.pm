@@ -87,7 +87,6 @@ sub formatRenderedProblem {
 	my @third_party_js = map { [ getAssetURL($formLanguage, $_->[0]), $_->[1] ] } (
 		[ 'node_modules/jquery/dist/jquery.min.js',                            {} ],
 		[ 'node_modules/jquery-ui-dist/jquery-ui.min.js',                      {} ],
-		[ 'node_modules/iframe-resizer/js/iframeResizer.contentWindow.min.js', {} ],
 		[ "js/apps/MathJaxConfig/mathjax-config.js",                { defer => undef } ],
 		[ 'node_modules/mathjax/es5/tex-svg.js',                    { defer => undef, id => 'MathJax-script' } ],
 		[ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js', { defer => undef } ],

@@ -239,4 +239,30 @@
 			}
 		});
 	}
+
+	// Resize: emit webwork.lifecycle.resize when body height settles. Replaces
+	// the iframe-resizer library (WW3-R23). MathJax renders math asynchronously
+	// after page load — body height grows in stages — so debounce ~50ms to ship
+	// only the settled value rather than every intermediate paint.
+	if (typeof ResizeObserver !== 'undefined') {
+		let resizeTimer = null;
+		let lastHeight  = -1;
+		const observer  = new ResizeObserver(() => {
+			if (resizeTimer) clearTimeout(resizeTimer);
+			resizeTimer = setTimeout(() => {
+				const height = document.body.scrollHeight;
+				if (height === lastHeight) return;
+				lastHeight = height;
+				window.parent.postMessage(
+					JSON.stringify({
+						type: 'webwork.lifecycle.resize',
+						frame: frame,
+						height: height
+					}),
+					parentOrigin
+				);
+			}, 50);
+		});
+		observer.observe(document.body);
+	}
 })();

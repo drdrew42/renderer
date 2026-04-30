@@ -142,6 +142,21 @@ subtest 'body has no onLoad postMessage broadcast' => sub {
 
 # ─── parent_origin coexists with trust_lane ────────────────────────────────
 
+subtest 'iframe-resizer asset is no longer included' => sub {
+	# WW3-R23: iframe-resizer dropped in favor of webwork.lifecycle.resize.
+	my $jwt = make_problem_jwt(
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+	);
+
+	$t->post_ok('/render-api' => form => {
+		problemJWT   => $jwt,
+		outputFormat => 'default',
+	})->status_is(200)
+	  ->content_unlike(qr/iframeResizer\.contentWindow/,
+		'iframe-resizer asset removed from third_party_js (replaced by webwork.lifecycle.resize)');
+};
+
 subtest 'parent_origin + trust_lane both render on grounded lane' => sub {
 	my $jwt = make_problem_jwt(
 		problemSource => $pg_source,
