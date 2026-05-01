@@ -23,6 +23,7 @@ use lib "$main::libname";
 print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Mojo::JSON;
+use Mojo::URL;
 use Renderer::Identity;
 use Renderer::OPLClient;
 use Renderer::Telemetry;
@@ -32,8 +33,20 @@ use Renderer::Version;
 use WeBWorK::FormatRenderedProblem;
 
 sub startup ($self) {
+	_configure_app($self);
+	_configure_urls($self);
+	_configure_cors($self);
+	_configure_logging($self);
+	_register_helpers($self);
+	_register_request_hooks($self);
+	_init_services($self);
+	_register_routes($self);
+}
 
-	# Merge environment variables with config file
+# Config plugin load, JWT secrets, baked-in third-party asset defaults, and
+# the placeholder-secrets guard. Anything that has to be in place before
+# URL/log/CORS/route configuration runs.
+sub _configure_app ($self) {
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
 	$self->secrets($self->config('secrets'));
@@ -75,6 +88,16 @@ sub startup ($self) {
 		}
 	}
 
+	# Increase max header line size from 8KB to 64KB.
+	# Browsers on shared wildcard domains send large Cookie headers
+	# from sibling services, which silently truncates the request.
+	$ENV{MOJO_MAX_LINE_SIZE} = 65536;
+}
+
+# RENDERER_URL → SITE_HOST + baseURL + basehref + formURL, with legacy
+# fallback from SITE_HOST + baseURL pair. Hypnotoad worker tuning lives here
+# too because it's also configuration-driven and shapes the runtime shell.
+sub _configure_urls ($self) {
 	# --- URL configuration ---
 	# RENDERER_URL: the public URL where this renderer is reachable.
 	#   e.g. "https://render.lan.drdrew.us" or "https://cms.example.com/renderer"
@@ -120,49 +143,48 @@ sub startup ($self) {
 
 	$self->log->info("Renderer is based at $main::basehref");
 	$self->log->info("Problem attempts will be sent to $main::formURL");
+}
 
-	# Increase max header line size from 8KB to 64KB.
-	# Browsers on shared wildcard domains send large Cookie headers
-	# from sibling services, which silently truncates the request.
-	$ENV{MOJO_MAX_LINE_SIZE} = 65536;
-
-	# CORS: allow requests from known OPL origins (learned during registration)
-	# and optionally from a static CORS_ORIGIN config for other use cases.
-	{
-		my $static_origin = $self->config('CORS_ORIGIN');
-		if ($static_origin) {
-			die "CORS_ORIGIN ($static_origin) must be an absolute URL or '*'"
-				unless ($static_origin eq '*' || $static_origin =~ /^https?:\/\//);
-			$self->log->warn("Using '*' for CORS_ORIGIN is insecure")
-				if ($static_origin eq '*');
-		}
-
-		$self->hook(
-			before_dispatch => sub {
-				my $c = shift;
-				my $origin = $c->req->headers->origin // return;
-
-				my $allowed = $static_origin && ($static_origin eq '*' || $static_origin eq $origin)
-					? $static_origin
-					: Renderer::Registration::is_known_origin($origin)
-						? $origin
-						: undef;
-				return unless $allowed;
-
-				$c->res->headers->header('Access-Control-Allow-Origin'  => $allowed);
-				$c->res->headers->header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
-				$c->res->headers->header('Access-Control-Allow-Headers' => 'Content-Type');
-
-				# Short-circuit preflight requests
-				if ($c->req->method eq 'OPTIONS') {
-					$c->res->headers->header('Access-Control-Max-Age' => '86400');
-					$c->rendered(204);
-				}
-			}
-		);
+# CORS allow-list: registered OPL origins (TOFU-learned) plus an optional
+# static CORS_ORIGIN config. Preflight requests short-circuit to 204.
+sub _configure_cors ($self) {
+	my $static_origin = $self->config('CORS_ORIGIN');
+	if ($static_origin) {
+		die "CORS_ORIGIN ($static_origin) must be an absolute URL or '*'"
+			unless ($static_origin eq '*' || $static_origin =~ /^https?:\/\//);
+		$self->log->warn("Using '*' for CORS_ORIGIN is insecure")
+			if ($static_origin eq '*');
 	}
 
-	# Logging — Hypnotoad sets MOJO_MODE=production implicitly.
+	$self->hook(
+		before_dispatch => sub {
+			my $c = shift;
+			my $origin = $c->req->headers->origin // return;
+
+			my $allowed = $static_origin && ($static_origin eq '*' || $static_origin eq $origin)
+				? $static_origin
+				: Renderer::Registration::is_known_origin($origin)
+					? $origin
+					: undef;
+			return unless $allowed;
+
+			$c->res->headers->header('Access-Control-Allow-Origin'  => $allowed);
+			$c->res->headers->header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
+			$c->res->headers->header('Access-Control-Allow-Headers' => 'Content-Type');
+
+			# Short-circuit preflight requests
+			if ($c->req->method eq 'OPTIONS') {
+				$c->res->headers->header('Access-Control-Max-Age' => '86400');
+				$c->rendered(204);
+			}
+		}
+	);
+}
+
+# Log target (file vs stderr), structured-JSON formatter, and the optional
+# interaction log (one CSV-ish line per submit/preview).
+sub _configure_logging ($self) {
+	# Hypnotoad sets MOJO_MODE=production implicitly.
 	# In containers, LOG_TO_STDERR=1 keeps logs on stderr for Docker/Promtail/CloudWatch.
 	# Without LOG_TO_STDERR, production mode logs to file.
 	my $level = $ENV{MOJO_LOG_LEVEL} || 'warn';
@@ -206,7 +228,12 @@ sub startup ($self) {
 		});
 		$self->helper(logAttempt => sub { shift; $resultsLog->info(@_); });
 	}
+}
 
+# App-level helpers + content-cache sweep + OPL HTTP client construction.
+# Order matters: cache sweep must run before any request can reach the cache,
+# OPL client must exist before any helper that depends on it.
+sub _register_helpers ($self) {
 	# Content cache sweep on startup — evict stale problem directories.
 	# Controlled by CACHE_TTL_HOURS env var (default 168 = 1 week).
 	if ($ENV{CONTENT_ADDRESSED}) {
@@ -216,25 +243,25 @@ sub startup ($self) {
 	}
 
 	# OPL HTTP client (single instance per app; closes over $self->ua at init time).
-	{
-		my $client = Renderer::OPLClient->new(
-			ua       => $self->ua,
-			base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
-			log      => $self->log,
-		);
-		$self->helper(opl_client => sub { $client });
-	}
+	my $client = Renderer::OPLClient->new(
+		ua       => $self->ua,
+		base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
+		log      => $self->log,
+	);
+	$self->helper(opl_client => sub { $client });
 
-	# Helpers
-	$self->helper(format          => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
-	$self->helper(parseRequest    => sub { Renderer::Render::ParseRequest::dispatch(@_) });
-	$self->helper(croak           => sub { Renderer::Controller::Render::croak(@_) });
-	$self->helper(logID           => sub { shift->req->request_id });
-	$self->helper(exception       => sub { Renderer::Controller::Render::exception(@_) });
+	$self->helper(format       => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
+	$self->helper(parseRequest => sub { Renderer::Render::ParseRequest::dispatch(@_) });
+	$self->helper(croak        => sub { Renderer::Controller::Render::croak(@_) });
+	$self->helper(logID        => sub { shift->req->request_id });
+	$self->helper(exception    => sub { Renderer::Controller::Render::exception(@_) });
+}
 
-	# Structured request logging — one JSON line per request
+# Per-request structured log line — one JSON entry per non-/health request,
+# emitted in after_dispatch with status, duration, request_id, and renderer-
+# specific fields (cache_status, pg_hash) when stashed.
+sub _register_request_hooks ($self) {
 	require Time::HiRes;
-	require Mojo::JSON;
 	$self->hook(before_dispatch => sub ($c) {
 		$c->stash('_request_start' => Time::HiRes::time());
 	});
@@ -257,10 +284,30 @@ sub startup ($self) {
 		$entry{pg_hash}      = $c->stash('pg_hash')       if $c->stash('pg_hash');
 		$self->log->info(Mojo::JSON::encode_json(\%entry));
 	});
+}
 
-	# Routes
-	# baseURL sets the root at which the renderer is listening,
-	# and is used in Environment for pg_root_url
+# Identity (Ed25519 keypair lifecycle), telemetry batch reporter, and explicit
+# OPL registration with callback URL. Order is independent — none of these
+# dispatch through the routing layer at startup time.
+sub _init_services ($self) {
+	# Ed25519 identity for telemetry signing (persisted in private/.identity/)
+	if (Renderer::Identity::init()) {
+		$self->log->info("Identity: fingerprint " . Renderer::Identity::fingerprint());
+	} else {
+		$self->log->warn("Identity: no keypair — telemetry will be unsigned");
+	}
+
+	# Telemetry batch reporter (fires only when OPL_API_URL is set)
+	Renderer::Telemetry::init($self);
+
+	# Explicit OPL registration with callback URL (LT-016)
+	Renderer::Registration::init($self);
+}
+
+# Route table. baseURL is the optional path prefix at which the renderer is
+# mounted (used in Environment for pg_root_url). Specific routes register
+# first; static catch-alls last so they don't shadow real endpoints.
+sub _register_routes ($self) {
 	my $r = $self->routes->under($ENV{baseURL});
 
 	$r->any('/render-api')->to('render#problem');
@@ -282,20 +329,7 @@ sub startup ($self) {
 	# Enable problem editor & OPL browser -- NOT recommended for production environment!
 	supplementalRoutes($r) if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE'));
 
-	# Ed25519 identity for telemetry signing (persisted in private/.identity/)
-	if (Renderer::Identity::init()) {
-		$self->log->info("Identity: fingerprint " . Renderer::Identity::fingerprint());
-	} else {
-		$self->log->warn("Identity: no keypair — telemetry will be unsigned");
-	}
-
-	# Telemetry batch reporter (fires only when OPL_API_URL is set)
-	Renderer::Telemetry::init($self);
-
-	# Explicit OPL registration with callback URL (LT-016)
-	Renderer::Registration::init($self);
-
-	# Static file routes
+	# Static file routes — must come last so the catch-all doesn't shadow real endpoints.
 	$r->any('/pg_files/CAPA_Graphics/*static')->to('StaticFiles#CAPA_graphics_file');
 	$r->any('/pg_files/tmp/*static')->to('StaticFiles#temp_file');
 	$r->any('/pg_files/*static')->to('StaticFiles#pg_file');
