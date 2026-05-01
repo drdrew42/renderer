@@ -2,6 +2,12 @@ use Mojo::Base -strict;
 use Test::More;
 use Test::Mojo;
 
+# Subtest names contain Unicode (→, ──) — encode TAP output as UTF-8 so
+# Test2::Formatter::TAP doesn't emit "Wide character in print" warnings.
+binmode Test::More->builder->output,         ':encoding(UTF-8)';
+binmode Test::More->builder->failure_output, ':encoding(UTF-8)';
+binmode Test::More->builder->todo_output,    ':encoding(UTF-8)';
+
 use lib 't/lib';
 use TestHelper qw(temp_render_root);
 

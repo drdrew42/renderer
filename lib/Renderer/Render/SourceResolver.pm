@@ -29,18 +29,15 @@ our @EXPORT_OK = qw(
 );
 
 # Mutates $inputs_ref to populate problemSource / sourceFilePath / pg_hash
-# from whichever entry shape was supplied. Returns 1 on success, undef on
-# failure (after $c->exception has rendered the error response). Caller
-# bails with `return unless $resolved` to avoid a double-render.
+# from whichever entry shape was supplied. Returns 1 on success or undef on
+# failure (after $c->exception has rendered the error). Caller bails with
+# `return unless $resolved`.
 async sub resolve_source ($c, $inputs_ref) {
 
 	if ($inputs_ref->{problemSourceURL}) {
 		my ($source, $pg_hash)
 			= await fetch_remote_source_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash});
-		unless ($source) {
-			$c->exception('Failed to retrieve problem source.', 500);
-			return undef;
-		}
+		return $c->exception('Failed to retrieve problem source.', 500) unless $source;
 
 		$inputs_ref->{problemSource} = $source;
 		if ($pg_hash) {
@@ -67,10 +64,8 @@ async sub resolve_source ($c, $inputs_ref) {
 
 		my ($source, $pg_hash)
 			= await resolve_source_file_path_p($c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash});
-		unless ($source && $pg_hash) {
-			$c->exception("Cannot resolve sourceFilePath: $inputs_ref->{sourceFilePath}", 404);
-			return undef;
-		}
+		return $c->exception("Cannot resolve sourceFilePath: $inputs_ref->{sourceFilePath}", 404)
+			unless $source && $pg_hash;
 
 		$inputs_ref->{problemSource}  = $source;
 		$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);

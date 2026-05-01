@@ -221,7 +221,7 @@ sub exception ($c, $message, $status, @extra) {
 	my $id = $c->logID;
 	$message = "[$id] " . (ref $message eq 'ARRAY' ? join "\n", @$message : $message);
 	$c->log->error("($status) EXCEPTION: $message");
-	return $c->respond_to(
+	$c->respond_to(
 		json => {
 			json => {
 				message => $message,
@@ -232,6 +232,11 @@ sub exception ($c, $message, $status, @extra) {
 		},
 		html => { template => 'exception', message => $message, status => $status }
 	);
+	# Return undef so `return $c->exception(...)` from a helper/lane causes
+	# the caller's `or return` / `return unless $result` to bail. Without this,
+	# respond_to's truthy return propagates up and the action continues past
+	# the rendered exception, double-rendering. See WW3-R40.
+	return undef;
 }
 
 sub croak ($c, $exception, $depth) {
