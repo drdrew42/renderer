@@ -18,6 +18,7 @@ lib/
 │   ├── Constants.pm                    # SENSITIVE_PARAMS, ANSWER_RESPONSE_*, shared string constants
 │   ├── ContentCache.pm                 # Content-addressed caching: pg_hash → local disk, OPL fetch on miss
 │   ├── Identity.pm                     # Ed25519 keypair: env vars → disk → generate. Fleet identity via Secrets Manager.
+│   ├── Log.pm                          # Structured-JSON log formatter factory + iso8601_now helper (R38)
 │   ├── OPLAuthed.pm                    # Shared verify-and-parse for OPL-signed POSTs (Callback + Audit), R34
 │   ├── OPLClient.pm                    # OPL HTTP contract: URL templates, conditional GET, redirect canonicalization
 │   ├── Permissions.pm                  # resolve_permissions(): single decision point for show* booleans

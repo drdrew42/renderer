@@ -10,6 +10,7 @@ use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha256_hex);
 use Encode qw(encode);
 use Renderer::Identity;
+use Renderer::Log qw(iso8601_now);
 
 # Process-global event buffer. Hypnotoad workers rotate every ~100-200 requests,
 # so this never grows unbounded. Events are lost on worker death — that's fine,
@@ -85,7 +86,7 @@ sub record_render {
 		render_ms    => $args{render_ms}    // 0,
 		pg_version   => $ENV{PG_VERSION}    // 'unknown',
 		cache_status => $args{cache_status} // 'unknown',
-		timestamp    => _iso8601(),
+		timestamp    => iso8601_now(),
 	);
 
 	# Seed diversity: only on first-render, successful, student requests
@@ -115,7 +116,7 @@ sub record_interaction {
 		score      => $args{score},
 		attempt    => $args{attempt}    // 1,
 		pg_version => $ENV{PG_VERSION}  // 'unknown',
-		timestamp  => _iso8601(),
+		timestamp  => iso8601_now(),
 	};
 	_maybe_flush();
 }
@@ -218,12 +219,6 @@ sub normalize_for_hash {
 
 sub _maybe_flush {
 	flush() if $APP && pending() >= $FLUSH_THRESHOLD;
-}
-
-sub _iso8601 {
-	my @t = gmtime(time);
-	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ',
-		$t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
 }
 
 1;

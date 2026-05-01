@@ -24,6 +24,7 @@ print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Mojo::JSON;
 use Mojo::URL;
+use Renderer::Log;
 use Renderer::Identity;
 use Renderer::OPLClient;
 use Renderer::Telemetry;
@@ -199,18 +200,8 @@ sub _configure_logging ($self) {
 
 	# Structured JSON logging for Loki/CloudWatch Insights queryability.
 	# LOG_FORMAT=json enables; plaintext otherwise (Mojo default).
-	if ($ENV{LOG_FORMAT} && $ENV{LOG_FORMAT} eq 'json') {
-		$self->log->format(sub {
-			my ($time, $level, @lines) = @_;
-			Mojo::JSON::encode_json({
-				timestamp => Mojo::Date->new($time)->to_datetime,
-				level     => $level,
-				pid       => $$,
-				service   => 'renderer',
-				message   => join(' ', @lines),
-			}) . "\n";
-		});
-	}
+	# App-level log carries no `component` field (module-level loggers do).
+	Renderer::Log::apply_json_format($self->log);
 
 	$self->log->info("Renderer logging to "
 		. ($ENV{LOG_TO_STDERR} ? 'stderr' : 'file')

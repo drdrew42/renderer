@@ -6,28 +6,15 @@ use warnings;
 use Digest::SHA qw(sha256_hex);
 use File::Path  qw(make_path remove_tree);
 use File::Spec;
-use Mojo::Log;
 use Mojo::JSON qw(encode_json decode_json);
-use Mojo::Date;
+
+use Renderer::Log;
 
 # Base directory for all content-addressed storage
 my $PRIVATE = "$ENV{RENDER_ROOT}/private";
 
 # Module-level logger — respects LOG_FORMAT for structured output
-my $log = Mojo::Log->new;
-if ($ENV{LOG_FORMAT} && $ENV{LOG_FORMAT} eq 'json') {
-	$log->format(sub {
-		my ($time, $level, @lines) = @_;
-		encode_json({
-			timestamp => Mojo::Date->new($time)->to_datetime,
-			level     => $level,
-			pid       => $$,
-			service   => 'renderer',
-			component => 'ContentCache',
-			message   => join(' ', @lines),
-		}) . "\n";
-	});
-}
+my $log = Renderer::Log::structured('ContentCache');
 
 # Return the pg_hash associated with a URL, or undef if unknown.
 sub pg_hash_for_url {
@@ -173,23 +160,15 @@ sub save_path_index {
 # Build the injectedMacros hash for a cached problem.
 # Returns { macro_name => source_code } or empty hashref if no macros/cache.
 #
-# Two storage shapes are supported (WW3-R11 transition):
-#   * manifest.json (current) — read entries, slurp each macro by hash from
-#     $PRIVATE/macros/<hash>.
-#   * legacy symlinks (pre-R11 problem dirs) — fall back to readdir+readlink.
-#     Lifetime: the fallback dies naturally as the cache rotates per
-#     CACHE_TTL_HOURS (default 168h = 1 week). Remove the fallback as a
-#     R11 follow-up once the cache has rotated past the legacy entries.
+# Reads manifest.json (R11 storage shape). Pre-R11 symlink fallback was
+# dropped in R38 — the entrypoint cache-wipe at deploy is the safety net.
 sub get_injected_macros {
 	my ($pg_hash) = @_;
 	my $dir = _problem_dir($pg_hash);
 	return {} unless -d $dir;
 
 	my $manifest_path = File::Spec->catfile($dir, 'manifest.json');
-	if (-f $manifest_path) {
-		return _read_manifest_macros($dir, $manifest_path);
-	}
-	return _read_symlink_macros($dir);
+	return -f $manifest_path ? _read_manifest_macros($dir, $manifest_path) : {};
 }
 
 sub _read_manifest_macros {
@@ -216,33 +195,6 @@ sub _read_manifest_macros {
 		$injected{ $entry->{name} } = <$mfh>;
 		close $mfh;
 	}
-	return \%injected;
-}
-
-# Legacy reader for problem dirs staged before R11 (no manifest.json).
-# Removed as a R11 follow-up once the cache has rotated past the legacy
-# entries (~2 weeks post-deploy).
-sub _read_symlink_macros {
-	my ($dir) = @_;
-
-	my %injected;
-	opendir my $dh, $dir or return {};
-	while (my $entry = readdir $dh) {
-		next unless $entry =~ /\.pl$/i;
-		my $link_path = File::Spec->catfile($dir, $entry);
-		next unless -l $link_path;    # only symlinks (not regular .pl files)
-
-		my $target = readlink($link_path);
-		my $abs_target = File::Spec->rel2abs($target, $dir);
-		next unless -f $abs_target;
-
-		open my $fh, '<:encoding(UTF-8)', $abs_target or next;
-		local $/;
-		$injected{$entry} = <$fh>;
-		close $fh;
-	}
-	closedir $dh;
-
 	return \%injected;
 }
 
@@ -275,22 +227,7 @@ sub sweep {
 	}
 
 	# Sweep index entries pointing to evicted hashes
-	if ($evicted) {
-		for my $index_dir ('.url_index', '.path_index') {
-			my $idx_path = File::Spec->catdir($PRIVATE, $index_dir);
-			next unless -d $idx_path;
-			opendir my $ih, $idx_path or next;
-			while (my $f = readdir $ih) {
-				next if $f eq '.' || $f eq '..';
-				my $file = File::Spec->catfile($idx_path, $f);
-				open my $fh, '<', $file or next;
-				chomp(my $hash = <$fh>);
-				close $fh;
-				unlink $file if $evicted_hashes{$hash};
-			}
-			closedir $ih;
-		}
-	}
+	_delete_index_entries_where(sub { $evicted_hashes{ $_[0] } }) if $evicted;
 
 	return $evicted;
 }
@@ -302,8 +239,16 @@ sub invalidate {
 	return 0 unless -d $dir;
 
 	remove_tree($dir);
+	_delete_index_entries_where(sub { $_[0] eq $pg_hash });
 
-	# Clean any index entries pointing to this hash
+	return 1;
+}
+
+# Walk both .url_index and .path_index, deleting any entry whose stored
+# pg_hash satisfies the predicate. Each index file holds a single hash
+# (chomp'd) that maps a URL or path to a problem directory.
+sub _delete_index_entries_where {
+	my ($predicate) = @_;
 	for my $index_dir ('.url_index', '.path_index') {
 		my $idx_path = File::Spec->catdir($PRIVATE, $index_dir);
 		next unless -d $idx_path;
@@ -314,12 +259,10 @@ sub invalidate {
 			open my $fh, '<', $file or next;
 			chomp(my $hash = <$fh>);
 			close $fh;
-			unlink $file if $hash eq $pg_hash;
+			unlink $file if $predicate->($hash);
 		}
 		closedir $ih;
 	}
-
-	return 1;
 }
 
 # --- private helpers ---

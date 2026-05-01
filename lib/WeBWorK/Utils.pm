@@ -13,6 +13,9 @@ our @EXPORT_OK = qw(
 
 # usage wwRound($places,$float)
 # return $float rounded up to number of decimal places given by $places
+# Used by templates/RPCRenderFormats/default.html.ep to format the
+# percent score; not called from any .pm/.t. Don't drop without
+# auditing templates first.
 sub wwRound(@) {
 	my $places = shift;
 	my $float  = shift;

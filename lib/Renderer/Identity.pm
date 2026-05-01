@@ -9,24 +9,10 @@ use MIME::Base64 qw(encode_base64 decode_base64);
 use Encode qw(encode);
 use File::Spec;
 use File::Path qw(make_path);
-use Mojo::Log;
-use Mojo::JSON qw(encode_json);
-use Mojo::Date;
 
-my $log = Mojo::Log->new;
-if ($ENV{LOG_FORMAT} && $ENV{LOG_FORMAT} eq 'json') {
-	$log->format(sub {
-		my ($time, $level, @lines) = @_;
-		encode_json({
-			timestamp => Mojo::Date->new($time)->to_datetime,
-			level     => $level,
-			pid       => $$,
-			service   => 'renderer',
-			component => 'Identity',
-			message   => join(' ', @lines),
-		}) . "\n";
-	});
-}
+use Renderer::Log;
+
+my $log = Renderer::Log::structured('Identity');
 
 my $PRIVATE_KEY;
 my $PUBLIC_KEY;

@@ -170,38 +170,4 @@ subtest 'stage_problem omits source_type field when not provided' => sub {
 	ok(!exists $parsed->[0]{source_type}, 'source_type absent when caller did not supply it');
 };
 
-# --- Backward-compat: legacy symlink-shape problem dirs still read ---
-
-subtest 'get_injected_macros falls back to symlink shape when no manifest' => sub {
-	# Pre-create a problem dir in the legacy shape: a problem.pg + a symlink
-	# pointing into ../../macros/<hash>. No manifest.json. Reader should
-	# still return the macro via the symlink fallback. This is the
-	# transition path for problem dirs staged before R11.
-	my $macro_hash = 'macro_for_legacy_test';
-	my $macro_src  = 'sub legacy { 1 }';
-	Renderer::ContentCache::stage_macro($macro_hash, $macro_src);
-
-	my $pg_hash    = 'problem_legacy_shape';
-	my $problem_dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $pg_hash);
-	make_path($problem_dir);
-
-	# Write problem.pg by hand
-	my $pg_file = File::Spec->catfile($problem_dir, 'problem.pg');
-	open my $pfh, '>:encoding(UTF-8)', $pg_file or die $!;
-	print $pfh 'DOCUMENT(); ENDDOCUMENT();';
-	close $pfh;
-
-	# Create the legacy symlink
-	my $link_target = File::Spec->catfile('..', '..', 'macros', $macro_hash);
-	my $link_path   = File::Spec->catfile($problem_dir, 'legacy.pl');
-	symlink($link_target, $link_path) or die "Cannot create symlink: $!";
-
-	ok(!-f File::Spec->catfile($problem_dir, 'manifest.json'),
-		'sanity: no manifest in this fixture');
-
-	my $injected = Renderer::ContentCache::get_injected_macros($pg_hash);
-	is($injected->{'legacy.pl'}, $macro_src,
-		'symlink-shape reader returns macro source via fallback path');
-};
-
 done_testing();

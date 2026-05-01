@@ -14,6 +14,7 @@ use lib File::Spec->catdir(dirname(__FILE__), '..', '..', 'PG', 'lib');
 use WWSafe;
 
 use Renderer::OPLAuthed qw(verify_request);
+use Renderer::Log qw(iso8601_now);
 use Renderer::Version qw(pg_version renderer_version);
 
 # POST /render-api/audit
@@ -78,7 +79,7 @@ sub audit ($c) {
 		compiled          => $result->{compiled} ? \1 : \0,
 		renderer_version  => renderer_version(),
 		pg_version        => pg_version(),
-		audited_at        => _iso8601_now(),
+		audited_at        => iso8601_now(),
 	});
 }
 
@@ -189,12 +190,6 @@ sub _structure_warning ($raw) {
 sub _clean_diagnostic ($msg) {
 	$msg =~ s/\s+$//;
 	return $msg;
-}
-
-sub _iso8601_now {
-	my @t = gmtime;
-	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ',
-		$t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
 }
 
 1;
