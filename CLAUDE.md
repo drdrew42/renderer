@@ -154,6 +154,30 @@ Single-stage Dockerfile. Ubuntu 24.04, Node 22 (for PG client-side JS). Hypnotoa
 
 **Memory leak**: PG has a known memory leak. Hypnotoad rotates workers via `accepts` setting (default 400). The sawtooth pattern (leak → rotate → drop) is expected and should be visible in memory monitoring.
 
+## Testing posture
+
+Perl test suite (`t/*.t`) is exercised via `pgperl prove -lr t/` (the
+`pgperl` wrapper uses the perlbrew `pg-perl` install with the renderer's
+CPAN deps). Suite is currently 166/166 with zero warnings.
+
+JS companion code (`public/js/apps/Problem/problem.js`,
+`public/js/apps/CSSMessage/css-message.js`,
+`public/js/apps/DraftTracker/draft-tracker.js` — ~600 lines total) has
+**no JS unit-test harness** by design (WW3-R39 Phase 5 decision). JS
+behavior is verified through:
+
+1. The full-stack browser smoke path (load a rendered problem in a
+   browser, exercise the feature manually).
+2. Perl-side template assertions in `t/asset_config.t` that confirm the
+   asset URLs land in rendered HTML.
+3. Browser DevTools console + the renderer's interaction logs when the
+   parent (portal/LMS) consumes postMessage events.
+
+When changing JS, run the browser smoke for: problem load, focus/blur
+events, hint/solution buttons, draft tracker keystroke debouncing,
+parent→iframe CSS injection. If the JS surface grows beyond ~1k lines
+or starts carrying business logic, revisit and add a Vitest/Jest harness.
+
 ## Known Quirks
 
 - PG is a git submodule at `lib/PG/` — update with `git submodule update`

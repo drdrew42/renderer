@@ -91,4 +91,34 @@ subtest 'content-addressed 404 on missing sourceFilePath' => sub {
 		->status_is(404);
 };
 
+# --- Editor preview: problemSource + sourceFilePath both set ---
+# Per resolve_source: when CONTENT_ADDRESSED is on AND sourceFilePath is
+# given AND problemSource is *also* present, the renderer uses the editor's
+# live source (not the cached bytes) but still resolves the path to populate
+# pg_hash so cached custom macros get injected by name.
+
+subtest 'editor preview: problemSource overrides cached source, path still resolves pg_hash' => sub {
+	require Renderer::ContentCache;
+	my $cached_hash    = 'test_render_api_editor_preview_hash';
+	my $cached_source  = "DOCUMENT();\nBEGIN_PGML\nCACHED VERSION\nEND_PGML\nENDDOCUMENT();";
+	my $editor_source  = "DOCUMENT();\nloadMacros('PGstandard.pl', 'PGML.pl');\nBEGIN_PGML\nEDITOR VERSION\nEND_PGML\nENDDOCUMENT();";
+
+	Renderer::ContentCache::stage_problem($cached_hash, $cached_source);
+	Renderer::ContentCache::save_path_index('test/editor_preview.pg', $cached_hash);
+
+	local $ENV{CONTENT_ADDRESSED} = 1;
+
+	$t->post_ok('/render-api' => form => {
+		problemSource  => $editor_source,
+		sourceFilePath => 'test/editor_preview.pg',
+		outputFormat   => 'simple',
+		problemSeed    => 4242,
+	})
+		->status_is(200)
+		->content_like(qr/EDITOR VERSION/i,
+			'editor source rendered (not the cached bytes)')
+		->content_unlike(qr/CACHED VERSION/i,
+			'cached source not used when editor source supplied');
+};
+
 done_testing();

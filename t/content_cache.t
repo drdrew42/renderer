@@ -170,4 +170,90 @@ subtest 'stage_problem omits source_type field when not provided' => sub {
 	ok(!exists $parsed->[0]{source_type}, 'source_type absent when caller did not supply it');
 };
 
+# --- sweep: TTL-based eviction (WW3-R39 Phase 1) ---
+
+subtest 'sweep evicts stale problem dirs and their index entries' => sub {
+	my $stale_hash   = 'stale_problem_for_sweep';
+	my $fresh_hash   = 'fresh_problem_for_sweep';
+	my $stale_url    = 'https://opl.example.com/api/problems/hash/stale';
+	my $fresh_url    = 'https://opl.example.com/api/problems/hash/fresh';
+	my $stale_path   = 'Library/Sweep/stale.pg';
+	my $fresh_path   = 'Library/Sweep/fresh.pg';
+
+	# Stage two problems + index entries pointing to each
+	Renderer::ContentCache::stage_problem($stale_hash, 'DOCUMENT(); ENDDOCUMENT();');
+	Renderer::ContentCache::stage_problem($fresh_hash, 'DOCUMENT(); ENDDOCUMENT();');
+	Renderer::ContentCache::save_url_index($stale_url, $stale_hash);
+	Renderer::ContentCache::save_url_index($fresh_url, $fresh_hash);
+	Renderer::ContentCache::save_path_index($stale_path, $stale_hash);
+	Renderer::ContentCache::save_path_index($fresh_path, $fresh_hash);
+
+	# Backdate the stale problem dir to 200h ago (past the 168h default TTL)
+	my $stale_dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $stale_hash);
+	my $past = time - (200 * 3600);
+	utime($past, $past, $stale_dir) or die "utime failed: $!";
+
+	my $evicted = Renderer::ContentCache::sweep();
+
+	ok($evicted >= 1, 'sweep reports >=1 evicted dir');
+	ok(!-d $stale_dir, 'stale problem dir removed');
+	ok(-d File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $fresh_hash),
+		'fresh problem dir untouched');
+
+	# Index entries pointing to the evicted hash also gone
+	is(Renderer::ContentCache::pg_hash_for_url($stale_url),  undef, 'stale url_index entry swept');
+	is(Renderer::ContentCache::pg_hash_for_path($stale_path), undef, 'stale path_index entry swept');
+
+	# Index entries for the fresh hash preserved
+	is(Renderer::ContentCache::pg_hash_for_url($fresh_url),  $fresh_hash, 'fresh url_index preserved');
+	is(Renderer::ContentCache::pg_hash_for_path($fresh_path), $fresh_hash, 'fresh path_index preserved');
+};
+
+subtest 'sweep on empty cache is a no-op' => sub {
+	# Idempotent and safe even if nothing to evict
+	my $evicted = Renderer::ContentCache::sweep(max_age_hours => 9_999_999);
+	is($evicted, 0, 'sweep returns 0 when nothing is stale');
+};
+
+# --- invalidate: targeted single-hash removal (WW3-R39 Phase 1) ---
+
+subtest 'invalidate removes problem dir and both index entries' => sub {
+	my $hash = 'problem_to_invalidate';
+	my $url  = 'https://opl.example.com/api/problems/hash/invalidate-me';
+	my $path = 'Library/Invalidate/target.pg';
+
+	Renderer::ContentCache::stage_problem($hash, 'DOCUMENT(); ENDDOCUMENT();');
+	Renderer::ContentCache::save_url_index($url, $hash);
+	Renderer::ContentCache::save_path_index($path, $hash);
+
+	my $dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $hash);
+	ok(-d $dir, 'sanity: problem dir exists pre-invalidate');
+
+	ok(Renderer::ContentCache::invalidate($hash), 'invalidate returns truthy');
+	ok(!-d $dir, 'problem dir removed');
+	is(Renderer::ContentCache::pg_hash_for_url($url),  undef, 'url_index entry removed');
+	is(Renderer::ContentCache::pg_hash_for_path($path), undef, 'path_index entry removed');
+};
+
+subtest 'invalidate leaves unrelated entries alone' => sub {
+	my $target_hash    = 'target_for_partial_invalidate';
+	my $bystander_hash = 'bystander_for_partial_invalidate';
+	my $bystander_url  = 'https://opl.example.com/api/problems/hash/bystander';
+
+	Renderer::ContentCache::stage_problem($target_hash, 'DOCUMENT(); ENDDOCUMENT();');
+	Renderer::ContentCache::stage_problem($bystander_hash, 'DOCUMENT(); ENDDOCUMENT();');
+	Renderer::ContentCache::save_url_index($bystander_url, $bystander_hash);
+
+	Renderer::ContentCache::invalidate($target_hash);
+
+	ok(-d File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $bystander_hash),
+		'bystander problem dir untouched');
+	is(Renderer::ContentCache::pg_hash_for_url($bystander_url), $bystander_hash,
+		'bystander url_index entry preserved');
+};
+
+subtest 'invalidate on unknown hash returns 0' => sub {
+	is(Renderer::ContentCache::invalidate('does_not_exist'), 0, 'invalidate returns 0 for absent dir');
+};
+
 done_testing();

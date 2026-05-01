@@ -42,7 +42,9 @@ sub verify_request ($c) {
 
 	my $sig     = decode_base64($sig_b64);
 	my $opl_key = Renderer::Registration::opl_public_key();
-	my $valid   = eval { Crypt::Ed25519::verify($raw_body, $opl_key, $sig); 1 } // 0;
+	# Crypt::Ed25519::verify returns falsy on signature mismatch (doesn't die).
+	# eval is defensive against malformed-bytes crashes in the underlying C call.
+	my $valid   = eval { Crypt::Ed25519::verify($raw_body, $opl_key, $sig) } // 0;
 	unless ($valid) {
 		$c->render(json => { error => 'invalid signature' }, status => 401);
 		return undef;

@@ -133,7 +133,13 @@ sub fetch_problem_p ($self, $url, %opts) {
 
 sub fetch_macro ($self, $macro_url) {
 	my $url = $self->_absolute_url($macro_url);
-	my $tx  = $self->{ua}->get($url);
+	# Explicitly enable redirects: this method's contract is to canonicalize
+	# name-form URLs via OPL's 302→hash-form redirect. Without this, callers
+	# that hit fetch_macro before any fetch_problem_p call would silently get
+	# the 302 body (not the canonical macro). The shared UA's max_redirects
+	# is sticky once set; previously this method worked by accident because
+	# fetch_problem_p set it first in the typical request order.
+	my $tx  = $self->{ua}->max_redirects(5)->get($url);
 	my $res = $tx->result;
 
 	unless ($res->is_success) {

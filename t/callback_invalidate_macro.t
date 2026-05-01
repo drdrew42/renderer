@@ -1,0 +1,103 @@
+use Mojo::Base -strict, -signatures;
+use Test::More;
+use Test::Mojo;
+
+# Subtest names contain Unicode (→) — encode TAP output as UTF-8.
+binmode Test::More->builder->output,         ':encoding(UTF-8)';
+binmode Test::More->builder->failure_output, ':encoding(UTF-8)';
+binmode Test::More->builder->todo_output,    ':encoding(UTF-8)';
+
+use lib 't/lib';
+use TestHelper qw(temp_render_root);
+
+use Crypt::Ed25519;
+use MIME::Base64 qw(encode_base64);
+use Mojo::JSON qw(encode_json);
+use File::Path qw(make_path);
+use File::Spec;
+
+# WW3-R39 Phase 4 — exercise the `invalidate_macro` action of the OPL
+# callback endpoint. The cheap, no-PG-fork sibling of the render-probe
+# action; previously untested.
+
+my $root = temp_render_root();
+$ENV{RENDER_ROOT} = $root;
+$ENV{SITE_HOST}   = 'https://renderer.test.edu';
+$ENV{baseURL}     = '';
+delete $ENV{OPL_API_URL};
+
+# Pin an OPL public key via RENDERER_PEERS (peer name 'opl' satisfies the
+# Registration::has_opl_public_key check). Must be set BEFORE test_app()
+# spins the app — startup reads RENDERER_PEERS once during init.
+my ($opl_pub, $opl_sec) = Crypt::Ed25519::generate_keypair();
+$ENV{RENDERER_PEERS} = encode_json([
+	{ name => 'opl', public_key => encode_base64($opl_pub, '') },
+]);
+
+my $t = TestHelper::test_app();
+
+my $macros_dir = File::Spec->catdir($root, 'private', 'macros');
+make_path($macros_dir);
+
+# Helper: build a signed body and POST to /render-api/callback.
+sub signed_post ($body_hash) {
+	my $body = encode_json($body_hash);
+	my $sig  = Crypt::Ed25519::sign($body, $opl_pub, $opl_sec);
+	return $t->post_ok('/render-api/callback' => {
+		'Content-Type'          => 'application/json',
+		'X-Telemetry-Signature' => encode_base64($sig, ''),
+	} => $body);
+}
+
+subtest 'invalidate_macro: deletes the macro file by hash' => sub {
+	my $hash = 'sha256:macro-to-invalidate';
+	my $path = File::Spec->catfile($macros_dir, $hash);
+	open my $fh, '>', $path or die "Cannot create macro fixture: $!";
+	print $fh "sub fixture { 1 }";
+	close $fh;
+	ok(-f $path, 'sanity: macro file exists pre-invalidate');
+
+	signed_post({ action => 'invalidate_macro', hash => $hash })
+		->status_is(200)
+		->json_is('/invalidated' => $hash)
+		->json_is('/deleted'     => Mojo::JSON::true);
+
+	ok(!-f $path, 'macro file removed');
+};
+
+subtest 'invalidate_macro: missing-hash request → 400' => sub {
+	signed_post({ action => 'invalidate_macro' })
+		->status_is(400)
+		->json_like('/error' => qr/missing hash/);
+};
+
+subtest 'invalidate_macro: hash for non-existent file → 200 deleted=false' => sub {
+	# unlink on a missing file returns 0 (not an error). Endpoint reports
+	# deleted=false; the OPL caller sees idempotent success.
+	signed_post({ action => 'invalidate_macro', hash => 'sha256:nope-not-here' })
+		->status_is(200)
+		->json_is('/invalidated' => 'sha256:nope-not-here')
+		->json_is('/deleted'     => Mojo::JSON::false);
+};
+
+subtest 'invalidate_macro: bad signature → 401 (does not delete)' => sub {
+	my $hash = 'sha256:protected-by-signature';
+	my $path = File::Spec->catfile($macros_dir, $hash);
+	open my $fh, '>', $path or die $!;
+	print $fh "sub still_here { 1 }";
+	close $fh;
+
+	my $body = encode_json({ action => 'invalidate_macro', hash => $hash });
+	my $bad_sig = Crypt::Ed25519::sign('different bytes', $opl_pub, $opl_sec);
+
+	$t->post_ok('/render-api/callback' => {
+		'Content-Type'          => 'application/json',
+		'X-Telemetry-Signature' => encode_base64($bad_sig, ''),
+	} => $body)
+		->status_is(401)
+		->json_like('/error' => qr/invalid signature/);
+
+	ok(-f $path, 'macro file untouched when signature rejects');
+};
+
+done_testing();
