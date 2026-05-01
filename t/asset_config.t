@@ -87,6 +87,7 @@ subtest 'rendered HTML includes all bundled JS assets' => sub {
 		problem.js
 		submithelper.js
 		css-message.js
+		draft-tracker.js
 	)) {
 		like($body, qr/\Q$expected\E/, "rendered HTML includes $expected");
 	}

@@ -60,6 +60,7 @@ sub startup ($self) {
 		[ 'js/apps/Problem/problem.js',                             { defer => undef } ],
 		[ 'js/apps/Problem/submithelper.js',                        { defer => undef } ],
 		[ 'js/apps/CSSMessage/css-message.js',                      { defer => undef } ],
+		[ 'js/apps/DraftTracker/draft-tracker.js',                  { defer => undef } ],
 	];
 
 	# Refuse to start if shared secrets are still placeholders.
