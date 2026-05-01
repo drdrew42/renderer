@@ -1,12 +1,8 @@
 package Renderer::Lane::Ungrounded;
 
-# Ungrounded body lane — no JWT body, no peer signature. Two configs
-# govern behavior; both stay inside this lane (they're config responses,
-# not structural lane differences):
-#
-#   * STRICT_JWT — entry gate. When truthy, reject ungrounded requests
-#     outright (401). Public/student instances should set this; VPC-
-#     isolated editor renderers can leave unset.
+# Ungrounded body lane — no JWT body, no peer signature. Owns the self-mint
+# UX only: the STRICT_JWT entry gate now lives alongside its sibling gates
+# in Render::ParseRequest::_apply_lanes (WW3-R37).
 #
 #   * SELF_MINT_DISABLED — UX opt-out. When falsy (the default), the
 #     renderer wraps the inbound %params in a self-minted problemJWT
@@ -18,9 +14,10 @@ package Renderer::Lane::Ungrounded;
 # only re-injected from upstream claims) so _can_emit_answer_jwt stays
 # unset and answerJWTs cannot be produced even after round-tripping.
 #
-# Note: this lane fires only when outputFormat != 'ptx'. PTX renders skip
-# the body-lane entirely (no JWT minted, no defaults applied) — handled
-# by the dispatcher in parseRequest.
+# Note: this lane fires only when outputFormat != 'ptx' AND STRICT_JWT is
+# falsy. PTX renders skip the body-lane entirely (no JWT minted, no
+# defaults applied); STRICT_JWT-rejected requests are short-circuited at
+# the dispatcher before this lane runs.
 
 use strict;
 use warnings;
@@ -34,11 +31,6 @@ our @EXPORT_OK = qw(apply);
 
 sub apply ($c, $params) {
 	$c->stash(_trust_lane => 'ungrounded');
-
-	# Entry gate.
-	if ($ENV{STRICT_JWT}) {
-		return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401);
-	}
 
 	# Self-mint (UX opinion). Default on; SELF_MINT_DISABLED=1 to opt out.
 	unless ($ENV{SELF_MINT_DISABLED}) {

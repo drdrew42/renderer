@@ -188,7 +188,9 @@ sub _apply_lanes ($c, $params, $ctx) {
 	# challengeJWT are mutually exclusive (rejected pre-dispatch); peer-signed
 	# fires when peer-verified AND no JWT body; ungrounded covers the rest
 	# unless outputFormat=ptx (PTX path skips body-lane entirely — no JWT
-	# minted, no defaults).
+	# minted, no defaults). The STRICT_JWT entry gate fires on the ungrounded
+	# branch before Lane::Ungrounded runs (sibling to peer-admission and the
+	# emission gate below; all three lane-policy gates live at this level).
 	if (defined $params->{problemJWT}) {
 		Renderer::Lane::Problem::apply($c, $params) or return;
 	} elsif (defined $params->{challengeJWT}) {
@@ -196,6 +198,14 @@ sub _apply_lanes ($c, $params, $ctx) {
 	} elsif ($c->stash('_peer_signed')) {
 		Renderer::Lane::Peer::apply_body($c, $params) or return;
 	} elsif (($params->{outputFormat} // '') ne 'ptx') {
+		# Entry gate: reject ungrounded requests outright when STRICT_JWT is set.
+		# Public/student instances should set this; VPC-isolated editor
+		# renderers can leave it unset to opt into the self-mint UX.
+		if ($ENV{STRICT_JWT}) {
+			return $c->exception(
+				'Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401,
+			);
+		}
 		Renderer::Lane::Ungrounded::apply($c, $params) or return;
 	}
 
