@@ -27,6 +27,7 @@ use Renderer::Identity;
 use Renderer::OPLClient;
 use Renderer::Telemetry;
 use Renderer::Registration;
+use Renderer::Render::ParseRequest;
 use Renderer::Version;
 use WeBWorK::FormatRenderedProblem;
 
@@ -226,7 +227,7 @@ sub startup ($self) {
 
 	# Helpers
 	$self->helper(format          => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
-	$self->helper(parseRequest    => sub { Renderer::Controller::Render::parseRequest(@_) });
+	$self->helper(parseRequest    => sub { Renderer::Render::ParseRequest::dispatch(@_) });
 	$self->helper(croak           => sub { Renderer::Controller::Render::croak(@_) });
 	$self->helper(logID           => sub { shift->req->request_id });
 	$self->helper(exception       => sub { Renderer::Controller::Render::exception(@_) });
@@ -263,7 +264,7 @@ sub startup ($self) {
 	my $r = $self->routes->under($ENV{baseURL});
 
 	$r->any('/render-api')->to('render#problem');
-	$r->post('/render-api/callback')->to('render#callback');
+	$r->post('/render-api/callback')->to('callback#callback');
 	$r->post('/render-api/audit')->to('audit#audit');
 	$r->post('/render-api/hint')->to('render#hint');
 	$r->post('/render-api/solution')->to('render#solution');

@@ -13,25 +13,46 @@ WeBWorK standalone problem renderer. Executes PG (Problem Generator) code in a s
 
 ```
 lib/
-├── Renderer.pm                         # App entry: routes, startup, Hypnotoad env var overrides
+├── Renderer.pm                         # App entry: startup(), routes, helpers, Hypnotoad env var overrides
 ├── Renderer/
+│   ├── Constants.pm                    # SENSITIVE_PARAMS, ANSWER_RESPONSE_*, shared string constants
 │   ├── ContentCache.pm                 # Content-addressed caching: pg_hash → local disk, OPL fetch on miss
 │   ├── Identity.pm                     # Ed25519 keypair: env vars → disk → generate. Fleet identity via Secrets Manager.
+│   ├── OPLClient.pm                    # OPL HTTP contract: URL templates, conditional GET, redirect canonicalization
+│   ├── Permissions.pm                  # resolve_permissions(): single decision point for show* booleans
 │   ├── Registration.pm                 # Bidirectional TOFU registration with OPL instances
 │   ├── Telemetry.pm                    # In-memory buffer, 60s/100-event flush, Ed25519-signed batches to OPL
+│   ├── Version.pm                      # pg_version / renderer_version helpers
 │   ├── Controller/
-│   │   ├── Render.pm                   # Core: POST /render-api (PG execution, JWT handling, cache flow)
-│   │   ├── IO.pm                       # Filesystem operations (ShowMeAnother, dev-mode editor routes)
-│   │   ├── Pages.pm                    # Web UI pages (problem display, OPL browser)
-│   │   └── StaticFiles.pm             # Static asset serving
-│   └── Model/
-│       └── Problem.pm                  # Problem model (source resolution, rendering)
+│   │   ├── Audit.pm                    # POST /render-api/audit — OPL-signed macro audit
+│   │   ├── Callback.pm                 # POST /render-api/callback — OPL-signed render probe / cache invalidation
+│   │   ├── Render.pm                   # POST /render-api — thin route handler; delegates to Render::*
+│   │   └── StaticFiles.pm              # Static asset serving
+│   ├── Lane/
+│   │   ├── Challenge.pm                # challengeJWT body lane (orchestrator-minted, WW3-032)
+│   │   ├── Peer.pm                     # Peer-signed lane (Ed25519 verify, server-to-server trust)
+│   │   ├── Problem.pm                  # Legacy problemJWT body lane (LMS-minted, LibreTexts/ADAPT)
+│   │   ├── Session.pm                  # sessionJWT prefix lane (continuation state, claims-always-win)
+│   │   └── Ungrounded.pm               # No-JWT-no-peer lane: STRICT_JWT entry gate + self-mint UX
+│   ├── Render/
+│   │   ├── AnswerURL.pm                # answerURL postback (legacy + challengeJWT) + post-fold (R33)
+│   │   ├── ParseRequest.pm             # Envelope parse + lane dispatch (split parse_envelope/apply_lanes, R33)
+│   │   ├── SourceResolver.pm           # Source resolution + content-cache fetch flow (R33)
+│   │   └── Subprocess.pm               # PG execution in forked subprocess (replaced Model::Problem in R10)
+│   └── Util/
+│       └── JWT.pm                      # mint_jwt() — single hook point for JWT signing policy
 ├── WeBWorK/
-│   ├── RenderProblem.pm               # PG execution orchestration
 │   ├── FormatRenderedProblem.pm        # HTML output formatting
-│   ├── PreTeXt.pm                     # PreTeXt XML output
-│   └── Utils.pm, Localize.pm          # Utilities
-└── PG/                                 # PG submodule (math engine, macros, MathObjects)
+│   ├── HintSolution.pm                 # Hint/solution endpoint impl (POST /render-api/{hint,solution}, R28)
+│   ├── PreTeXt.pm                      # PreTeXt XML output
+│   ├── RenderProblem.pm                # PG execution orchestration (calls into Renderer::Render::Subprocess)
+│   ├── VerdictJWT.pm                   # Verdict-fold primitive — sessionJWT_{k+1} mint from signed verdict (WW3-053)
+│   ├── Localize.pm                     # i18n
+│   ├── Utils.pm                        # Misc utilities (asset URL resolution)
+│   └── Utils/
+│       ├── LanguageAndDirection.pm     # Locale + RTL handling
+│       └── Tags.pm                     # OPL tag parsing (cold path; only when includeTags is set)
+└── PG/                                 # PG submodule (math engine, macros, MathObjects) — upstream, not ours
 ```
 
 ### Content-Addressed Flow
@@ -96,11 +117,13 @@ See `LibreTexts/Renderer Secrets Migration.md`, `LibreTexts/Editor Provider Inte
 | Route | Controller | Purpose |
 |---|---|---|
 | `POST /render-api` | Render | Core render endpoint (form-data, NOT JSON) |
-| `POST /render-api/callback` | Render | OPL callback for bidirectional registration |
-| `GET /health` | (inline) | Health check (JSON) |
-| `GET /render-api/tap` | IO | Read problem source (dev mode only) |
-| `POST /render-api/can` | IO | Write problem source (dev mode only) |
-| Various `/render-api/*` | IO | Editor routes (disabled in production, `MOJO_MODE=production`) |
+| `POST /render-api/callback` | Render | OPL callback for cache invalidation + registration probe |
+| `POST /render-api/audit` | Audit | OPL-signed performance audit ingestion |
+| `POST /render-api/hint` | Render | Dumb content fetch (rendered hint body, R28) |
+| `POST /render-api/solution` | Render | Dumb content fetch (rendered solution body, R28) |
+| `ANY  /render-ptx` | Render | PreTeXt XML output (bypasses parseRequest) |
+| `GET  /health` | (inline) | Health check (JSON) |
+| `/pg_files/*`, `/*` | StaticFiles | Static asset serving |
 
 **Important**: The render endpoint takes **form-data**, not JSON. This is a key discovery — documented in `WeBWorK/API Reference.md`.
 
@@ -132,7 +155,7 @@ Single-stage Dockerfile. Ubuntu 24.04, Node 22 (for PG client-side JS). Hypnotoa
 ## Known Quirks
 
 - PG is a git submodule at `lib/PG/` — update with `git submodule update`
-- Dev-mode routes (`supplementalRoutes`) are disabled when `MOJO_MODE=production`
+- Dev-mode editor routes were retired in R07/R08; the controller IO.pm and Model::Problem are gone
 - `renderer.conf` values are overridden by env vars, not replaced — unset vars leave config defaults intact
 - Wide character encoding fixed in Ed25519 signing (`b5124895`) — `encode_utf8` before signing
 
