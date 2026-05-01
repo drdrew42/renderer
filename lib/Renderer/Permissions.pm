@@ -35,7 +35,7 @@ use feature 'signatures';
 no warnings qw(experimental::signatures);
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(resolve_permissions);
+our @EXPORT_OK = qw(resolve_permissions reveal_state);
 
 sub resolve_permissions ($inputs_ref) {
 	my $isInstructor = $inputs_ref->{isInstructor} ? 1 : 0;
@@ -68,6 +68,46 @@ sub resolve_permissions ($inputs_ref) {
 		showCorrectAnswers => $showCorrectAnswers,
 		showSolutions      => $showSolutions,
 		showHints          => $showHints,
+	};
+}
+
+# Compute the reveal-reporting facts for the current render. Returns the six
+# fields the answerJWT and submissionJWT carry per WW3-R29:
+#   answers_requested      — per-render, effective showCorrectAnswers
+#   solutions_requested    — per-render, effective showSolutions
+#   answers_revealed_in    — inbound cumulative (state-at-submission-time)
+#   solutions_revealed_in  — inbound cumulative
+#   answers_revealed_out   — outbound cumulative (sticky one-way: prior OR newly ratcheted)
+#   solutions_revealed_out — outbound cumulative
+#
+# The ratchet only flips 0→1 when *_requested fires AND post-render is still
+# incomplete (recorded_score < 1). Earned-then-peek doesn't ratchet.
+#
+# Decoupled from PG: caller passes the recorded_score scalar so this module
+# stays in pure-permission territory and doesn't reach into $pg internals.
+# Moved from WeBWorK::RenderProblem in WW3-R36.
+sub reveal_state ($inputs_ref, $recorded_score = 0) {
+	my $perms = resolve_permissions($inputs_ref);
+	my $answers_requested   = $perms->{showCorrectAnswers};
+	my $solutions_requested = $perms->{showSolutions};
+
+	my $answers_revealed_in   = $inputs_ref->{answersRevealed}   ? 1 : 0;
+	my $solutions_revealed_in = $inputs_ref->{solutionsRevealed} ? 1 : 0;
+
+	my $earned = ($recorded_score // 0) >= 1;
+
+	my $answers_revealed_out =
+		($answers_revealed_in   || ($answers_requested   && !$earned)) ? 1 : 0;
+	my $solutions_revealed_out =
+		($solutions_revealed_in || ($solutions_requested && !$earned)) ? 1 : 0;
+
+	return {
+		answers_requested      => $answers_requested,
+		solutions_requested    => $solutions_requested,
+		answers_revealed_in    => $answers_revealed_in,
+		solutions_revealed_in  => $solutions_revealed_in,
+		answers_revealed_out   => $answers_revealed_out,
+		solutions_revealed_out => $solutions_revealed_out,
 	};
 }
 

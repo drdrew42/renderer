@@ -18,6 +18,7 @@ use Mojo::URL;
 use WeBWorK::Localize;
 use WeBWorK::Utils qw(getAssetURL);
 use WeBWorK::Utils::LanguageAndDirection;
+use Renderer::Permissions;
 
 sub formatRenderedProblem {
 	my $c          = shift;
@@ -195,14 +196,16 @@ sub formatRenderedProblem {
 		# permissions block carrying only render-affecting flags;
 		# reveal-history reporting lives on the answerJWT and is inspected
 		# via the tokens block, not here.
+		#
+		# Permissions block is the resolver's view (renderer decision),
+		# not raw inputs — instructor mode's default-on rules now show
+		# correctly here. Was a latent bug pre-R36: instructors with no
+		# explicit showCorrectAnswers would see 0 in this block while
+		# the actual render resolved to 1.
+		my $perms = Renderer::Permissions::resolve_permissions($inputs_ref);
 		my $debug = {
 			lane        => $trust_lane,
-			permissions => {
-				isInstructor       => $inputs_ref->{isInstructor} ? 1 : 0,
-				showCorrectAnswers => $inputs_ref->{showCorrectAnswers} ? 1 : 0,
-				showSolutions      => $rh_result->{flags}{showSolutions} // 0,
-				showHints          => $rh_result->{flags}{showHints} // 0,
-			},
+			permissions => $perms,
 			problem => {
 				pg_hash        => $inputs_ref->{pg_hash} // '',
 				sourceFilePath => $inputs_ref->{sourceFilePath} // '',

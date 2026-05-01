@@ -17,43 +17,7 @@ use WeBWorK::PG;
 use WeBWorK::Utils::Tags;
 use Renderer::Constants   qw( PLATFORM_NAME );
 use Renderer::Util::JWT   qw( mint_jwt );
-use Renderer::Permissions qw( resolve_permissions );
-
-# Helper: compute the four reveal-reporting facts for the current render.
-# Returns a hashref with:
-#   answers_requested   — per-render, effective showCorrectAnswers
-#   solutions_requested — per-render, effective showSolutions
-#   answers_revealed_in   — inbound cumulative (state-at-submission-time)
-#   solutions_revealed_in — inbound cumulative
-#   answers_revealed_out  — outbound cumulative (sticky one-way: prior OR newly ratcheted)
-#   solutions_revealed_out — outbound cumulative
-# Per WW3-R29: the ratchet only flips 0→1 when *_requested fires AND post-render
-# is still incomplete (recorded_score < 1). Earned-then-peek doesn't ratchet.
-sub _reveal_state {
-	my ($pg, $inputs_ref) = @_;
-	my $perms = resolve_permissions($inputs_ref);
-	my $answers_requested   = $perms->{showCorrectAnswers};
-	my $solutions_requested = $perms->{showSolutions};
-
-	my $answers_revealed_in   = $inputs_ref->{answersRevealed}   ? 1 : 0;
-	my $solutions_revealed_in = $inputs_ref->{solutionsRevealed} ? 1 : 0;
-
-	my $earned = ($pg->{problem_state}{recorded_score} // 0) >= 1;
-
-	my $answers_revealed_out =
-		($answers_revealed_in || ($answers_requested && !$earned)) ? 1 : 0;
-	my $solutions_revealed_out =
-		($solutions_revealed_in || ($solutions_requested && !$earned)) ? 1 : 0;
-
-	return {
-		answers_requested      => $answers_requested,
-		solutions_requested    => $solutions_requested,
-		answers_revealed_in    => $answers_revealed_in,
-		solutions_revealed_in  => $solutions_revealed_in,
-		answers_revealed_out   => $answers_revealed_out,
-		solutions_revealed_out => $solutions_revealed_out,
-	};
-}
+use Renderer::Permissions qw( resolve_permissions reveal_state );
 
 ##################################################
 # create log files :: expendable
@@ -426,7 +390,7 @@ sub generateJWTs {
 	#       prior knowledge).
 	#   sessionJWT carries outbound cumulative (sticky-rolled with any new
 	#       ratchet from this render — propagates to next render).
-	my $reveal = _reveal_state($pg, $inputs_ref);
+	my $reveal = reveal_state($inputs_ref, $pg->{problem_state}{recorded_score});
 
 	if (!$inputs_ref->{isInstructor}) {
 		$sessionHash->{answersRevealed}   = $reveal->{answers_revealed_out}   if $reveal->{answers_revealed_out};
@@ -591,7 +555,7 @@ sub generateSubmissionJWT {
 	# (per-render); cumulative *_revealed lives in the orchestrator's chain
 	# entries, queried by mode atoms when policy needs history. play_sessionJWT
 	# carries nothing reveal-related — navigation state only.
-	my $reveal = _reveal_state($pg, $inputs_ref);
+	my $reveal = reveal_state($inputs_ref, $pg->{problem_state}{recorded_score});
 
 	my $payload = {
 		iss => $ENV{SITE_HOST},
