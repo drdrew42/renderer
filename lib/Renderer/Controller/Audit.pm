@@ -2,7 +2,6 @@ package Renderer::Controller::Audit;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
 
 use Mojo::JSON qw(encode_json);
-use MIME::Base64 qw(decode_base64);
 use Opcode;
 
 # Self-bootstrap PG/lib so direct loads (e.g. `prove t/audit.t`, `perl -c`)
@@ -14,7 +13,7 @@ use lib File::Spec->catdir(dirname(__FILE__), '..', '..', 'PG', 'lib');
 
 use WWSafe;
 
-use Renderer::Registration;
+use Renderer::OPLAuthed qw(verify_request);
 use Renderer::Version qw(pg_version renderer_version);
 
 # POST /render-api/audit
@@ -40,27 +39,7 @@ my $AUDIT_SEMAPHORE = 0;
 my $AUDIT_MAX_CONCURRENT = $ENV{AUDIT_MAX_CONCURRENT} // 4;
 
 sub audit ($c) {
-	unless (Renderer::Registration::has_opl_public_key()) {
-		return $c->render(json => { error => 'registration not completed' }, status => 503);
-	}
-
-	my $raw_body = $c->req->body;
-	my $sig_b64  = $c->req->headers->header('X-Telemetry-Signature');
-	unless ($sig_b64 && length($sig_b64)) {
-		return $c->render(json => { error => 'missing signature' }, status => 401);
-	}
-
-	my $sig     = decode_base64($sig_b64);
-	my $opl_key = Renderer::Registration::opl_public_key();
-	my $valid   = eval { Crypt::Ed25519::verify($raw_body, $opl_key, $sig); 1 } // 0;
-	unless ($valid) {
-		return $c->render(json => { error => 'invalid signature' }, status => 401);
-	}
-
-	my $req = $c->req->json;
-	unless ($req) {
-		return $c->render(json => { error => 'missing JSON body' }, status => 400);
-	}
+	my $req = verify_request($c) or return;
 
 	my $macro_name   = $req->{macro_name};
 	my $macro_hash   = $req->{macro_hash};
