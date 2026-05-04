@@ -77,13 +77,13 @@ async sub problem ($c) {
 	# renderer is dumb here: a JWT-declared answerURL means "report back" —
 	# isInstructor is the orchestrator's concern, not ours.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}) {
-		# Emission gate (belt-and-suspenders). The primary guard fires earlier
-		# in parseRequest (WW3-R03) so ungrounded submits don't pay the PG-fork
-		# cost; this re-check survives as defense-in-depth in case some future
-		# lane plumbs JWTanswerURL into %params without setting the stash flag.
-		# Self-minted JWTs do not qualify — see parseRequest. This gate is
-		# orthogonal to STRICT_JWT, which governs whether ungrounded requests
-		# are accepted at all. Ref: WeBWorK3/Config and Secrets Evolution.
+		# Emission gate. The renderer's contract is validate-then-render; we
+		# do NOT refuse to render based on grounding shape. What we DO refuse
+		# is to emit a signed answerJWT without upstream grounding — that's a
+		# statement about what the renderer signs, not about which requests
+		# render. Self-minted and peer-signed lanes never set the flag.
+		# Orthogonal to STRICT_JWT (which governs whether ungrounded requests
+		# are admitted at all). Ref: WeBWorK3/Config and Secrets Evolution.
 		unless ($c->stash('_can_emit_answer_jwt')) {
 			$c->log->error('Student submit without upstream JWT — rejecting answer emission.');
 			return $c->exception('Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403);

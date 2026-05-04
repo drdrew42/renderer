@@ -21,6 +21,9 @@ use Mojo::Base -signatures;
 #   1. Entry gate    (STRICT_JWT)            — may an ungrounded request render at all?
 #   2. Session UX    (SELF_MINT_DISABLED)    — wrap an admitted ungrounded request in a self-minted JWT?
 #   3. Emission gate (_can_emit_answer_jwt)  — may this request produce an answerJWT?
+# The emission gate is enforced at the emission site (Render.pm), not here:
+# the renderer's job is to validate and render, not to refuse renders based
+# on what the caller might or might not be allowed to emit.
 # See WeBWorK3/Config and Secrets Evolution for rationale.
 #
 # Moved out of Renderer::Controller::Render in WW3-R33.
@@ -31,6 +34,7 @@ use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
 use Renderer::Lane::Session;
 use Renderer::Lane::Problem;
 use Renderer::Lane::Challenge;
+use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
 use Renderer::Constants qw(SENSITIVE_PARAMS);
@@ -68,7 +72,7 @@ sub _parse_envelope ($c, $params, $ctx) {
 	# backing value was undef render as `value=""`, which is `defined` but empty;
 	# Crypt::JWT::decode_jwt rejects empty tokens with "missing token". Strip
 	# them up front so the dispatcher below sees a clean envelope shape.
-	for my $k (qw(problemJWT sessionJWT challengeJWT verdict_signed initial_state)) {
+	for my $k (qw(problemJWT sessionJWT challengeJWT submissionJWT verdict_signed initial_state)) {
 		delete $params->{$k} if defined $params->{$k} && !length $params->{$k};
 	}
 
@@ -89,9 +93,17 @@ sub _parse_envelope ($c, $params, $ctx) {
 		delete $params->{initial_state};
 	}
 
-	# challengeJWT and problemJWT are sibling trust lanes — never both at once.
-	if (defined $params->{challengeJWT} && defined $params->{problemJWT}) {
-		return $c->exception('Ambiguous envelope: both challengeJWT and problemJWT present.', 400);
+	# problemJWT / challengeJWT / submissionJWT are sibling body-lane trust
+	# anchors — never more than one at a time. Each carries a complete
+	# envelope intent (live LMS-grounded play, WW3 play definition, or
+	# historical replay artifact respectively); combining them is ambiguous.
+	{
+		my @body = grep { defined $params->{$_} } qw(problemJWT challengeJWT submissionJWT);
+		if (@body > 1) {
+			return $c->exception(
+				'Ambiguous envelope: ' . join(' + ', @body) . ' present together.', 400,
+			);
+		}
 	}
 
 	# Render-time verdict fold (WW3-053). When the portal threads
@@ -175,8 +187,8 @@ sub _parse_envelope ($c, $params, $ctx) {
 
 # Phase 2: lane application + post-dispatch finalize. Session prefix runs
 # first (combines with any body lane). Body lane runs second (problemJWT /
-# challengeJWT / peer-signed / ungrounded; PTX skips body-lane entirely).
-# Finalize restores originIP/parent_origin and runs the emission gate.
+# challengeJWT / submissionJWT / peer-signed / ungrounded; PTX skips
+# body-lane entirely). Finalize restores originIP/parent_origin.
 sub _apply_lanes ($c, $params, $ctx) {
 
 	# Session prefix — sessionJWT decode + claim merge. Combines with any body lane.
@@ -184,17 +196,19 @@ sub _apply_lanes ($c, $params, $ctx) {
 		Renderer::Lane::Session::apply_prefix($c, $params) or return;
 	}
 
-	# Body-lane dispatch — envelope shape selects the lane. problemJWT and
-	# challengeJWT are mutually exclusive (rejected pre-dispatch); peer-signed
-	# fires when peer-verified AND no JWT body; ungrounded covers the rest
-	# unless outputFormat=ptx (PTX path skips body-lane entirely — no JWT
-	# minted, no defaults). The STRICT_JWT entry gate fires on the ungrounded
-	# branch before Lane::Ungrounded runs (sibling to peer-admission and the
-	# emission gate below; all three lane-policy gates live at this level).
+	# Body-lane dispatch — envelope shape selects the lane. problemJWT,
+	# challengeJWT, and submissionJWT are mutually exclusive (rejected
+	# pre-dispatch); peer-signed fires when peer-verified AND no JWT body;
+	# ungrounded covers the rest unless outputFormat=ptx (PTX path skips
+	# body-lane entirely — no JWT minted, no defaults). The STRICT_JWT
+	# entry gate fires on the ungrounded branch before Lane::Ungrounded
+	# runs.
 	if (defined $params->{problemJWT}) {
 		Renderer::Lane::Problem::apply($c, $params) or return;
 	} elsif (defined $params->{challengeJWT}) {
 		Renderer::Lane::Challenge::apply($c, $params) or return;
+	} elsif (defined $params->{submissionJWT}) {
+		Renderer::Lane::Review::apply($c, $params) or return;
 	} elsif ($c->stash('_peer_signed')) {
 		Renderer::Lane::Peer::apply_body($c, $params) or return;
 	} elsif (($params->{outputFormat} // '') ne 'ptx') {
@@ -216,18 +230,6 @@ sub _apply_lanes ($c, $params, $ctx) {
 	# _parse_envelope). The JWT lane recovers parent_origin via the generic
 	# claim merge; the peer-signed lane has no such merge, so reapply explicitly.
 	$params->{parent_origin} //= $ctx->{peer_parent_origin} if defined $ctx->{peer_parent_origin};
-
-	# Emission gate, fail-fast (WW3-R03). Reject submits that arrived without
-	# upstream grounding before the PG fork, rather than after a full render.
-	# _can_emit_answer_jwt is set only by problemJWT / challengeJWT / sessionJWT
-	# carrying upstream context — self-mint and peer-signed lanes never set it.
-	# A late belt-and-suspenders check survives at the dispatch site; this one
-	# is the primary gate.
-	if ($params->{submitAnswers} && !$c->stash('_can_emit_answer_jwt')) {
-		return $c->exception(
-			'Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403,
-		);
-	}
 
 	return 1;
 }

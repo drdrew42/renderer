@@ -82,24 +82,15 @@ END_PGML
 ENDDOCUMENT();
 PG
 
+# The emission gate (_can_emit_answer_jwt) is enforced at the emission site
+# in Render.pm — only when the request would actually emit an answerJWT (i.e.
+# JWTanswerURL is plumbed and submitAnswers is set). Validated requests render
+# regardless of grounding; emission is what's gated, not rendering. These
+# subtests are smoke checks that ungrounded validated requests render cleanly.
+
 # ─── Self-mint lane ────────────────────────────────────────────────────────
 
-subtest 'self-mint: submitAnswers without grounding → 403' => sub {
-	# Ungrounded request (no JWT, no peer signature) with submitAnswers=1.
-	# The early guard in parseRequest must reject before PG forks.
-	local $ENV{STRICT_JWT} = 0;  # admit ungrounded so we hit the emission gate, not the entry gate
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	})->status_is(403)
-	  ->content_like(qr/Submit requires/i, 'rejection message names the requirement');
-};
-
-subtest 'self-mint: render without submitAnswers proceeds normally' => sub {
-	# Sanity: the early guard fires only on submit; plain renders still work.
+subtest 'self-mint: render proceeds without grounding' => sub {
 	local $ENV{STRICT_JWT} = 0;
 	$t->post_ok('/render-api' => form => {
 		problemSource => $pg_source,
@@ -110,26 +101,7 @@ subtest 'self-mint: render without submitAnswers proceeds normally' => sub {
 
 # ─── Peer-signed lane ──────────────────────────────────────────────────────
 
-subtest 'peer-signed: submitAnswers → 403 (one-shot lane, no submit)' => sub {
-	# Peer-signed admits the request but does not set _can_emit_answer_jwt
-	# (the one-shot rule — peer-signed renders don't continue, don't submit).
-	# The early guard rejects before PG forks.
-	my $body = form_body(
-		problemSource => $pg_source,
-		outputFormat  => 'simple',
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	);
-	my $headers = peer_headers('POST', '/render-api', $body);
-
-	$t->post_ok('/render-api', $headers, $body)
-		->status_is(403)
-		->content_like(qr/Submit requires/i);
-};
-
-subtest 'peer-signed: render without submitAnswers proceeds normally' => sub {
-	# Sanity check — peer-signed renders are unaffected when not submitting.
+subtest 'peer-signed: render proceeds' => sub {
 	my $body = form_body(
 		problemSource => $pg_source,
 		outputFormat  => 'simple',
@@ -144,10 +116,6 @@ subtest 'peer-signed: render without submitAnswers proceeds normally' => sub {
 # ─── problemJWT lane (control) ─────────────────────────────────────────────
 
 subtest 'problemJWT: submitAnswers proceeds (sets _can_emit_answer_jwt)' => sub {
-	# Control: the JWT lane sets _can_emit_answer_jwt, so the early guard
-	# passes and the existing render path runs. (Existing permissions.t
-	# covers the full submit-flow; this is just a smoke check that the new
-	# guard didn't break the happy path.)
 	my $jwt = make_problem_jwt(
 		problemSource => $pg_source,
 		problemSeed   => 1234,
