@@ -66,6 +66,23 @@ subtest 'startup populates third_party_css and third_party_js defaults' => sub {
 	ok(scalar @$js  >= 6, 'third_party_js has the expected default entries');
 };
 
+# Asset-name matcher tolerant of static-assets.json fingerprinting.
+# `getAssetURL` resolves a logical path like `js/apps/Problem/problem.js`
+# through the build-time manifest into a hashed minified filename like
+# `js/apps/Problem/problem.5585204b.min.js`. Tests assert that each logical
+# basename appears, allowing for an optional `.<hex>` fingerprint and an
+# optional `.min` infix before the extension. Matches both the unbuilt
+# (literal-name) and built (hashed) cases.
+sub asset_present {
+	my ($body, $basename, $ext) = @_;
+	# basename + optional .hash + optional .min + .ext, anchored at a non-word
+	# boundary on the left so e.g. "submithelper" doesn't accidentally match
+	# inside a longer name. Right side anchored on .ext to avoid matching
+	# basename.<ext>.foo.
+	my $re = qr{(?:^|[/\b])\Q$basename\E(?:\.[a-f0-9]+)?(?:\.min)?\.\Q$ext\E\b};
+	return $body =~ $re;
+}
+
 subtest 'rendered HTML includes all bundled JS assets' => sub {
 	my $jwt = make_problem_jwt(
 		problemSource => $pg_source,
@@ -78,18 +95,24 @@ subtest 'rendered HTML includes all bundled JS assets' => sub {
 	})->status_is(200)->tx;
 
 	my $body = $tx->res->body;
-	for my $expected (qw(
-		jquery.min.js
-		jquery-ui.min.js
-		mathjax-config.js
-		tex-svg.js
-		bootstrap.bundle.min.js
-		problem.js
-		submithelper.js
-		css-message.js
-		draft-tracker.js
-	)) {
-		like($body, qr/\Q$expected\E/, "rendered HTML includes $expected");
+	# Each entry: [basename, extension]. The asset_present matcher tolerates
+	# build-time fingerprinting (`.<hex>.min` infix). jquery / jquery-ui /
+	# bootstrap.bundle / tex-svg ride from node_modules and aren't fingerprinted;
+	# the others (js/apps/*) are fingerprinted in built deployments.
+	for my $spec (
+		[ 'jquery',           'js' ],
+		[ 'jquery-ui',        'js' ],
+		[ 'mathjax-config',   'js' ],
+		[ 'tex-svg',          'js' ],
+		[ 'bootstrap.bundle', 'js' ],
+		[ 'problem',          'js' ],
+		[ 'submithelper',     'js' ],
+		[ 'css-message',      'js' ],
+		[ 'draft-tracker',    'js' ],
+	) {
+		my ($basename, $ext) = @$spec;
+		ok(asset_present($body, $basename, $ext),
+			"rendered HTML includes $basename.$ext (with or without hash)");
 	}
 };
 
@@ -105,13 +128,17 @@ subtest 'rendered HTML includes all bundled CSS assets' => sub {
 	})->status_is(200)->tx;
 
 	my $body = $tx->res->body;
-	for my $expected (qw(
-		bootstrap.css
-		jquery-ui.min.css
-		fontawesome-free
-	)) {
-		like($body, qr/\Q$expected\E/, "rendered HTML includes $expected");
+	for my $spec (
+		[ 'bootstrap', 'css' ],
+		[ 'jquery-ui', 'css' ],
+	) {
+		my ($basename, $ext) = @$spec;
+		ok(asset_present($body, $basename, $ext),
+			"rendered HTML includes $basename.$ext (with or without hash)");
 	}
+	# fontawesome-free rides from node_modules under that directory name —
+	# the directory token is the stable signal regardless of fingerprinting.
+	like($body, qr{fontawesome-free}, 'rendered HTML includes fontawesome-free');
 };
 
 subtest 'config override replaces baked defaults' => sub {
@@ -130,9 +157,12 @@ subtest 'config override replaces baked defaults' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemJWT   => $jwt,
 		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(qr/submithelper\.js/, 'removed asset is absent from HTML')
-	  ->content_like(qr/problem\.js/,        'untouched assets still present');
+	})->status_is(200);
+	my $body = $t->tx->res->body;
+	ok(!asset_present($body, 'submithelper', 'js'),
+		'removed asset is absent from HTML');
+	ok(asset_present($body, 'problem', 'js'),
+		'untouched assets still present');
 
 	# Restore for downstream test files that share this app instance.
 	$t->app->config(third_party_js => $orig);
