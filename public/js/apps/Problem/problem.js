@@ -240,8 +240,11 @@
 		});
 	}
 
-	// Resize: emit webwork.lifecycle.resize when body height settles. Replaces
-	// the iframe-resizer library (WW3-R23). MathJax renders math asynchronously
+	// Resize: emit webwork.lifecycle.resize when body height settles. Native
+	// ResizeObserver path introduced in WW3-R23; the iframe-resizer content
+	// script is also loaded for integrators who haven't migrated yet (see
+	// Renderer.pm third_party_js). Both protocols broadcast independently —
+	// hosts listen to whichever they speak. MathJax renders math asynchronously
 	// after page load — body height grows in stages — so debounce ~50ms to ship
 	// only the settled value rather than every intermediate paint.
 	if (typeof ResizeObserver !== 'undefined') {

@@ -83,6 +83,10 @@ window.addEventListener('message', (event) => {
 	try {
 		message = JSON.parse(event.data);
 	} catch (e) {
+		// [iFrameSizer]… strings are iframe-resizer's wire format. The
+		// iframeResizer.contentWindow script handles them on its own listener
+		// (loaded alongside us in third_party_js); we just need to not yell
+		// about them when they pass through this handler.
 		if (typeof event.data !== 'string' || !event.data.startsWith('[iFrameSizer]')) {
 			console.warn('CSSMessage: message not JSON', event.data);
 		}
