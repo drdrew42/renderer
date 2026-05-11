@@ -16,6 +16,7 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 use Mojo::JSON qw(encode_json decode_json);
 use Time::HiRes qw(time);
+use Crypt::JWT qw(decode_jwt);
 
 use WeBWorK::PreTeXt;
 use WeBWorK::HintSolution;
@@ -170,15 +171,52 @@ async sub render_ptx ($c) {
 }
 
 # POST /render-api/hint and POST /render-api/solution (WW3-R28).
-# Pure dumb content fetches: render with the appropriate flag, extract
-# just the hint/solution divs, return as JSON. Bypasses parseRequest;
-# mints nothing, POSTs nothing, emits no events. The LMS/orchestrator
-# gates user access at its own UI layer — the renderer is dumb about
-# who's allowed to read what. See WeBWorK::HintSolution for the
-# implementation and lib/WeBWorK/Renderer/Render-Only Hint and Solution
-# Modes.md for the design rationale.
+# Content fetches gated by a problemJWT with typ='hint' or typ='solution'.
+# The token is constructed exactly like any other problemJWT (same secret,
+# same aud); the only differences are the typ claim and which endpoint it
+# arrives at. The LMS makes the policy decision ("display this solution to
+# this user now"); the renderer just verifies the token and returns content.
+#
+# See WeBWorK::HintSolution for the render+extract pipeline,
+# WeBWorK/Renderer/Render-Only Hint and Solution Modes.md for the PG-side
+# investigation, and WeBWorK/Renderer/Content Fetch Token Model.md for the
+# gate's design rationale.
+sub _verify_content_fetch_jwt ($c, $expected_typ) {
+	my $jwt = $c->req->param('problemJWT');
+	unless (defined $jwt && length $jwt) {
+		$c->exception('Missing required parameter: problemJWT', 401);
+		return;
+	}
+
+	my $claims = eval {
+		decode_jwt(
+			token      => $jwt,
+			key        => $ENV{problemJWTsecret},
+			verify_aud => $ENV{SITE_HOST},
+		);
+	};
+	if (my $err = $@) {
+		$c->log->info("Content-fetch JWT verify failed: $err");
+		$c->exception('Invalid or expired problemJWT', 401);
+		return;
+	}
+
+	# LibreTexts wraps claims under a provider key — mirrors Lane/Problem.pm.
+	$claims = $claims->{webwork} if defined $claims->{webwork};
+
+	my $actual_typ = $claims->{typ} // '';
+	if ($actual_typ ne $expected_typ) {
+		$c->exception("Wrong typ: expected '$expected_typ', got '$actual_typ'", 401);
+		return;
+	}
+
+	return $claims;
+}
+
 async sub hint ($c) {
 	$c->render_later;
+
+	_verify_content_fetch_jwt($c, 'hint') or return;
 
 	my $params = $c->req->params->to_hash;
 	return $c->exception('Missing required parameter: problemSource', 400)
@@ -199,6 +237,8 @@ async sub hint ($c) {
 
 async sub solution ($c) {
 	$c->render_later;
+
+	_verify_content_fetch_jwt($c, 'solution') or return;
 
 	my $params = $c->req->params->to_hash;
 	return $c->exception('Missing required parameter: problemSource', 400)

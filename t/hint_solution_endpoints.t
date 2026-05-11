@@ -15,10 +15,27 @@ use Test::Mojo;
 # Renderer startup refuses placeholder secrets; supply test values.
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
+$ENV{SITE_HOST}        //= 'test.local';
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
 my $t = Test::Mojo->new('Renderer');
+
+# Mint a problemJWT carrying a `typ` claim. Per Content Fetch Token Model,
+# the /solution and /hint endpoints accept a problemJWT (same secret, same
+# aud) with typ='solution' or typ='hint'.
+use Renderer::Util::JWT qw(mint_jwt);
+sub mint_typed {
+	my ($typ, %extra) = @_;
+	mint_jwt($ENV{problemJWTsecret}, {
+		typ => $typ,
+		aud => $ENV{SITE_HOST},
+		%extra,
+	});
+}
+my $jwt_solution = mint_typed('solution');
+my $jwt_hint     = mint_typed('hint');
+
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -98,6 +115,7 @@ PG
 
 subtest 'POST /render-api/solution returns solution body' => sub {
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200)
@@ -109,6 +127,7 @@ subtest 'POST /render-api/solution returns solution body' => sub {
 
 subtest 'POST /render-api/solution: no solution → solution=null' => sub {
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
 		problemSource => $pg_hints_only,
 		problemSeed   => 1234,
 	})->status_is(200);
@@ -118,6 +137,7 @@ subtest 'POST /render-api/solution: no solution → solution=null' => sub {
 
 subtest 'POST /render-api/solution: bare problem → solution=null' => sub {
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
 		problemSource => $pg_bare,
 		problemSeed   => 1234,
 	})->status_is(200);
@@ -129,6 +149,7 @@ subtest 'POST /render-api/solution: bare problem → solution=null' => sub {
 
 subtest 'POST /render-api/hint returns hints array' => sub {
 	$t->post_ok('/render-api/hint' => form => {
+		problemJWT    => $jwt_hint,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200)
@@ -141,6 +162,7 @@ subtest 'POST /render-api/hint returns hints array' => sub {
 
 subtest 'POST /render-api/hint: multiple hints all returned' => sub {
 	$t->post_ok('/render-api/hint' => form => {
+		problemJWT    => $jwt_hint,
 		problemSource => $pg_multi_hints,
 		problemSeed   => 1234,
 	})->status_is(200);
@@ -152,6 +174,7 @@ subtest 'POST /render-api/hint: multiple hints all returned' => sub {
 
 subtest 'POST /render-api/hint: no hints → hints=[]' => sub {
 	$t->post_ok('/render-api/hint' => form => {
+		problemJWT    => $jwt_hint,
 		problemSource => $pg_bare,
 		problemSeed   => 1234,
 	})->status_is(200);
@@ -160,22 +183,88 @@ subtest 'POST /render-api/hint: no hints → hints=[]' => sub {
 	is(scalar @$hints, 0, 'empty array when no hints in problem');
 };
 
-# ─── Validation ───────────────────────────────────────────────────────────
+# ─── Token gate ───────────────────────────────────────────────────────────
+
+subtest 'missing problemJWT → 401' => sub {
+	$t->post_ok('/render-api/solution' => form => {
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+	$t->post_ok('/render-api/hint' => form => {
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+};
+
+subtest 'wrong typ → 401 (hint token at /solution and vice versa)' => sub {
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_hint,
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+	$t->post_ok('/render-api/hint' => form => {
+		problemJWT    => $jwt_solution,
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+};
+
+subtest 'untyped problemJWT (regular /render-api token) → 401' => sub {
+	my $jwt_no_typ = mint_jwt($ENV{problemJWTsecret}, {
+		aud => $ENV{SITE_HOST},
+		# No typ claim — same shape as a regular /render-api problemJWT.
+	});
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_no_typ,
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+};
+
+subtest 'wrong signing secret → 401' => sub {
+	my $jwt_bad = mint_jwt('not-the-real-secret', {
+		typ => 'solution',
+		aud => $ENV{SITE_HOST},
+	});
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_bad,
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+};
+
+subtest 'wrong aud → 401' => sub {
+	my $jwt_bad_aud = mint_jwt($ENV{problemJWTsecret}, {
+		typ => 'solution',
+		aud => 'other.example.com',
+	});
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_bad_aud,
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401);
+};
+
+# ─── Body validation (assumes token passes) ───────────────────────────────
 
 subtest 'missing problemSource → 400' => sub {
 	$t->post_ok('/render-api/hint' => form => {
+		problemJWT  => $jwt_hint,
 		problemSeed => 1234,
 	})->status_is(400);
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT  => $jwt_solution,
 		problemSeed => 1234,
 	})->status_is(400);
 };
 
 subtest 'missing problemSeed → 400' => sub {
 	$t->post_ok('/render-api/hint' => form => {
+		problemJWT    => $jwt_hint,
 		problemSource => $pg_with_both,
 	})->status_is(400);
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
 		problemSource => $pg_with_both,
 	})->status_is(400);
 };
@@ -184,6 +273,7 @@ subtest 'missing problemSeed → 400' => sub {
 
 subtest 'solution endpoint mints no JWTs' => sub {
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200);
@@ -198,6 +288,7 @@ subtest 'solution endpoint mints no JWTs' => sub {
 
 subtest 'hint endpoint mints no JWTs' => sub {
 	$t->post_ok('/render-api/hint' => form => {
+		problemJWT    => $jwt_hint,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200);
@@ -207,18 +298,18 @@ subtest 'hint endpoint mints no JWTs' => sub {
 		'response carries only the hints field — no JWTs, no extras');
 };
 
-# ─── Endpoints are independent of the main /render-api lane plumbing ─────
+# ─── Endpoints bypass /render-api lane plumbing ──────────────────────────
 
-subtest 'endpoints work without lane dispatch (no JWT, no STRICT_JWT trip)' => sub {
-	# These endpoints bypass parseRequest entirely (PTX precedent). Even
-	# with STRICT_JWT on, the dumb-fetch endpoints accept raw problemSource
-	# because they aren't subject to the lane dispatcher's grounded-JWT
-	# requirement.
+subtest 'endpoints bypass parseRequest (STRICT_JWT does not apply)' => sub {
+	# The content-fetch endpoints have their own gate (typed problemJWT) and
+	# do not flow through parseRequest. STRICT_JWT (which governs the main
+	# /render-api lane's grounded-JWT requirement) has no effect here.
 	local $ENV{STRICT_JWT} = 1;
 	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
-	})->status_is(200, 'STRICT_JWT does not block hint/solution endpoints');
+	})->status_is(200, 'STRICT_JWT does not block content-fetch endpoints');
 };
 
 done_testing();
