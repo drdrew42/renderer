@@ -109,50 +109,58 @@ async sub problem ($c) {
 		);
 	}
 
-	# ─── Telemetry ──────────────────────────────────────────────────────────
-	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{pg_hash} && !$inputs_ref->{isInstructor}) {
-		my $render_ms = int((time - $render_start) * 1000);
-		# By this point we've passed the render's _error early-return, so the
-		# only remaining outcome distinction is "warning" vs "success" based on
-		# whether PG emitted warning_messages during the run.
-		my $outcome = @{ $return_object->{warning_messages} // [] } ? 'warning' : 'success';
-		my $is_first  = $c->stash('_is_first_render');
-
-		# LT-010: compute html_hash on first successful render for seed diversity
-		my $html_hash;
-		if ($is_first && $outcome eq 'success' && defined $return_object->{text}) {
-			$html_hash = Renderer::Telemetry::content_hash(
-				$return_object->{text}, $return_object->{answers});
-		}
+	# ─── Telemetry (LT-057) ─────────────────────────────────────────────────
+	# Three event types, three gates. See vault: WeBWorK/Render Telemetry.md.
+	#   * render            — universal; code-path health (warnings/errors/ms)
+	#   * seed_observation  — first-render only; deterministic content property
+	#   * interaction       — non-instructor only; student-experience signal
+	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{pg_hash}) {
+		my $render_ms     = int((time - $render_start) * 1000);
+		my $warning_count = scalar(@{ $return_object->{warning_messages} // [] });
+		# PG's error surface: flags.error_flag is the boolean; $errors is the
+		# blob string. Either signals "this render errored." Count as 0/1 today;
+		# LT-050 can bump to a real count.
+		my $error_count = ($return_object->{flags}{error_flag}
+			|| $return_object->{errors}) ? 1 : 0;
 
 		Renderer::Telemetry::record_render(
-			pg_hash         => $inputs_ref->{pg_hash},
-			outcome         => $outcome,
-			warnings        => scalar(@{ $return_object->{warning_messages} // [] }),
-			render_ms       => $render_ms,
-			cache_status    => $c->stash('_cache_status') // 'unknown',
-			is_first_render => $is_first,
-			seed            => $inputs_ref->{problemSeed},
-			html_hash       => $html_hash,
+			pg_hash   => $inputs_ref->{pg_hash},
+			warnings  => $warning_count,
+			errors    => $error_count,
+			render_ms => $render_ms,
 		);
 
-		if ($inputs_ref->{submitAnswers}) {
-			Renderer::Telemetry::record_interaction(
-				pg_hash => $inputs_ref->{pg_hash},
-				action  => 'submit',
-				score   => $return_object->{problem_result}{score},
-				attempt => ($inputs_ref->{numIncorrect} // 0) + 1,
-			);
-		} elsif ($inputs_ref->{previewAnswers}) {
-			Renderer::Telemetry::record_interaction(
-				pg_hash => $inputs_ref->{pg_hash},
-				action  => 'preview',
-			);
-		} elsif ($inputs_ref->{showCorrectAnswers}) {
-			Renderer::Telemetry::record_interaction(
-				pg_hash => $inputs_ref->{pg_hash},
-				action  => 'show_answers',
-			);
+		# Seed diversity: first-render only, error-free (an errored render's
+		# html_hash carries the error template, not a content variant).
+		if ($c->stash('_is_first_render') && !$error_count && defined $return_object->{text}) {
+			my $html_hash = Renderer::Telemetry::content_hash(
+				$return_object->{text}, $return_object->{answers});
+			Renderer::Telemetry::record_seed_observation(
+				pg_hash   => $inputs_ref->{pg_hash},
+				seed      => $inputs_ref->{problemSeed},
+				html_hash => $html_hash,
+			) if $html_hash;
+		}
+
+		unless ($inputs_ref->{isInstructor}) {
+			if ($inputs_ref->{submitAnswers}) {
+				Renderer::Telemetry::record_interaction(
+					pg_hash => $inputs_ref->{pg_hash},
+					action  => 'submit',
+					score   => $return_object->{problem_result}{score},
+					attempt => ($inputs_ref->{numIncorrect} // 0) + 1,
+				);
+			} elsif ($inputs_ref->{previewAnswers}) {
+				Renderer::Telemetry::record_interaction(
+					pg_hash => $inputs_ref->{pg_hash},
+					action  => 'preview',
+				);
+			} elsif ($inputs_ref->{showCorrectAnswers}) {
+				Renderer::Telemetry::record_interaction(
+					pg_hash => $inputs_ref->{pg_hash},
+					action  => 'show_answers',
+				);
+			}
 		}
 	}
 

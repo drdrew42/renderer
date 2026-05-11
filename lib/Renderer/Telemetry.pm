@@ -70,40 +70,33 @@ sub flush {
 	});
 }
 
-# Record a render event (every non-instructor request).
-# Optional seed diversity fields: seed, html_hash, is_first_render.
-# These are only emitted for first-render student requests on content-addressed problems.
+# Record a render event. Universal — emitted on every render regardless of
+# role. Render outcomes describe code-path health (PG warnings, errors,
+# render time), which is the same signal whether a student or an instructor
+# triggered the render. See vault: WeBWorK/Render Telemetry.md.
+#
+# `errors` is currently 0 or 1 (PG exposes the error blob as a string + a
+# flag, not a structured list). Typed as int so LT-050 structured-warning
+# capture can bump it to real counts without an API break.
 sub record_render {
 	my (%args) = @_;
-	return if $args{is_instructor};
 	return unless $args{pg_hash};
 
-	my %event = (
-		type         => 'render',
-		pg_hash      => $args{pg_hash},
-		outcome      => $args{outcome}      // 'success',
-		warnings     => $args{warnings}     // 0,
-		render_ms    => $args{render_ms}    // 0,
-		pg_version   => $ENV{PG_VERSION}    // 'unknown',
-		cache_status => $args{cache_status} // 'unknown',
-		timestamp    => iso8601_now(),
-	);
-
-	# Seed diversity: only on first-render, successful, student requests
-	if ($args{is_first_render}
-		&& defined $args{seed}
-		&& defined $args{html_hash}
-		&& ($event{outcome} eq 'success'))
-	{
-		$event{seed}      = $args{seed} + 0;
-		$event{html_hash} = $args{html_hash};
-	}
-
-	push @BUFFER, \%event;
+	push @BUFFER, {
+		type       => 'render',
+		pg_hash    => $args{pg_hash},
+		pg_version => $ENV{PG_VERSION} // 'unknown',
+		warnings   => $args{warnings}  // 0,
+		errors     => $args{errors}    // 0,
+		render_ms  => $args{render_ms} // 0,
+		timestamp  => iso8601_now(),
+	};
 	_maybe_flush();
 }
 
 # Record an interaction event (answer submission, preview, show answers).
+# Non-instructor only — student-experience signal. Instructor submits/show-
+# answers would poison completion-rate and give-up-rate aggregates.
 sub record_interaction {
 	my (%args) = @_;
 	return if $args{is_instructor};
@@ -112,10 +105,30 @@ sub record_interaction {
 	push @BUFFER, {
 		type       => 'interaction',
 		pg_hash    => $args{pg_hash},
+		pg_version => $ENV{PG_VERSION}  // 'unknown',
 		action     => $args{action}     // 'submit',
 		score      => $args{score},
 		attempt    => $args{attempt}    // 1,
-		pg_version => $ENV{PG_VERSION}  // 'unknown',
+		timestamp  => iso8601_now(),
+	};
+	_maybe_flush();
+}
+
+# Record a seed observation. Role-agnostic — the (seed -> html_hash) mapping
+# is a deterministic content property; instructor previews, authoring renders,
+# and review renders all contribute valid samples of the variant space.
+# Called only on first renders (no sessionJWT = fresh seed).
+sub record_seed_observation {
+	my (%args) = @_;
+	return unless $args{pg_hash};
+	return unless defined $args{seed} && defined $args{html_hash};
+
+	push @BUFFER, {
+		type       => 'seed_observation',
+		pg_hash    => $args{pg_hash},
+		pg_version => $ENV{PG_VERSION} // 'unknown',
+		seed       => $args{seed} + 0,
+		html_hash  => $args{html_hash},
 		timestamp  => iso8601_now(),
 	};
 	_maybe_flush();
