@@ -12,6 +12,6 @@ sub pg_version { return $ENV{PG_VERSION} // 'unknown' }
 
 # Renderer version: no built-in $VERSION; deployments may set via env.
 # Falls back to 'unknown' rather than guessing.
-sub renderer_version { return $ENV{RENDERER_VERSION} // 'unknown' }
+sub renderer_version { return $ENV{VERSION} // 'unknown' }
 
 1;
