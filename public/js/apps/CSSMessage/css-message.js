@@ -79,17 +79,28 @@ window.addEventListener('message', (event) => {
 	// Origin gate: explicit allow-list when parent_origin declared.
 	if (parentOrigin && event.origin !== parentOrigin) return;
 
+	// Accept either an object (legacy senders use structured clone via
+	// postMessage(obj, '*')) or a JSON string (namespaced senders are
+	// expected to JSON.stringify so the wire format is uniform). The
+	// new-vocabulary discipline (type/frame requirements) is enforced
+	// downstream — this step is just "get to a parsed message object."
 	let message;
-	try {
-		message = JSON.parse(event.data);
-	} catch (e) {
-		// [iFrameSizer]… strings are iframe-resizer's wire format. The
-		// iframeResizer.contentWindow script handles them on its own listener
-		// (loaded alongside us in third_party_js); we just need to not yell
-		// about them when they pass through this handler.
-		if (typeof event.data !== 'string' || !event.data.startsWith('[iFrameSizer]')) {
-			console.warn('CSSMessage: message not JSON', event.data);
+	if (event.data && typeof event.data === 'object') {
+		message = event.data;
+	} else if (typeof event.data === 'string') {
+		try {
+			message = JSON.parse(event.data);
+		} catch (e) {
+			// [iFrameSizer]… strings are iframe-resizer's wire format. The
+			// iframeResizer.contentWindow script handles them on its own listener
+			// (loaded alongside us in third_party_js); we just need to not yell
+			// about them when they pass through this handler.
+			if (!event.data.startsWith('[iFrameSizer]')) {
+				console.warn('CSSMessage: message not JSON', event.data);
+			}
+			return;
 		}
+	} else {
 		return;
 	}
 
