@@ -72,17 +72,22 @@ sub _configure_app ($self) {
 		[ 'js/apps/MathJaxConfig/mathjax-config.js',                { defer => undef } ],
 		[ 'node_modules/mathjax/es5/tex-svg.js',                    { defer => undef, id => 'MathJax-script' } ],
 		[ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js', { defer => undef } ],
-		# Re-enabled alongside the native webwork.lifecycle.resize emission so
-		# existing iframe-resizer host pages keep working without changes.
-		# The native ResizeObserver path in problem.js is the going-forward
-		# vocabulary; this is bilingual-emit for integrator continuity. Circle
-		# back to remove once integrators have migrated off the legacy library.
-		[ 'node_modules/iframe-resizer/js/iframeResizer.contentWindow.min.js', { defer => undef } ],
 		[ 'js/apps/Problem/problem.js',                             { defer => undef } ],
 		[ 'js/apps/Problem/submithelper.js',                        { defer => undef } ],
 		[ 'js/apps/CSSMessage/css-message.js',                      { defer => undef } ],
 		[ 'js/apps/DraftTracker/draft-tracker.js',                  { defer => undef } ],
 	];
+
+	# Optional bilingual resize emit: append iframe-resizer's content-side
+	# script when LEGACY_IFRAME_RESIZER is set. Appended *after* the //= so
+	# the env-var-driven feature flag applies even to deployments that
+	# customize third_party_js in renderer.conf. The native
+	# webwork.lifecycle.resize protocol is the going-forward vocabulary;
+	# this exists for integrators (e.g. ADAPT) still on iframe-resizer
+	# host-side. Removal tracked in LT-070.
+	push @{ $self->config->{third_party_js} },
+		[ 'node_modules/iframe-resizer/js/iframeResizer.contentWindow.min.js', { defer => undef } ]
+		if $ENV{LEGACY_IFRAME_RESIZER};
 
 	# Refuse to start if shared secrets are still placeholders.
 	# Prevents silent fallback to conf-file defaults when a service forgets to
