@@ -1,0 +1,47 @@
+{
+  "name": "@openwebwork/renderer-client",
+  "version": "0.0.0",
+  "description": "Typed postMessage client for the WeBWorK standalone renderer. Zero deps. Spec: WeBWorK/Renderer/postMessage Protocol.md",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openwebwork/renderer",
+    "directory": "client"
+  },
+  "license": "MIT",
+  "keywords": [
+    "webwork",
+    "renderer",
+    "postmessage",
+    "iframe"
+  ]
+}
