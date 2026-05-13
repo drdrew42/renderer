@@ -21,6 +21,17 @@ delete $ENV{OPL_API_URL};
 
 my $t = Test::Mojo->new('Renderer');
 
+# Content-fetch endpoints are JSON-only API endpoints; real callers
+# (LibreTexts, ADAPT, WW3) send Accept: application/json. $c->exception
+# honors content negotiation, so without this header Mojolicious falls back
+# to the HTML 'exception' template — which would defeat the body-shape
+# assertions below. This default mirrors production client behavior.
+$t->ua->on(start => sub {
+	my ($ua, $tx) = @_;
+	$tx->req->headers->accept('application/json')
+		unless $tx->req->headers->accept;
+});
+
 # Mint a problemJWT carrying a `typ` claim. Per Content Fetch Token Model,
 # the /solution and /hint endpoints accept a problemJWT (same secret, same
 # aud) with typ='solution' or typ='hint'.
@@ -403,6 +414,108 @@ subtest 'endpoints bypass parseRequest (STRICT_JWT does not apply)' => sub {
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200, 'STRICT_JWT does not block content-fetch endpoints');
+};
+
+# ─── injectedMacros wiring (regression guard for ADAPT outage) ────────────
+
+subtest 'cache-only macro renders via injectedMacros' => sub {
+	# The load-bearing fix from the ADAPT-side outage: when a problem
+	# loadMacros() a custom/override macro whose source lives only in the
+	# content cache (never on disk), the hint/solution path must populate
+	# envir{injectedMacros} so PGloadfiles.pm resolves from memory. Without
+	# this wiring the response silently degrades to message: "".
+	require Renderer::ContentCache;
+
+	my $macro_name   = 'testInjectedMacro.pl';
+	my $macro_source = <<'PERL';
+sub injected_test_sentinel { return "INJECTED_OK"; }
+1;
+PERL
+	my $macro_hash = 'sha256:test_injected_macro_hash';
+	Renderer::ContentCache::stage_macro($macro_hash, $macro_source);
+
+	my $pg_with_custom_macro = <<"PG";
+DOCUMENT();
+loadMacros("PGstandard.pl", "PGML.pl", "MathObjects.pl", "$macro_name");
+Context("Numeric");
+\$answer = Compute("1");
+\$sentinel = injected_test_sentinel();
+TEXT(beginproblem());
+BEGIN_PGML
+Trivial. [___]{\$answer}
+END_PGML
+BEGIN_PGML_SOLUTION
+[\$sentinel]*
+END_PGML_SOLUTION
+ENDDOCUMENT();
+PG
+
+	my $pg_hash = 'sha256:test_problem_with_injected_macro';
+	Renderer::ContentCache::stage_problem($pg_hash, $pg_with_custom_macro, [
+		{ name => $macro_name, hash => $macro_hash, source_type => 'custom' },
+	]);
+	Renderer::ContentCache::save_path_index('test/injected_macro.pg', $pg_hash);
+
+	local $ENV{CONTENT_ADDRESSED} = 1;
+
+	my $jwt = mint_jwt($ENV{problemJWTsecret}, {
+		typ     => 'solution',
+		aud     => $ENV{SITE_HOST},
+		webwork => {
+			sourceFilePath => 'test/injected_macro.pg',
+			problemSeed    => 1234,
+		},
+	});
+
+	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
+		->status_is(200);
+	like($t->tx->res->json->{message}, qr/INJECTED_OK/,
+		'cache-only macro loaded via injectedMacros — sentinel rendered into solution');
+};
+
+# ─── PG render failure surfaces as 5xx (not silent 200) ───────────────────
+
+subtest 'PG render failure → 500 with error in message' => sub {
+	# Pre-ca3336e0, a Translator-level failure (uncompilable problem,
+	# loadMacros failure for a disk-missing macro) left $pg->{body_text}
+	# empty, hintExists/solutionExists at 0, and the endpoint returned 200
+	# with empty content — indistinguishable from "no SOLUTION block."
+	# error_flag check now surfaces these as 500 with $pg->{errors}.
+	my $pg_broken = <<'PG';
+DOCUMENT();
+loadMacros("PGstandard.pl", "PGML.pl");
+this is not valid Perl ($$ %% &&;
+ENDDOCUMENT();
+PG
+
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt_solution,
+		problemSource => $pg_broken,
+		problemSeed   => 1234,
+	})->status_is(500)
+	  ->json_is('/status' => 500);
+	ok($t->tx->res->json->{message}, 'error message present on 500 (not empty body)');
+};
+
+# ─── Error response shape parity with success ─────────────────────────────
+
+subtest 'error responses follow { status, message } shape' => sub {
+	# 8a7d913b unified success and failure on a single contract. Verify the
+	# error half — 401 (token gate) and 400 (post-resolve body validation)
+	# both carry status + message just like 200 does.
+	$t->post_ok('/render-api/solution' => form => {
+		problemSource => $pg_with_both,
+		problemSeed   => 1234,
+	})->status_is(401)
+	  ->json_is('/status' => 401);
+	ok($t->tx->res->json->{message}, '401 carries message field');
+
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT  => $jwt_solution,
+		problemSeed => 1234,
+	})->status_is(400)
+	  ->json_is('/status' => 400);
+	ok($t->tx->res->json->{message}, '400 carries message field');
 };
 
 done_testing();
