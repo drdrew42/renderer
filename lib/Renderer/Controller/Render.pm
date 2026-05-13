@@ -209,10 +209,17 @@ sub _verify_content_fetch_jwt ($c, $expected_typ) {
 		return;
 	}
 
-	# LibreTexts wraps claims under a provider key — mirrors Lane/Problem.pm.
+	# `typ` is an auth-shape claim and may live at either level: top-level
+	# (alongside iss/aud, the natural JWT spot) or inside the LibreTexts
+	# `webwork` envelope. Check outer first so a top-level mint isn't lost
+	# by the unwrap.
+	my $outer_typ = $claims->{typ};
+
+	# LibreTexts wraps problem-detail claims under a provider key — mirrors
+	# Lane/Problem.pm.
 	$claims = $claims->{webwork} if defined $claims->{webwork};
 
-	my $actual_typ = $claims->{typ} // '';
+	my $actual_typ = $outer_typ // $claims->{typ} // '';
 	if ($actual_typ ne $expected_typ) {
 		$c->exception("Wrong typ: expected '$expected_typ', got '$actual_typ'", 401);
 		return;
@@ -224,17 +231,23 @@ sub _verify_content_fetch_jwt ($c, $expected_typ) {
 async sub hint ($c) {
 	$c->render_later;
 
-	_verify_content_fetch_jwt($c, 'hint') or return;
+	my $claims = _verify_content_fetch_jwt($c, 'hint') or return;
 
-	my $params = $c->req->params->to_hash;
+	# JWT claims win over form params: the token binds the caller to a
+	# specific source+seed, so honoring them prevents a valid hint token
+	# from being used to fetch a different problem's hints.
+	my $params        = $c->req->params->to_hash;
+	my $problemSource = $claims->{problemSource} // $params->{problemSource};
+	my $problemSeed   = $claims->{problemSeed}   // $params->{problemSeed};
+
 	return $c->exception('Missing required parameter: problemSource', 400)
-		unless defined $params->{problemSource} && length $params->{problemSource};
+		unless defined $problemSource && length $problemSource;
 	return $c->exception('Missing required parameter: problemSeed', 400)
-		unless defined $params->{problemSeed};
+		unless defined $problemSeed;
 
 	my $res = await WeBWorK::HintSolution::render_hint({
-		problemSource => $params->{problemSource},
-		problemSeed   => $params->{problemSeed},
+		problemSource => $problemSource,
+		problemSeed   => $problemSeed,
 	});
 
 	if (ref($res) eq 'HASH' && $res->{error}) {
@@ -246,17 +259,20 @@ async sub hint ($c) {
 async sub solution ($c) {
 	$c->render_later;
 
-	_verify_content_fetch_jwt($c, 'solution') or return;
+	my $claims = _verify_content_fetch_jwt($c, 'solution') or return;
 
-	my $params = $c->req->params->to_hash;
+	my $params        = $c->req->params->to_hash;
+	my $problemSource = $claims->{problemSource} // $params->{problemSource};
+	my $problemSeed   = $claims->{problemSeed}   // $params->{problemSeed};
+
 	return $c->exception('Missing required parameter: problemSource', 400)
-		unless defined $params->{problemSource} && length $params->{problemSource};
+		unless defined $problemSource && length $problemSource;
 	return $c->exception('Missing required parameter: problemSeed', 400)
-		unless defined $params->{problemSeed};
+		unless defined $problemSeed;
 
 	my $res = await WeBWorK::HintSolution::render_solution({
-		problemSource => $params->{problemSource},
-		problemSeed   => $params->{problemSeed},
+		problemSource => $problemSource,
+		problemSeed   => $problemSeed,
 	});
 
 	if (ref($res) eq 'HASH' && $res->{error}) {

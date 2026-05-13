@@ -300,6 +300,60 @@ subtest 'hint endpoint mints no JWTs' => sub {
 
 # ─── Endpoints bypass /render-api lane plumbing ──────────────────────────
 
+subtest 'typ at top level, problemSource/seed inside webwork envelope' => sub {
+	# LibreTexts-shaped mint: typ as a sibling of aud/iss, problem-detail
+	# claims inside the `webwork` envelope. Controller should accept typ
+	# from the outer claims (before unwrap) and pull source/seed from the
+	# inner envelope (preferred over form params).
+	my $jwt = mint_jwt($ENV{problemJWTsecret}, {
+		typ     => 'solution',
+		aud     => $ENV{SITE_HOST},
+		webwork => {
+			problemSource => $pg_with_both,
+			problemSeed   => 1234,
+		},
+	});
+	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
+		->status_is(200);
+	like($t->tx->res->json->{solution}, qr/42/,
+		'source+seed from webwork claims rendered without form params');
+};
+
+subtest 'typ inside webwork envelope also accepted' => sub {
+	# Some mints put typ inside the envelope alongside problem detail.
+	# Either placement should work.
+	my $jwt = mint_jwt($ENV{problemJWTsecret}, {
+		aud     => $ENV{SITE_HOST},
+		webwork => {
+			typ           => 'solution',
+			problemSource => $pg_with_both,
+			problemSeed   => 1234,
+		},
+	});
+	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
+		->status_is(200);
+};
+
+subtest 'claims win over form params for source+seed' => sub {
+	# When both are present, the JWT-bound source+seed take precedence —
+	# a typed token can only fetch what it was minted for.
+	my $jwt = mint_jwt($ENV{problemJWTsecret}, {
+		typ     => 'solution',
+		aud     => $ENV{SITE_HOST},
+		webwork => {
+			problemSource => $pg_with_both,
+			problemSeed   => 1234,
+		},
+	});
+	$t->post_ok('/render-api/solution' => form => {
+		problemJWT    => $jwt,
+		problemSource => $pg_bare,    # would render nothing — claim wins
+		problemSeed   => 9999,
+	})->status_is(200);
+	like($t->tx->res->json->{solution}, qr/42/,
+		'rendered the claim-bound source, not the form-data override');
+};
+
 subtest 'endpoints bypass parseRequest (STRICT_JWT does not apply)' => sub {
 	# The content-fetch endpoints have their own gate (typed problemJWT) and
 	# do not flow through parseRequest. STRICT_JWT (which governs the main
