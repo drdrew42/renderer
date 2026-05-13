@@ -16,7 +16,6 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 use Mojo::JSON qw(encode_json decode_json);
 use Time::HiRes qw(time);
-use Crypt::JWT qw(decode_jwt);
 
 use WeBWorK::PreTeXt;
 use WeBWorK::HintSolution;
@@ -25,6 +24,7 @@ use Renderer::Telemetry;
 use Renderer::Render::Subprocess qw(render_in_subprocess);
 use Renderer::Render::SourceResolver;
 use Renderer::Render::AnswerURL;
+use Renderer::Lane::ContentFetch;
 use Renderer::Util::JWT qw(mint_jwt);
 
 async sub problem ($c) {
@@ -179,106 +179,53 @@ async sub render_ptx ($c) {
 }
 
 # POST /render-api/hint and POST /render-api/solution (WW3-R28).
-# Content fetches gated by a problemJWT with typ='hint' or typ='solution'.
-# The token is constructed exactly like any other problemJWT (same secret,
-# same aud); the only differences are the typ claim and which endpoint it
-# arrives at. The LMS makes the policy decision ("display this solution to
-# this user now"); the renderer just verifies the token and returns content.
+# Content fetches gated by a typed problemJWT (typ='hint' or typ='solution').
+# Same secret, same aud as any other problemJWT — only typ and the endpoint
+# differ. The LMS makes the policy decision ("display this solution to this
+# user now"); the renderer verifies the token and returns content.
 #
-# See WeBWorK::HintSolution for the render+extract pipeline,
-# WeBWorK/Renderer/Render-Only Hint and Solution Modes.md for the PG-side
-# investigation, and WeBWorK/Renderer/Content Fetch Token Model.md for the
-# gate's design rationale.
-sub _verify_content_fetch_jwt ($c, $expected_typ) {
-	my $jwt = $c->req->param('problemJWT');
-	unless (defined $jwt && length $jwt) {
-		$c->exception('Missing required parameter: problemJWT', 401);
-		return;
+# Pipeline mirrors the main /render-api lane but skips the trust mesh:
+#   1. Lane::ContentFetch — verify+typ-check, merge claims onto params.
+#   2. SourceResolver     — turn problemSourceURL / sourceFilePath /
+#                           problemSource into resolved problemSource bytes.
+#   3. HintSolution       — render-and-filter to extract hint/solution blocks.
+#
+# See WeBWorK::HintSolution for the render+filter pipeline,
+# WeBWorK/Renderer/Content Fetch Token Model.md for the gate's design.
+async sub _content_fetch ($c, $expected_typ, $renderer) {
+	$c->render_later;
+
+	my $params = $c->req->params->to_hash;
+	Renderer::Lane::ContentFetch::apply($c, $params, $expected_typ) or return;
+
+	# Resolve any of problemSourceURL / sourceFilePath / problemSource into
+	# concrete bytes on $params->{problemSource}. Reuses the same content-cache
+	# and OPL-lookup machinery the main render lane uses.
+	my $resolved = await Renderer::Render::SourceResolver::resolve_source($c, $params);
+	return unless $resolved;
+
+	return $c->exception('Cannot render without problem source.', 400)
+		unless defined $params->{problemSource} && length $params->{problemSource};
+	return $c->exception('Missing required parameter: problemSeed', 400)
+		unless defined $params->{problemSeed};
+
+	my $res = await $renderer->({
+		problemSource => $params->{problemSource},
+		problemSeed   => $params->{problemSeed},
+	});
+
+	if (ref($res) eq 'HASH' && $res->{error}) {
+		return $c->exception($res->{error}, $res->{status} // 500);
 	}
-
-	my $claims = eval {
-		decode_jwt(
-			token      => $jwt,
-			key        => $ENV{problemJWTsecret},
-			verify_aud => $ENV{SITE_HOST},
-		);
-	};
-	if (my $err = $@) {
-		$c->log->info("Content-fetch JWT verify failed: $err");
-		$c->exception('Invalid or expired problemJWT', 401);
-		return;
-	}
-
-	# `typ` is an auth-shape claim and may live at either level: top-level
-	# (alongside iss/aud, the natural JWT spot) or inside the LibreTexts
-	# `webwork` envelope. Check outer first so a top-level mint isn't lost
-	# by the unwrap.
-	my $outer_typ = $claims->{typ};
-
-	# LibreTexts wraps problem-detail claims under a provider key — mirrors
-	# Lane/Problem.pm.
-	$claims = $claims->{webwork} if defined $claims->{webwork};
-
-	my $actual_typ = $outer_typ // $claims->{typ} // '';
-	if ($actual_typ ne $expected_typ) {
-		$c->exception("Wrong typ: expected '$expected_typ', got '$actual_typ'", 401);
-		return;
-	}
-
-	return $claims;
+	return $c->render(json => $res);
 }
 
 async sub hint ($c) {
-	$c->render_later;
-
-	my $claims = _verify_content_fetch_jwt($c, 'hint') or return;
-
-	# JWT claims win over form params: the token binds the caller to a
-	# specific source+seed, so honoring them prevents a valid hint token
-	# from being used to fetch a different problem's hints.
-	my $params        = $c->req->params->to_hash;
-	my $problemSource = $claims->{problemSource} // $params->{problemSource};
-	my $problemSeed   = $claims->{problemSeed}   // $params->{problemSeed};
-
-	return $c->exception('Missing required parameter: problemSource', 400)
-		unless defined $problemSource && length $problemSource;
-	return $c->exception('Missing required parameter: problemSeed', 400)
-		unless defined $problemSeed;
-
-	my $res = await WeBWorK::HintSolution::render_hint({
-		problemSource => $problemSource,
-		problemSeed   => $problemSeed,
-	});
-
-	if (ref($res) eq 'HASH' && $res->{error}) {
-		return $c->exception($res->{error}, $res->{status} // 500);
-	}
-	return $c->render(json => $res);
+	return await _content_fetch($c, 'hint', \&WeBWorK::HintSolution::render_hint);
 }
 
 async sub solution ($c) {
-	$c->render_later;
-
-	my $claims = _verify_content_fetch_jwt($c, 'solution') or return;
-
-	my $params        = $c->req->params->to_hash;
-	my $problemSource = $claims->{problemSource} // $params->{problemSource};
-	my $problemSeed   = $claims->{problemSeed}   // $params->{problemSeed};
-
-	return $c->exception('Missing required parameter: problemSource', 400)
-		unless defined $problemSource && length $problemSource;
-	return $c->exception('Missing required parameter: problemSeed', 400)
-		unless defined $problemSeed;
-
-	my $res = await WeBWorK::HintSolution::render_solution({
-		problemSource => $problemSource,
-		problemSeed   => $problemSeed,
-	});
-
-	if (ref($res) eq 'HASH' && $res->{error}) {
-		return $c->exception($res->{error}, $res->{status} // 500);
-	}
-	return $c->render(json => $res);
+	return await _content_fetch($c, 'solution', \&WeBWorK::HintSolution::render_solution);
 }
 
 sub exception ($c, $message, $status, @extra) {

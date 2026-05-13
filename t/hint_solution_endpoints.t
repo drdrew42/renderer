@@ -354,6 +354,45 @@ subtest 'claims win over form params for source+seed' => sub {
 		'rendered the claim-bound source, not the form-data override');
 };
 
+subtest 'sourceFilePath claim resolves via content cache' => sub {
+	# Claim binds the token to a content-cache path. Endpoint should
+	# resolve through SourceResolver — no problemSource in body, no
+	# problemSource claim either.
+	require Renderer::ContentCache;
+	my $cached_hash = 'test_hint_solution_cached_hash';
+	Renderer::ContentCache::stage_problem($cached_hash, $pg_with_both);
+	Renderer::ContentCache::save_path_index('test/hint_solution.pg', $cached_hash);
+
+	local $ENV{CONTENT_ADDRESSED} = 1;
+
+	my $jwt = mint_jwt($ENV{problemJWTsecret}, {
+		typ     => 'solution',
+		aud     => $ENV{SITE_HOST},
+		webwork => {
+			sourceFilePath => 'test/hint_solution.pg',
+			problemSeed    => 1234,
+		},
+	});
+	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
+		->status_is(200);
+	like($t->tx->res->json->{solution}, qr/42/,
+		'solution resolved from sourceFilePath claim via content cache');
+};
+
+subtest 'unresolvable sourceFilePath → 404' => sub {
+	local $ENV{CONTENT_ADDRESSED} = 1;
+	my $jwt = mint_jwt($ENV{problemJWTsecret}, {
+		typ     => 'solution',
+		aud     => $ENV{SITE_HOST},
+		webwork => {
+			sourceFilePath => 'nonexistent/path/to/problem.pg',
+			problemSeed    => 1234,
+		},
+	});
+	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
+		->status_is(404);
+};
+
 subtest 'endpoints bypass parseRequest (STRICT_JWT does not apply)' => sub {
 	# The content-fetch endpoints have their own gate (typed problemJWT) and
 	# do not flow through parseRequest. STRICT_JWT (which governs the main
