@@ -63,11 +63,28 @@ sub _render_and_filter ($p, %opts) {
 			displayMode    => 'MathJax',
 			problemSeed    => $p->{problemSeed} // 1234,
 			r_source       => \$source,
+			# Content-addressed custom macros: source bytes for custom/override
+			# macros live only in the content cache, not on disk. Without this
+			# wiring, loadMacros() for chemQuillMath / contextInexactValue /
+			# etc. fails silently — PG returns no body, solutionExists stays 0,
+			# and the endpoint returns solution: null. See RenderProblem.pm:256
+			# for the same wiring on the main /render-api lane.
+			($p->{injectedMacros} ? (injectedMacros => $p->{injectedMacros}) : ()),
 			# State-conditional content (a hint reading $inputs{...}) flows
 			# through PG's normal inputs_ref plumbing. Empty hashref for the
 			# stateless case (the typical case).
 			inputs_ref     => $p->{inputs_ref} // {},
 		);
+
+		# Render failure: PG sets error_flag and accumulates messages in
+		# $pg->{errors} on Translator-level failures (uncompilable problem,
+		# loadMacros failure, etc.). Surface as 5xx so the caller can tell
+		# this apart from "this problem has no hint/solution block."
+		if ($pg->{flags}{error_flag}) {
+			my $err = $pg->{errors} // 'PG render failed';
+			$pg->free;
+			return { error => $err, status => 500 };
+		}
 
 		# Existence flag short-circuit. PG sets these to 1 only if at least
 		# one HINT/SOLUTION macro fired during document evaluation. If a

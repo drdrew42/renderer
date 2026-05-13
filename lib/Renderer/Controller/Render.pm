@@ -209,9 +209,23 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	return $c->exception('Missing required parameter: problemSeed', 400)
 		unless defined $params->{problemSeed};
 
+	# Custom/override macro injection — the source we just resolved may
+	# loadMacros() files that live only in the content cache (e.g. ADAPT
+	# problems pulling chemQuillMath.pl). Without this, PG's loadMacros
+	# falls back to disk, fails for cache-only macros, and the response
+	# silently degrades to solution: null. Mirrors the wiring at
+	# Render::problem (Renderer/Controller/Render.pm in the main lane).
+	my $injectedMacros;
+	if ($params->{pg_hash}) {
+		$injectedMacros = Renderer::ContentCache::get_injected_macros($params->{pg_hash});
+		$c->log->info("Injecting " . scalar(keys %$injectedMacros) . " macro(s) via envir for $params->{pg_hash}")
+			if $injectedMacros && %$injectedMacros;
+	}
+
 	my $res = await $renderer->({
-		problemSource => $params->{problemSource},
-		problemSeed   => $params->{problemSeed},
+		problemSource  => $params->{problemSource},
+		problemSeed    => $params->{problemSeed},
+		($injectedMacros && %$injectedMacros ? (injectedMacros => $injectedMacros) : ()),
 	});
 
 	if (ref($res) eq 'HASH' && $res->{error}) {
