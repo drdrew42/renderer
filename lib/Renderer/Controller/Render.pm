@@ -231,7 +231,17 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	if (ref($res) eq 'HASH' && $res->{error}) {
 		return $c->exception($res->{error}, $res->{status} // 500);
 	}
-	return $c->render(json => $res);
+
+	# Unified response shape: { status, message }. Matches $c->exception's
+	# error shape so consumers can rely on a single contract across success
+	# and failure — check `status`, read `message`. For solution, message is
+	# the body HTML (or "" when the problem has no SOLUTION block). For hint,
+	# message is the concatenation of all hint bodies in source order (or ""
+	# when there are no HINT blocks).
+	my $message = $expected_typ eq 'solution'
+		? ($res->{solution} // '')
+		: join('', @{ $res->{hints} // [] });
+	return $c->render(json => { status => 200, message => $message });
 }
 
 async sub hint ($c) {

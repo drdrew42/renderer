@@ -113,74 +113,76 @@ PG
 
 # ─── Solution endpoint ────────────────────────────────────────────────────
 
-subtest 'POST /render-api/solution returns solution body' => sub {
+# Response contract: { status, message } across both success and error.
+#   Success with content: status=200, message=<html>
+#   Success no content:   status=200, message=""
+#   Any error:            status=<code>, message=<error string>
+# Consumers can rely on a single shape regardless of outcome.
+
+subtest 'POST /render-api/solution returns solution body in message' => sub {
 	$t->post_ok('/render-api/solution' => form => {
 		problemJWT    => $jwt_solution,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200)
-	  ->json_has('/solution');
-	my $body = $t->tx->res->json->{solution};
-	ok($body, 'solution body is non-empty');
-	like($body, qr/42/, 'solution body contains expected content');
+	  ->json_is('/status' => 200);
+	my $body = $t->tx->res->json->{message};
+	ok($body, 'message is non-empty');
+	like($body, qr/42/, 'message contains expected solution content');
 };
 
-subtest 'POST /render-api/solution: no solution → solution=null' => sub {
+subtest 'POST /render-api/solution: no solution block → empty message' => sub {
 	$t->post_ok('/render-api/solution' => form => {
 		problemJWT    => $jwt_solution,
 		problemSource => $pg_hints_only,
 		problemSeed   => 1234,
-	})->status_is(200);
-	is($t->tx->res->json->{solution}, undef,
-		'problem with no solution returns solution=null');
+	})->status_is(200)
+	  ->json_is('/status'  => 200)
+	  ->json_is('/message' => '');
 };
 
-subtest 'POST /render-api/solution: bare problem → solution=null' => sub {
+subtest 'POST /render-api/solution: bare problem → empty message' => sub {
 	$t->post_ok('/render-api/solution' => form => {
 		problemJWT    => $jwt_solution,
 		problemSource => $pg_bare,
 		problemSeed   => 1234,
-	})->status_is(200);
-	is($t->tx->res->json->{solution}, undef,
-		'problem with neither hints nor solutions returns solution=null');
+	})->status_is(200)
+	  ->json_is('/status'  => 200)
+	  ->json_is('/message' => '');
 };
 
 # ─── Hint endpoint ────────────────────────────────────────────────────────
 
-subtest 'POST /render-api/hint returns hints array' => sub {
+subtest 'POST /render-api/hint returns hint body in message' => sub {
 	$t->post_ok('/render-api/hint' => form => {
 		problemJWT    => $jwt_hint,
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200)
-	  ->json_has('/hints');
-	my $hints = $t->tx->res->json->{hints};
-	is(ref($hints), 'ARRAY', 'hints field is an array');
-	is(scalar @$hints, 1, 'one hint returned');
-	like($hints->[0], qr/small even number/, 'hint body contains expected content');
+	  ->json_is('/status' => 200);
+	like($t->tx->res->json->{message}, qr/small even number/,
+		'message contains expected hint content');
 };
 
-subtest 'POST /render-api/hint: multiple hints all returned' => sub {
+subtest 'POST /render-api/hint: multiple hints concatenated' => sub {
 	$t->post_ok('/render-api/hint' => form => {
 		problemJWT    => $jwt_hint,
 		problemSource => $pg_multi_hints,
 		problemSeed   => 1234,
 	})->status_is(200);
-	my $hints = $t->tx->res->json->{hints};
-	is(scalar @$hints, 2, 'both hints returned');
-	like($hints->[0], qr/division/, 'first hint correct');
-	like($hints->[1], qr/24 divided by 2/, 'second hint correct');
+	my $message = $t->tx->res->json->{message};
+	like($message, qr/division/,        'first hint present in message');
+	like($message, qr/24 divided by 2/, 'second hint present in message');
 };
 
-subtest 'POST /render-api/hint: no hints → hints=[]' => sub {
+subtest 'POST /render-api/hint: no hints → empty message' => sub {
 	$t->post_ok('/render-api/hint' => form => {
 		problemJWT    => $jwt_hint,
 		problemSource => $pg_bare,
 		problemSeed   => 1234,
-	})->status_is(200);
-	my $hints = $t->tx->res->json->{hints};
-	is(ref($hints), 'ARRAY', 'still an array');
-	is(scalar @$hints, 0, 'empty array when no hints in problem');
+	})->status_is(200)
+	  ->json_is('/status'  => 200)
+	  ->json_is('/message' => '');
 };
 
 # ─── Token gate ───────────────────────────────────────────────────────────
@@ -277,13 +279,12 @@ subtest 'solution endpoint mints no JWTs' => sub {
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200);
-	my $json = $t->tx->res->json;
-	# Response shape is { solution => "..." } only — no JWT block, no
+	# Response shape is { status, message } only — no JWT block, no
 	# session_jwt, no answer_jwt. Anything else would be a violation of
 	# the dumb-fetch contract.
-	my @keys = sort keys %$json;
-	is_deeply(\@keys, ['solution'],
-		'response carries only the solution field — no JWTs, no extras');
+	my @keys = sort keys %{ $t->tx->res->json };
+	is_deeply(\@keys, ['message', 'status'],
+		'response carries only status+message — no JWTs, no extras');
 };
 
 subtest 'hint endpoint mints no JWTs' => sub {
@@ -292,10 +293,9 @@ subtest 'hint endpoint mints no JWTs' => sub {
 		problemSource => $pg_with_both,
 		problemSeed   => 1234,
 	})->status_is(200);
-	my $json = $t->tx->res->json;
-	my @keys = sort keys %$json;
-	is_deeply(\@keys, ['hints'],
-		'response carries only the hints field — no JWTs, no extras');
+	my @keys = sort keys %{ $t->tx->res->json };
+	is_deeply(\@keys, ['message', 'status'],
+		'response carries only status+message — no JWTs, no extras');
 };
 
 # ─── Endpoints bypass /render-api lane plumbing ──────────────────────────
@@ -315,7 +315,7 @@ subtest 'typ at top level, problemSource/seed inside webwork envelope' => sub {
 	});
 	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
 		->status_is(200);
-	like($t->tx->res->json->{solution}, qr/42/,
+	like($t->tx->res->json->{message}, qr/42/,
 		'source+seed from webwork claims rendered without form params');
 };
 
@@ -350,7 +350,7 @@ subtest 'claims win over form params for source+seed' => sub {
 		problemSource => $pg_bare,    # would render nothing — claim wins
 		problemSeed   => 9999,
 	})->status_is(200);
-	like($t->tx->res->json->{solution}, qr/42/,
+	like($t->tx->res->json->{message}, qr/42/,
 		'rendered the claim-bound source, not the form-data override');
 };
 
@@ -375,7 +375,7 @@ subtest 'sourceFilePath claim resolves via content cache' => sub {
 	});
 	$t->post_ok('/render-api/solution' => form => { problemJWT => $jwt })
 		->status_is(200);
-	like($t->tx->res->json->{solution}, qr/42/,
+	like($t->tx->res->json->{message}, qr/42/,
 		'solution resolved from sourceFilePath claim via content cache');
 };
 
