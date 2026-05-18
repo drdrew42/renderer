@@ -7,10 +7,10 @@ use Mojo::Base -signatures;
 # $c->exception already rendered). Internally split into two phases that
 # match the conceptual shape:
 #
-#   _parse_envelope  — raw form → normalized %params + %ctx (originIP,
-#                      peer-signed parent_origin) + pre-dispatch validations
-#                      + verdict-fold + peer-signature verify + sensitive-
-#                      params strip.
+#   _parse_envelope  — raw form → normalized %params + %ctx (originIP)
+#                      + pre-dispatch validations + verdict-fold +
+#                      peer-signature verify + sensitive-params strip
+#                      (skipped for verified peer-signed bodies).
 #   _apply_lanes     — sessionJWT prefix, body-lane dispatch (problemJWT /
 #                      challengeJWT / peer-signed / ungrounded), post-
 #                      dispatch finalize (originIP/parent_origin restore,
@@ -61,12 +61,6 @@ sub _parse_envelope ($c, $params, $ctx) {
 	$ctx->{originIP} = $c->req->headers->header('X-Forwarded-For')
 		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
 	$ctx->{originIP} ||= $c->tx->remote_address || 'unknown-origin';
-
-	# Protect against DOM manipulation.
-	if (defined $params->{submitAnswers} && defined $params->{previewAnswers}) {
-		$c->log->error('Simultaneous submit and preview! JWT: ', $params->{problemJWT} // {});
-		return $c->exception('Malformed request.', 400);
-	}
 
 	# Treat empty-string JWT params as not-present. Hidden form fields whose
 	# backing value was undef render as `value=""`, which is `defined` but empty;
@@ -149,9 +143,9 @@ sub _parse_envelope ($c, $params, $ctx) {
 		return $c->exception('Malformed request.', 400);
 	}
 
-	# Peer-signed verification. Runs early (before SENSITIVE_PARAMS strip and
-	# Lane::Session) so peer-signed parent_origin can be captured before the
-	# strip. On bad signature, returns a 401 exception.
+	# Peer-signed verification. Runs early — the result determines whether the
+	# SENSITIVE_PARAMS strip below applies. On bad signature, returns a 401
+	# exception (caller short-circuits).
 	Renderer::Lane::Peer::verify($c) or return;
 
 	# Translate the peer-facing `formAction` field to the internal `formURL`
@@ -160,12 +154,6 @@ sub _parse_envelope ($c, $params, $ctx) {
 	if (defined $params->{formAction}) {
 		$params->{formURL} //= delete $params->{formAction};
 	}
-
-	# parent_origin: peer-signed lane carries it in the signed body; capture
-	# before the SENSITIVE_PARAMS strip and restore after dispatch. JWT lane
-	# recovers it via Lane::Problem's claim merge (claim wins) — no special
-	# handling needed there.
-	$ctx->{peer_parent_origin} = $c->stash('_peer_signed') ? delete $params->{parent_origin} : undef;
 
 	# Normalize common lowercase query params to camelCase before JWT processing.
 	$params->{outputFormat} //= delete $params->{outputformat} if exists $params->{outputformat};
@@ -176,10 +164,22 @@ sub _parse_envelope ($c, $params, $ctx) {
 	$c->stash(_is_first_render => !defined $params->{sessionJWT} ? 1 : 0);
 	$c->stash(_no_cache        => $params->{noCache} ? 1 : 0);
 
-	# Strip security-sensitive params. Anything in this list can ONLY be
-	# (re)introduced via a trusted source (JWT claim, peer-signed body).
-	for (SENSITIVE_PARAMS) {
-		delete $params->{$_};
+	# Strip security-sensitive params from untrusted inputs. Peer-signed
+	# bodies are exempt — a verified peer signature IS the trust gate, and
+	# the signed body is as trustworthy as a JWT claim. Anyone who can mint
+	# a peer signature could equally mint a problemJWT carrying any of these
+	# fields; stripping them from a verified body would be theatre and would
+	# block legitimate flows (editor-provider with JWTanswerURL callback,
+	# library browse with declared parent_origin, etc.).
+	#
+	# Non-peer-signed: JWT-bearing requests recover sensitive values via the
+	# Lane::Session / Lane::Problem / Lane::Challenge claim merges. Ungrounded
+	# requests have nothing to recover from and stay stripped — that's the
+	# point.
+	unless ($c->stash('_peer_signed')) {
+		for (SENSITIVE_PARAMS) {
+			delete $params->{$_};
+		}
 	}
 
 	return 1;
@@ -225,11 +225,6 @@ sub _apply_lanes ($c, $params, $ctx) {
 
 	# Post-dispatch finalize.
 	$params->{originIP} = $ctx->{originIP} if $ctx->{originIP};
-
-	# Restore peer-signed parent_origin (captured before the strip in
-	# _parse_envelope). The JWT lane recovers parent_origin via the generic
-	# claim merge; the peer-signed lane has no such merge, so reapply explicitly.
-	$params->{parent_origin} //= $ctx->{peer_parent_origin} if defined $ctx->{peer_parent_origin};
 
 	return 1;
 }

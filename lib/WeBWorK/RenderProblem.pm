@@ -154,10 +154,7 @@ sub process_problem {
 	# applied later in the controller, where the actual answerJWT POST is
 	# refused for instructors (Render.pm:639). The artifact is still produced
 	# here so the HTML form has a sessionJWT to carry forward.
-	if ($inputs_ref->{previewAnswers}) {
-		# preview: leave session unmodified, no answerJWT
-		$return_object->{sessionJWT} = $inputs_ref->{sessionJWT};
-	} elsif ($inputs_ref->{challengeJWT}) {
+	if ($inputs_ref->{challengeJWT}) {
 		# challengeJWT path (WW3-032). Mints the play-level sessionJWT (always)
 		# and the per-submission submissionJWT (only on submit). These minters
 		# live side-by-side with generateJWTs; they share no state and emit
@@ -212,7 +209,6 @@ sub standaloneRenderer {
 
 	my $processAnswers = $inputs_ref->{processAnswers} // 1;
 
-	my $isPreview    = defined($inputs_ref->{previewAnswers}) ? 1 : 0;
 	my $isSubmit     = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
 
 	# answersSubmitted is the cumulative "the student has submitted at some
@@ -243,8 +239,8 @@ sub standaloneRenderer {
 	my $showSolutions      = $perms->{showSolutions};
 	my $showHints          = $perms->{showHints};
 
-	my $displayResults = $inputs_ref->{answersSubmitted} && !$isPreview;
-	my $forceResults   = $displayResults                 && $inputs_ref->{showPartialCorrectAnswers};
+	my $displayResults = $inputs_ref->{answersSubmitted} ? 1 : 0;
+	my $forceResults   = $displayResults && $inputs_ref->{showPartialCorrectAnswers};
 
 	my $pg = WeBWorK::PG->new(
 		inputs_ref              => {%$inputs_ref},                        # preserve original values
@@ -258,7 +254,7 @@ sub standaloneRenderer {
 		showFeedback            => 1,
 		showAttemptResults      => $displayResults,                       # respects showPartialCorrectAnswers
 		forceShowAttemptResults => $forceResults,                         # overrides showPartialCorrectAnswers
-		showAttemptAnswers      => $isPreview,                            # display string version of submitted answer
+		showAttemptAnswers      => 0,                                     # MathQuill renders inline as student types; no separate echo path
 		showAttemptPreviews     => 1,                                     # display LaTeX version of submitted answer
 		showHints               => $showHints,
 		showSolutions           => $showSolutions,
@@ -395,6 +391,13 @@ sub generateJWTs {
 	if (!$inputs_ref->{isInstructor}) {
 		$sessionHash->{answersRevealed}   = $reveal->{answers_revealed_out}   if $reveal->{answers_revealed_out};
 		$sessionHash->{solutionsRevealed} = $reveal->{solutions_revealed_out} if $reveal->{solutions_revealed_out};
+
+		# Stash reveal state on the render result so the controller's emission
+		# gate can fire on ratchet-activated peeks without submitAnswers. The
+		# LMS learns about a reveal event at render time rather than waiting
+		# for the next submit. Instructor renders skip the stash — instructor
+		# previews aren't accountability events the LMS cares to log.
+		$pg->{_reveal_state} = $reveal;
 	}
 
 	# store the current answer/response state for each entry
@@ -450,11 +453,12 @@ sub generateJWTs {
 #
 # These mint the play-level sessionJWT and the per-submission submissionJWT
 # defined by [[WeBWorK3/Challenge/Artifact Shape]]. They live alongside the
-# legacy generateJWTs above and share no state with it; the dispatch at
+# problem-lane generateJWTs above and share no state with it; the dispatch at
 # process_problem picks one path or the other based on which envelope the
 # request arrived with. The key architectural difference: attempt counting
-# (numCorrect/numIncorrect) and lock state (isLocked) are NOT carried here —
-# atom evaluation is orchestrator-only (Architecture B).
+# (numCorrect/numIncorrect) is NOT carried here — atom evaluation is
+# orchestrator-only (Architecture B). Chain history (reveal events, attempt
+# counts) lives in chain entries, not in the renderer's sessionJWT.
 
 # Mint the play-level sessionJWT. Embeds the inbound challengeJWT verbatim
 # and propagates the navigation state forward by one mint_sequence. The

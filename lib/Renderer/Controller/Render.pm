@@ -73,11 +73,23 @@ async sub problem ($c) {
 	};
 	$return_object->{inputs_ref} = $inputs_ref;
 
-	# If answerURL provided and this is a submit, send the answerJWT (legacy
-	# problemJWT path) or submissionJWT envelope (challengeJWT path). The
-	# renderer is dumb here: a JWT-declared answerURL means "report back" —
-	# isInstructor is the orchestrator's concern, not ours.
-	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}) {
+	# If answerURL provided, send the answerJWT (problem-lane) or submissionJWT
+	# envelope (challenge-lane) back to the LMS. Triggers:
+	#   (a) submitAnswers — the canonical case (graded submission).
+	#   (b) ratchet flipped this render — student peeked (showCorrectAnswers=1
+	#       requested + recorded_score < 1) without submitting. The LMS learns
+	#       about reveals at render time rather than waiting for next submit.
+	#       Problem-lane only; challenge-lane peeks aren't notified here
+	#       because the orchestrator owns chain history via mode atoms.
+	# The renderer is dumb here: a JWT-declared answerURL means "report back."
+	my $ratchet_flipped = $return_object->{_reveal_state} && (
+		($return_object->{_reveal_state}{answers_revealed_out}   || 0)
+			> ($return_object->{_reveal_state}{answers_revealed_in}   || 0)
+		|| ($return_object->{_reveal_state}{solutions_revealed_out} || 0)
+			> ($return_object->{_reveal_state}{solutions_revealed_in} || 0)
+	);
+
+	if ($inputs_ref->{JWTanswerURL} && ($inputs_ref->{submitAnswers} || $ratchet_flipped)) {
 		# Emission gate. The renderer's contract is validate-then-render; we
 		# do NOT refuse to render based on grounding shape. What we DO refuse
 		# is to emit a signed answerJWT without upstream grounding — that's a
@@ -86,7 +98,7 @@ async sub problem ($c) {
 		# Orthogonal to STRICT_JWT (which governs whether ungrounded requests
 		# are admitted at all). Ref: WeBWorK3/Config and Secrets Evolution.
 		unless ($c->stash('_can_emit_answer_jwt')) {
-			$c->log->error('Student submit without upstream JWT — rejecting answer emission.');
+			$c->log->error('Student submit/peek without upstream JWT — rejecting answer emission.');
 			return $c->exception('Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403);
 		}
 		await Renderer::Render::AnswerURL::process($c, $inputs_ref, $return_object);
@@ -94,7 +106,7 @@ async sub problem ($c) {
 
 	# log interaction and format the response
 	if ($c->app->config('INTERACTION_LOG')) {
-		my $displayScore = $inputs_ref->{previewAnswers} ? 'preview' : $return_object->{problem_result}{score};
+		my $displayScore = $return_object->{problem_result}{score};
 		$displayScore .= '*' if $inputs_ref->{showCorrectAnswers};
 		$displayScore //= 'err';
 
@@ -149,11 +161,6 @@ async sub problem ($c) {
 					action  => 'submit',
 					score   => $return_object->{problem_result}{score},
 					attempt => ($inputs_ref->{numIncorrect} // 0) + 1,
-				);
-			} elsif ($inputs_ref->{previewAnswers}) {
-				Renderer::Telemetry::record_interaction(
-					pg_hash => $inputs_ref->{pg_hash},
-					action  => 'preview',
 				);
 			} elsif ($inputs_ref->{showCorrectAnswers}) {
 				Renderer::Telemetry::record_interaction(

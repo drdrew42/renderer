@@ -61,9 +61,10 @@
 					% # JWTanswerURL).
 					% #
 					% # sessionJWT is the persistence channel — present when the caller
-					% # provided JWTanswerURL. Carries answer history, ratchets (isLocked,
-					% # showCorrectAnswers), and the embedded problemJWT. When both fields
-					% # are emitted, sessionJWT wins via parseRequest's claim-merge.
+					% # provided JWTanswerURL. Carries the reveal ratchet (answersRevealed /
+					% # solutionsRevealed) and the embedded problemJWT for restart. When
+					% # both fields are emitted, sessionJWT wins via parseRequest's
+					% # claim-merge for security-sensitive fields.
 					% if ($rh_result->{inputs_ref}{problemJWT}) {
 						%= hidden_field problemJWT => $rh_result->{inputs_ref}{problemJWT}, id => 'problemJWT'
 					% }
@@ -104,16 +105,10 @@
 					%# visible. Replaces the previous `formatName ne 'static'` magic-
 					%# string check; static now expresses itself via the three
 					%# button-hide flags set at the dispatcher boundary.
-					% my $any_button = ($showPreviewButton ne '0')
-					%               || ($showCheckAnswersButton ne '0')
+					% my $any_button = ($showCheckAnswersButton ne '0')
 					%               || ($showCorrectAnswersButton ne '0');
 					% if ($any_button) {
 						<div class="submit-buttons-container col-12 mb-2">
-							% # Submit buttons (preview and submit are shown by default)
-							% if ($showPreviewButton ne '0') {
-								<%= submit_button $lh->maketext('Preview My Answers'),
-									name => 'previewAnswers', id => 'previewAnswers_id', class => 'btn btn-primary mb-1' %>
-							% }
 							% if ($showCheckAnswersButton ne '0') {
 								<%= submit_button $lh->maketext('Submit Answers'),
 									name => 'submitAnswers', class => 'btn btn-primary mb-1' %>

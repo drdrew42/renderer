@@ -11,11 +11,15 @@ our @EXPORT_OK = qw(
 	PLATFORM_NAME
 );
 
-# Parameters that may only arrive from a trusted source (upstream JWT claim or
-# peer-signed body). Stripped from raw inputs before lane dispatch so that an
-# unauthenticated caller cannot self-declare them. Also consulted by the
-# self-mint payload builder — the self-mint wraps %params wholesale, so any
-# sensitive key not stripped here would leak back in as a trusted claim.
+# Parameters that may only arrive from a trusted source. Stripped from raw
+# inputs in Renderer::Render::ParseRequest before lane dispatch so that an
+# unauthenticated caller cannot self-declare them. Verified peer-signed
+# bodies are EXEMPT from the strip — a valid peer signature is itself the
+# trust gate, and the signed body is as trustworthy as a JWT claim. JWT-
+# bearing requests recover stripped values via the lane claim merges.
+# Also consulted by the self-mint payload builder — the self-mint wraps
+# %params wholesale, so any sensitive key not stripped here would leak
+# back in as a trusted claim.
 use constant SENSITIVE_PARAMS => qw(
 	JWTanswerURL
 	sessionID

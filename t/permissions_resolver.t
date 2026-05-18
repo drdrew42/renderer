@@ -28,61 +28,45 @@ subtest 'instructor: everything on by default' => sub {
 	is($p->{showHints},          1, 'showHints defaults to 1');
 };
 
-subtest 'instructor: explicit suppression wins' => sub {
+subtest 'instructor: per-flag inputs are ignored (revealAll means all-on)' => sub {
 	my $p = resolve_permissions({
 		isInstructor       => 1,
 		showCorrectAnswers => 0,
 		showSolutions      => 0,
 		showHints          => 0,
 	});
-	is($p->{showCorrectAnswers}, 0, 'explicit 0 suppresses correct answers');
-	is($p->{showSolutions},      0, 'explicit 0 suppresses solutions');
-	is($p->{showHints},          0, 'explicit 0 suppresses hints');
+	is($p->{showCorrectAnswers}, 1, 'instructor: showCorrectAnswers stays on regardless of input');
+	is($p->{showSolutions},      1, 'instructor: showSolutions stays on regardless of input');
+	is($p->{showHints},          1, 'instructor: showHints stays on regardless of input');
 };
 
-# ─── Student mode (assessed): nothing revealed by default ─────────────────
+# ─── Student mode (assessed): hints/solutions hardwired off ──────────────
 
 subtest 'student: everything off by default' => sub {
 	my $p = resolve_permissions({ isInstructor => 0 });
 	is($p->{showCorrectAnswers}, 0, 'showCorrectAnswers off');
-	is($p->{showSolutions},      0, 'showSolutions off (no correct answers to ride with)');
-	is($p->{showHints},          1, 'showHints defaults on (PG render gate, not security-sensitive)');
+	is($p->{showSolutions},      0, 'showSolutions hardwired off (use /render-api/solution)');
+	is($p->{showHints},          0, 'showHints hardwired off (use /render-api/hint)');
 };
 
-subtest 'student: showCorrectAnswers triggers solutions to ride along' => sub {
+subtest 'student: showCorrectAnswers from input, solutions/hints stay off' => sub {
 	my $p = resolve_permissions({
 		isInstructor       => 0,
 		showCorrectAnswers => 1,
 	});
 	is($p->{showCorrectAnswers}, 1, 'correct answers shown');
-	is($p->{showSolutions},      1, 'solutions ride along by default');
+	is($p->{showSolutions},      0, 'solutions still hardwired off');
+	is($p->{showHints},          0, 'hints still hardwired off');
 };
 
-subtest 'student: explicit showSolutions=0 suppresses ride-along' => sub {
-	my $p = resolve_permissions({
-		isInstructor       => 0,
-		showCorrectAnswers => 1,
-		showSolutions      => 0,
-	});
-	is($p->{showCorrectAnswers}, 1, 'correct answers shown');
-	is($p->{showSolutions},      0, 'solutions explicitly suppressed');
-};
-
-subtest 'student: showSolutions alone (no correct answers) is ignored' => sub {
+subtest 'student: inbound showSolutions/showHints are ignored' => sub {
 	my $p = resolve_permissions({
 		isInstructor  => 0,
 		showSolutions => 1,
+		showHints     => 1,
 	});
-	is($p->{showCorrectAnswers}, 0, 'no correct answers');
-	is($p->{showSolutions},      0, 'solutions without correct answers makes no sense');
-};
-
-subtest 'student: showHints respects explicit value' => sub {
-	my $p = resolve_permissions({
-		isInstructor => 0,
-		showHints    => 0,
-	});
-	is($p->{showHints}, 0, 'explicit 0 suppresses hints');
+	is($p->{showSolutions}, 0, 'inbound showSolutions=1 ignored — fetch via /render-api/solution');
+	is($p->{showHints},     0, 'inbound showHints=1 ignored — fetch via /render-api/hint');
 };
 
 # ─── Output shape ─────────────────────────────────────────────────────────

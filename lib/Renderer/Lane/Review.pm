@@ -15,19 +15,17 @@ package Renderer::Lane::Review;
 #   * Merge submitted_answers (AnSwEr* + MaThQuIlL_AnSwEr*) into %params for
 #     PG's native input-prefill path.
 #   * Force submitAnswers=1 so PG renders the graded view (per-answer
-#     feedback) the student saw at submit time. previewAnswers cleared
-#     defensively (mutually exclusive with submit).
+#     feedback) the student saw at submit time.
 #   * Lock outputFormat to 'default' (iframe-only).
 #   * Do NOT set _can_emit_answer_jwt, do NOT plumb JWTanswerURL — reView
 #     is read-only; the late emission gate naturally short-circuits because
 #     no JWTanswerURL is ever set.
 #
-# Button-hide flags (hidePreviewButton / hideCheckAnswersButton /
-# showCorrectAnswersButton) and showCorrectAnswers ride as raw form params
-# from the portal — display preferences, not security claims, so no
-# SENSITIVE_PARAMS protection is required. The orchestrator already gated
-# whether to release the submissionJWT to the caller; everything past that
-# is presentation.
+# Button-hide flags (hideCheckAnswersButton / showCorrectAnswersButton) and
+# showCorrectAnswers ride as raw form params from the portal — display
+# preferences, not security claims, so no SENSITIVE_PARAMS protection is
+# required. The orchestrator already gated whether to release the
+# submissionJWT to the caller; everything past that is presentation.
 
 use strict;
 use warnings;
@@ -91,9 +89,8 @@ sub apply ($c, $params) {
 
 	# Replay contract: original submission set submitAnswers, so reView
 	# does too — PG renders the graded view (per-answer green/red) the
-	# student saw on submit. Clear previewAnswers defensively.
+	# student saw on submit.
 	$params->{submitAnswers} = 1;
-	delete $params->{previewAnswers};
 
 	# outputFormat lock — reView is iframe-only.
 	$params->{outputFormat} = 'default';

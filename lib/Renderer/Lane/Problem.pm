@@ -1,10 +1,21 @@
 package Renderer::Lane::Problem;
 
-# Legacy problemJWT body lane (LMS-minted, LibreTexts/ADAPT origin).
+# problemJWT body lane — single-renderer integrators (LMS-minted; LibreTexts/
+# ADAPT origin, but the shape suits any LMS or editor wanting a one-token,
+# one-problem render without an orchestrator chain).
 #
 #   * Decode + verify_aud against $SITE_HOST under problemJWTsecret.
 #   * LibreTexts wraps claims under a `webwork` provider key; hoist if present.
-#   * Bulk merge: claims override raw params (claims-always-win).
+#   * `isInstructor` reads ONLY from claims — never from raw form params.
+#     If the LMS omits the claim, defaults to 0 (student). This closes the
+#     "LMS mints incomplete claims, raw form `isInstructor=1` wins" edge
+#     case. Stable across renders; an LMS that wants instructor preview
+#     mints with `isInstructor=1` once.
+#   * Bulk merge for everything else: claims override raw params. This
+#     includes per-render directives like `showCorrectAnswers` (the LMS's
+#     "Show Correct Answers" toggle is render-time, not session-time —
+#     keeping it claim-or-form lets the LMS update it per render without
+#     re-establishing the session).
 #   * Sets _can_emit_answer_jwt — this lane is upstream-grounded and may
 #     produce answerJWTs.
 
@@ -36,10 +47,21 @@ sub apply ($c, $params) {
 	# LibreTexts wraps claims under a provider key.
 	$claims = $claims->{webwork} if defined $claims->{webwork};
 
-	# Override raw params with claims (claims-always-win precedence — the
-	# whole point of carrying an upstream JWT is the upstream's view of
+	# `isInstructor` claim-only: drop any raw-form value first so the claim
+	# is the only possible source. Prevents form-param elevation when the
+	# LMS mints a JWT without speaking to instructor identity.
+	delete $params->{isInstructor};
+
+	# Bulk merge: claims override raw params (claims-always-win precedence —
+	# the whole point of carrying an upstream JWT is the upstream's view of
 	# the problem context wins).
 	@{$params}{ keys %$claims } = values %$claims;
+
+	# Defensive default for the permission family — fires when the claim
+	# was silent on isInstructor. Without it, an LMS that mints an
+	# incomplete JWT would leave $params->{isInstructor} undef (resolved to
+	# 0 downstream anyway, but setting it explicitly documents intent).
+	$params->{isInstructor} //= 0;
 
 	$c->stash(_can_emit_answer_jwt => 1);
 	$c->stash(_trust_lane         => 'problem');

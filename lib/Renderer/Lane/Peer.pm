@@ -10,10 +10,15 @@ package Renderer::Lane::Peer;
 #     peer headers were present (caller continues with non-peer flow).
 #
 #   * apply_body($c, $params) — runs at body-lane dispatch when no JWT body
-#     is present and _peer_signed is set. Sets aud, isInstructor=0, sessionID.
-#     _can_emit_answer_jwt stays unset — peer-signed raw-source renders are
-#     one-shot with no browser-carried continuation token. See
-#     [[Trust Model and Editor Flow]].
+#     is present and _peer_signed is set. Sets defaults, then self-mints a
+#     problemJWT wrapping the (already-trusted) inputs. The signed body is
+#     not subject to SENSITIVE_PARAMS strip (handled in ParseRequest), so
+#     JWTanswerURL and other sensitive params survive into the mint. The
+#     HTML's hidden problemJWT field then carries continuation through
+#     subsequent submits, which arrive as Lane::Problem requests — claim-
+#     merge sets _can_emit_answer_jwt=1 there, so answerJWT emission works
+#     normally without the editor backend re-signing every interaction.
+#     See [[Trust Model and Editor Flow]].
 
 use strict;
 use warnings;
@@ -21,6 +26,7 @@ use feature 'signatures';
 no warnings qw(experimental::signatures);
 
 use Renderer::Registration;
+use Renderer::Util::JWT qw(mint_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(verify apply_body);
@@ -53,14 +59,20 @@ sub verify ($c) {
 	return 1;
 }
 
-# apply_body($c, $params) — body-lane fallback when peer-verified and no
-# JWT body present. Sets minimal defaults so downstream code that reads
-# aud / isInstructor / sessionID has values. _can_emit_answer_jwt stays
-# unset (one-shot rule).
+# apply_body($c, $params) — body-lane handler when peer-verified and no
+# JWT body present. Sets defaults, then self-mints a JWE problemJWT wrapping
+# %params so the rendered HTML can carry continuation. Subsequent submits
+# arrive as Lane::Problem requests and emit answerJWTs normally via the
+# claim-merge / emission-gate path.
 sub apply_body ($c, $params) {
 	$params->{aud}            = $ENV{SITE_HOST};
 	$params->{isInstructor} //= 0;
 	$params->{sessionID}    ||= time;
+	$params->{problemJWT} = mint_jwt(
+		$ENV{problemJWTsecret}, $params,
+		alg => 'PBES2-HS512+A256KW',
+		enc => 'A256GCM',
+	);
 	return 1;
 }
 

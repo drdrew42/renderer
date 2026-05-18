@@ -82,16 +82,6 @@ else
     printf "${RED}not ok %d${NC} - Nonexistent file path returned %s\n" "$_TOTAL" "$NOFILE_STATUS"
 fi
 
-# Simultaneous submit + preview → 400
-SIMUL_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$CURL_TIMEOUT" \
-    -X POST \
-    --data-urlencode "problemSource=${PROBLEM_BASIC}" \
-    --data-urlencode "submitAnswers=1" \
-    --data-urlencode "previewAnswers=1" \
-    --data-urlencode "_format=json" \
-    "${BASE_URL}/render-api" 2>/dev/null)
-assert_eq "$SIMUL_STATUS" "400" "Simultaneous submit + preview returns 400"
-
 # Malformed JWT → error (not crash)
 BADJWT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$CURL_TIMEOUT" \
     -X POST \

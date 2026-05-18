@@ -94,20 +94,8 @@ FULL_RESP=$(curl -sf --max-time "$CURL_TIMEOUT" -X POST \
 FULL_SCORE=$(echo "$FULL_RESP" | jq -r '.problem_result.score')
 assert_eq "$FULL_SCORE" "1" "2/2 correct scores 1"
 
-# ── Preview mode ──────────────────────────────────────────────
-
-# Preview mode renders the formatted input. The grader still runs (score reflects
-# correctness), but the rendered HTML shows formatted input rather than right/wrong.
-PREVIEW_RESP=$(curl -sf --max-time "$CURL_TIMEOUT" -X POST \
-    -d "problemJWT=${PROB_JWT}" \
-    -d "sessionJWT=${SESS_JWT}" \
-    -d "${ANS_NAME}=${CORRECT_VAL}" \
-    -d "previewAnswers=1" \
-    -d "answersSubmitted=1" \
-    -d "_format=json" \
-    "${BASE_URL}/render-api" 2>/dev/null)
-
-assert_json_field "$PREVIEW_RESP" '.renderedHTML' "Preview mode returns rendered HTML"
-assert_json_field "$PREVIEW_RESP" '.JWT.session' "Preview mode returns session JWT"
-
 summary "answer cycle tests"
+
+# previewAnswers was retired — MathQuill renders inline as the student types,
+# so the separate "preview without grading" mode is no longer needed. Any inbound
+# previewAnswers param is now silently ignored.

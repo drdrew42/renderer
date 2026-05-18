@@ -91,14 +91,10 @@ sub formatRenderedProblem {
 	my $formatName = $inputs_ref->{outputFormat} || 'default';
 
 	# Collapse the default/simple/static alias cluster (WW3-R21). All three
-	# render the same template; they only differ in button visibility,
-	# which is now expressed via the explicit per-button flags. `simple`
-	# is a pure alias; `static` translates to "all three buttons hidden."
-	# Caller's explicit per-button flags always win — translate only when
-	# the flag isn't already set. Backward-compat: callers passing
-	# outputFormat=simple or =static continue to work unchanged.
+	# render the same template; `static` hides the two remaining buttons.
+	# `simple` is a pure alias for `default`. Caller's explicit per-button
+	# flags always win — translate only when the flag isn't already set.
 	if ($formatName eq 'static') {
-		$inputs_ref->{hidePreviewButton}        //= 1;
 		$inputs_ref->{hideCheckAnswersButton}   //= 1;
 		$inputs_ref->{showCorrectAnswersButton} //= '0';
 	}
@@ -134,8 +130,6 @@ sub formatRenderedProblem {
 	my %PROBLEM_LANG_AND_DIR = get_problem_lang_and_dir($rh_result->{flags}, 'auto:en:ltr', $formLanguage);
 	my $PROBLEM_LANG_AND_DIR = join(' ', map {qq{$_="$PROBLEM_LANG_AND_DIR{$_}"}} keys %PROBLEM_LANG_AND_DIR);
 
-	# is there a reason this doesn't use the same button IDs?
-	my $previewMode     = defined($inputs_ref->{previewAnswers})     || 0;
 	my $submitMode      = defined($inputs_ref->{submitAnswers})      || $inputs_ref->{answersSubmitted} || 0;
 	my $showCorrectMode = defined($inputs_ref->{showCorrectAnswers}) || 0;
 	# A problemUUID should be added to the request as a parameter.  It is used by PG to create a proper UUID for use in
@@ -152,7 +146,6 @@ sub formatRenderedProblem {
 	my $resultSummary = '';
 	if (!$renderErrorOccurred
 		&& $showSummary
-		&& !$previewMode
 		&& ($submitMode || $showCorrectMode)
 		&& $problemResult->{summary})
 	{
@@ -189,7 +182,7 @@ sub formatRenderedProblem {
 	# Returns JSON with permission decisions, macro injection, render state,
 	# the minted-token payload, and the resolved inputs_ref (post-claim-merge).
 	# This is the format the renderer's test suite uses to inspect rendered
-	# state — see t/permissions.t, t/lock_policy.t for example uses.
+	# state — see t/permissions.t, t/reveal_reporting.t for example uses.
 	if ($formatName eq 'debug') {
 		# Top-level `lane` field exposes which trust lane produced this
 		# render (WW3-R27). The R31 retirement of isLocked left the
@@ -285,9 +278,8 @@ sub formatRenderedProblem {
 		hideElementsCSS          => $hideElementsCSS,
 		resultSummary            => $resultSummary,
 		showSummary              => $showSummary,
-		showScoreSummary         => $submitMode && !$renderErrorOccurred && !$previewMode && $problemResult,
+		showScoreSummary         => $submitMode && !$renderErrorOccurred && $problemResult,
 		answerhashXML            => $answerhashXML,
-		showPreviewButton        => $inputs_ref->{hidePreviewButton}      ? '0' : '',
 		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? '0' : '',
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton}
 			// ($inputs_ref->{isInstructor} ? '' : '0'),

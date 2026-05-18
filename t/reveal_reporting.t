@@ -56,11 +56,13 @@ PG
 # ─── Helpers ─────────────────────────────────────────────────────────────
 
 sub upstream_problem_jwt {
+	my (%extra_claims) = @_;
 	return encode_jwt(
 		payload => {
 			aud          => $ENV{SITE_HOST},
 			iss          => $ENV{SITE_HOST},
 			JWTanswerURL => 'https://upstream.example.test/answer',
+			%extra_claims,
 		},
 		key      => $ENV{problemJWTsecret},
 		alg      => 'HS256',
@@ -69,7 +71,9 @@ sub upstream_problem_jwt {
 }
 
 # Submit and decode both JWTs (sessionJWT and answerJWT) so we can assert
-# the dual-state model directly.
+# the dual-state model directly. showCorrectAnswers flows as a raw form
+# param (per-render directive) — Lane::Problem's bulk merge honors it when
+# the JWT claim is silent.
 sub submit_and_decode {
 	my (%form) = @_;
 	$t->post_ok('/render-api' => form => {
@@ -112,17 +116,22 @@ subtest 'peek-before-earn: wrong submit + showCorrectAnswers' => sub {
 	is($r->{session}{answersRevealed}, 1, 'sessionJWT.answersRevealed = 1 (ratchet fired post-incomplete)');
 };
 
-subtest 'peek-before-earn (solutions): wrong submit + showSolutions ride-along' => sub {
-	# Solutions ride along with showCorrectAnswers in student mode. Same
-	# ratchet logic for solutionsRevealed.
+subtest 'solutions: showSolutions hardwired off in student render → no ratchet' => sub {
+	# Solutions are no longer rendered in the main response for students;
+	# they must be fetched via /render-api/solution. The solutionsRequested
+	# field on the answerJWT therefore stays 0 regardless of what the form
+	# carries, and the solutionsRevealed ratchet never fires via this path.
+	# (If/when "did the student fetch a solution" needs to be signaled, it
+	# will be a separate channel — see Reveal Reporting Model open questions.)
 	my $r = submit_and_decode(
 		AnSwEr0001         => 'wrong',
 		showCorrectAnswers => 1,
+		showSolutions      => 1,    # ignored — students cannot trigger in-render solutions
 	);
 
-	is($r->{answer}{solutionsRequested}, 1, 'answerJWT.solutionsRequested = 1 (effective showSolutions via ride-along)');
-	is($r->{answer}{solutionsRevealed},  0, 'answerJWT.solutionsRevealed = 0 (this submit was attempted blind)');
-	is($r->{session}{solutionsRevealed}, 1, 'sessionJWT.solutionsRevealed = 1 (newly ratcheted)');
+	is($r->{answer}{solutionsRequested}, 0, 'answerJWT.solutionsRequested = 0 (hardwired off for students)');
+	is($r->{answer}{solutionsRevealed},  0, 'answerJWT.solutionsRevealed = 0 (ratchet does not fire)');
+	ok(!$r->{session}{solutionsRevealed}, 'sessionJWT.solutionsRevealed unset (no in-render path to fire it)');
 };
 
 # ─── Scenario 2: peek-on-earn ─────────────────────────────────────────────
@@ -136,9 +145,6 @@ subtest 'peek-on-earn: correct submit + showCorrectAnswers (same render)' => sub
 	#   answerJWT.answersRequested = 1 (yes, this render exposed them)
 	#   answerJWT.answersRevealed  = 0 (peek didn't help; they got it right)
 	#   sessionJWT.answersRevealed = 0 (no ratchet — earned-before-peek)
-	#
-	# Note: under default LOCK_ON_PERFECT, isLocked still fires (perfect
-	# score). That's R31's territory; here we only assert reveal semantics.
 	my $r = submit_and_decode(
 		AnSwEr0001         => '42',
 		showCorrectAnswers => 1,
@@ -162,46 +168,36 @@ subtest 'post-completion peek: prior earned, then showCorrectAnswers-only render
 	#   answerJWT.answersRevealed  = 0 (inbound was 0; no prior peek)
 	#   sessionJWT.answersRevealed = 0 (still unset; earned protects)
 
-	# Step 1
-	my $first = submit_and_decode(AnSwEr0001 => '42');
-	# After step 1: under default LOCK_ON_PERFECT, session is locked.
-	# Re-submission with locked session would skip answerJWT. To exercise
-	# the post-completion-peek case cleanly, run step 2 with LOCK_ON_PERFECT
-	# off so the session stays writable.
+	# Post-R31 the renderer no longer locks sessions on perfect score — the
+	# earned session stays writable, so the peek-only re-render works without
+	# any env knob. (Pre-R31 this required LOCK_ON_PERFECT=0; that env var
+	# is retired.)
+	my $earn = submit_and_decode(AnSwEr0001 => '42');
+	ok(!$earn->{session}{answersRevealed}, 'no peek on earn render → no ratchet');
 
-	# Step 2 — fresh session, this time with LOCK_ON_PERFECT off so the
-	# earned session remains writable for the peek-only second render.
-	{
-		local $ENV{LOCK_ON_PERFECT} = 0;
+	# Step 2: re-render with the earned sessionJWT, request answers
+	# without resubmitting.
+	$t->post_ok('/render-api' => form => {
+		problemJWT         => upstream_problem_jwt(),
+		problemSource      => $pg_source,
+		sessionJWT         => $earn->{raw}{tokens}{sessionJWT},
+		outputFormat       => 'debug',
+		problemSeed        => 1234,
+		submitAnswers      => 1,
+		showCorrectAnswers => 1,
+		AnSwEr0001         => '42',
+	})->status_is(200);
 
-		my $earn = submit_and_decode(AnSwEr0001 => '42');
-		ok(!$earn->{session}{isLocked}, 'session writable post-earn (LOCK_ON_PERFECT off)');
-		ok(!$earn->{session}{answersRevealed}, 'no peek on earn render → no ratchet');
+	my $peek = $t->tx->res->json;
+	my $peek_session = decode_jwt(
+		token => $peek->{tokens}{sessionJWT}, key => $ENV{webworkJWTsecret});
+	my $peek_answer = decode_jwt(
+		token => $peek->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
 
-		# Step 2: re-render with the earned sessionJWT, request answers
-		# without resubmitting.
-		$t->post_ok('/render-api' => form => {
-			problemJWT         => upstream_problem_jwt(),
-			problemSource      => $pg_source,
-			sessionJWT         => $earn->{raw}{tokens}{sessionJWT},
-			outputFormat       => 'debug',
-			problemSeed        => 1234,
-			submitAnswers      => 1,
-			showCorrectAnswers => 1,
-			AnSwEr0001         => '42',
-		})->status_is(200);
-
-		my $peek = $t->tx->res->json;
-		my $peek_session = decode_jwt(
-			token => $peek->{tokens}{sessionJWT}, key => $ENV{webworkJWTsecret});
-		my $peek_answer = decode_jwt(
-			token => $peek->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
-
-		is($peek_answer->{answersRequested}, 1, 'peek render: answersRequested=1');
-		is($peek_answer->{answersRevealed},  0, 'peek render: answersRevealed=0 inbound');
-		ok(!$peek_session->{answersRevealed},
-			'post-completion peek does NOT ratchet (student already earned)');
-	}
+	is($peek_answer->{answersRequested}, 1, 'peek render: answersRequested=1');
+	is($peek_answer->{answersRevealed},  0, 'peek render: answersRevealed=0 inbound');
+	ok(!$peek_session->{answersRevealed},
+		'post-completion peek does NOT ratchet (student already earned)');
 };
 
 # ─── Scenario 4: sticky once set ──────────────────────────────────────────
@@ -214,11 +210,8 @@ subtest 'sticky once set: peek-before-earn → next render carries it' => sub {
 	#   answerJWT.answersRevealed  = 1 (inbound: state-at-submission was post-prior-reveal)
 	#   sessionJWT.answersRevealed = 1 (sticky-carried)
 	#
-	# Need LOCK_ON_SHOW_ANSWERS=0 so step 1 doesn't lock and step 2 can
-	# produce an answerJWT.
-	local $ENV{LOCK_ON_SHOW_ANSWERS} = 0;
-	local $ENV{LOCK_ON_PERFECT}      = 0;
-
+	# Post-R31 the renderer never terminates a session — step 1's peek
+	# doesn't lock anything, so step 2 produces an answerJWT normally.
 	my $first = submit_and_decode(
 		AnSwEr0001         => 'wrong',
 		showCorrectAnswers => 1,
@@ -316,7 +309,7 @@ subtest 'challenge lane: submissionJWT carries *_requested per render' => sub {
 
 	my $sub_claims = decode_jwt(token => $submission_jwt, key => $ENV{problemJWTsecret});
 	is($sub_claims->{answers_requested},   1, 'submissionJWT.answers_requested=1 (showCorrectAnswers fired via render_permissions)');
-	is($sub_claims->{solutions_requested}, 1, 'submissionJWT.solutions_requested=1 (ride-along)');
+	is($sub_claims->{solutions_requested}, 0, 'submissionJWT.solutions_requested=0 (solutions hardwired off; fetch via /render-api/solution)');
 
 	# play_sessionJWT carries no reveal claims (orchestrator handles cumulative).
 	my $session_jwt = $resp->{JWT}{session};

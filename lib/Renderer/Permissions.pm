@@ -13,16 +13,22 @@ package Renderer::Permissions;
 #
 # Permission model:
 #
-#   Instructor (preview): everything visible by default. Callers can
-#     suppress individual flags to see the student view.
+#   Instructor (preview / revealAll): everything visible — showHints,
+#     showSolutions, and showCorrectAnswers all forced to 1. The mode is
+#     intended for authoring previews and library browsing; if a caller
+#     wants the "what would a student see" view, mint a JWT with
+#     isInstructor=0 instead of trying to suppress per-flag.
 #
 #   Student (assessed): nothing revealed by default. showCorrectAnswers
-#     is the primary reveal trigger (the "Show Correct Answers" button).
-#     Solutions ride with correct answers unless explicitly suppressed
-#     (showSolutions=0). showSolutions alone is ignored — solutions
-#     don't make sense without the answers they explain. Hints are
-#     always available (PG's showHints is a render gate, not
-#     security-sensitive).
+#     is the only in-render reveal trigger (the "Show Correct Answers"
+#     button). Hints and solutions are NEVER rendered in the main
+#     response — `showHints` and `showSolutions` are hardwired to 0
+#     regardless of inbound. Callers wanting hint or solution content
+#     must use the dedicated `/render-api/hint` and `/render-api/solution`
+#     endpoints, which are gated by typed-JWT and minted policy-side by
+#     the LMS / orchestrator. This minimizes the cheat surface: the
+#     student-facing render carries only the problem, never the canonical
+#     answer derivation.
 #
 # The `isInstructor` field is the mode switch and is normalized to a
 # strict 0/1 boolean here. Callers that previously read
@@ -43,24 +49,18 @@ sub resolve_permissions ($inputs_ref) {
 	my ($showCorrectAnswers, $showSolutions, $showHints);
 
 	if ($isInstructor) {
-		# Defaults to "show" for each flag; explicit 0 from caller wins.
-		$showCorrectAnswers = defined $inputs_ref->{showCorrectAnswers}
-			? ($inputs_ref->{showCorrectAnswers} ? 1 : 0) : 1;
-		$showSolutions = defined $inputs_ref->{showSolutions}
-			? ($inputs_ref->{showSolutions} ? 1 : 0) : 1;
-		$showHints = defined $inputs_ref->{showHints}
-			? ($inputs_ref->{showHints} ? 1 : 0) : 1;
+		# revealAll: everything on. No per-flag suppression; if a caller
+		# wants the student view, mint with isInstructor=0.
+		$showCorrectAnswers = 1;
+		$showSolutions      = 1;
+		$showHints          = 1;
 	} else {
+		# Student: showCorrectAnswers is the only in-render reveal.
+		# Hints and solutions are hardwired off — fetch via /render-api/hint
+		# and /render-api/solution endpoints instead.
 		$showCorrectAnswers = $inputs_ref->{showCorrectAnswers} ? 1 : 0;
-
-		# Solutions ride with correct answers unless explicitly suppressed
-		# (showSolutions=0 wins; absence or truthy lets correct-answers
-		# decide).
-		$showSolutions = ($showCorrectAnswers
-			&& !(defined $inputs_ref->{showSolutions} && !$inputs_ref->{showSolutions})) ? 1 : 0;
-
-		$showHints = defined $inputs_ref->{showHints}
-			? ($inputs_ref->{showHints} ? 1 : 0) : 1;
+		$showSolutions      = 0;
+		$showHints          = 0;
 	}
 
 	return {

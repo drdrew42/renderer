@@ -79,7 +79,7 @@ subtest 'instructor: solutions and answers visible by default' => sub {
 	like($body, qr/solution accordion/, 'solutions visible by default for instructor');
 };
 
-subtest 'instructor: showSolutions=0 suppresses solutions' => sub {
+subtest 'instructor: showSolutions inbound ignored (revealAll forces on)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemSource => $pg_source,
 		outputFormat  => 'default',
@@ -88,7 +88,19 @@ subtest 'instructor: showSolutions=0 suppresses solutions' => sub {
 		showSolutions => 0,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	unlike($body, qr/solution accordion/, 'instructor can suppress solutions');
+	like($body, qr/solution accordion/, 'instructor sees solutions regardless of inbound showSolutions=0');
+};
+
+subtest 'instructor: hints visible regardless of inbound showHints' => sub {
+	$t->post_ok('/render-api' => form => {
+		problemSource => $pg_source,
+		outputFormat  => 'default',
+		problemSeed   => 1234,
+		isInstructor  => 1,
+		showHints     => 0,
+	})->status_is(200);
+	my $body = $t->tx->res->body;
+	like($body, qr/hint accordion/, 'instructor sees hints regardless of inbound showHints=0');
 };
 
 # ─── Student defaults ────────────────────────────────────────────────────
@@ -103,7 +115,7 @@ subtest 'student: no solutions without showCorrectAnswers' => sub {
 	unlike($body, qr/solution accordion/, 'no solutions for student by default');
 };
 
-subtest 'student: showCorrectAnswers implies solutions' => sub {
+subtest 'student: showCorrectAnswers does NOT imply solutions (hardwired off)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemSource      => $pg_source,
 		outputFormat       => 'default',
@@ -111,22 +123,10 @@ subtest 'student: showCorrectAnswers implies solutions' => sub {
 		showCorrectAnswers => 1,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	like($body, qr/solution accordion/, 'showCorrectAnswers reveals solutions too');
+	unlike($body, qr/solution accordion/, 'solutions hardwired off for students; fetch via /render-api/solution');
 };
 
-subtest 'student: showCorrectAnswers + showSolutions=0 suppresses solutions' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource      => $pg_source,
-		outputFormat       => 'default',
-		problemSeed        => 1234,
-		showCorrectAnswers => 1,
-		showSolutions      => 0,
-	})->status_is(200);
-	my $body = $t->tx->res->body;
-	unlike($body, qr/solution accordion/, 'explicit showSolutions=0 suppresses even with showCorrectAnswers');
-};
-
-subtest 'student: showSolutions=1 without showCorrectAnswers is ignored' => sub {
+subtest 'student: inbound showSolutions=1 is ignored (hardwired off)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemSource => $pg_source,
 		outputFormat  => 'default',
@@ -134,10 +134,10 @@ subtest 'student: showSolutions=1 without showCorrectAnswers is ignored' => sub 
 		showSolutions => 1,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	unlike($body, qr/solution accordion/, 'showSolutions alone does nothing for student');
+	unlike($body, qr/solution accordion/, 'showSolutions=1 from student form ignored');
 };
 
-subtest 'hints are ungated passthrough' => sub {
+subtest 'student: inbound showHints=1 is ignored (hardwired off)' => sub {
 	$t->post_ok('/render-api' => form => {
 		problemSource => $pg_source,
 		outputFormat  => 'default',
@@ -145,19 +145,7 @@ subtest 'hints are ungated passthrough' => sub {
 		showHints     => 1,
 	})->status_is(200);
 	my $body = $t->tx->res->body;
-	like($body, qr/hint accordion/, 'hints visible without isInstructor');
-};
-
-subtest 'hints suppressed by explicit showHints=0' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		isInstructor  => 1,
-		showHints     => 0,
-	})->status_is(200);
-	my $body = $t->tx->res->body;
-	unlike($body, qr/hint accordion/, 'hints suppressed by showHints=0 even for instructor');
+	unlike($body, qr/hint accordion/, 'hints hardwired off for students; fetch via /render-api/hint');
 };
 
 # ─── Instructor JWT suppression ────────────────────────────────────────────
