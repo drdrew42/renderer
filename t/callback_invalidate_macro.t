@@ -80,6 +80,48 @@ subtest 'invalidate_macro: hash for non-existent file → 200 deleted=false' => 
 		->json_is('/deleted'     => Mojo::JSON::false);
 };
 
+subtest 'invalidate_macro: cascades to dependent problem manifests (WW3-R42)' => sub {
+	my $macro_hash = 'sha256:cascade_target';
+
+	# Macro file present
+	my $macro_path = File::Spec->catfile($macros_dir, $macro_hash);
+	open my $mfh, '>', $macro_path or die $!;
+	print $mfh "sub macro { 1 }";
+	close $mfh;
+
+	# Two problems reference this macro, one does not
+	require Renderer::ContentCache;
+	for my $pg (qw(pg_dep_alpha pg_dep_beta)) {
+		Renderer::ContentCache::stage_problem(
+			$pg,
+			"DOCUMENT(); loadMacros('m.pl'); ENDDOCUMENT();",
+			[ { name => 'm.pl', hash => $macro_hash, source_type => 'custom' } ],
+		);
+	}
+	Renderer::ContentCache::stage_macro('sha256:other_macro', 'sub o { 1 }');
+	Renderer::ContentCache::stage_problem(
+		'pg_independent',
+		"DOCUMENT(); loadMacros('o.pl'); ENDDOCUMENT();",
+		[ { name => 'o.pl', hash => 'sha256:other_macro', source_type => 'custom' } ],
+	);
+	Renderer::ContentCache::save_path_index('Library/Alpha/p.pg', 'pg_dep_alpha');
+	Renderer::ContentCache::save_path_index('Library/Beta/p.pg',  'pg_dep_beta');
+	Renderer::ContentCache::save_path_index('Library/Other/o.pg', 'pg_independent');
+
+	signed_post({ action => 'invalidate_macro', hash => $macro_hash })
+		->status_is(200)
+		->json_is('/invalidated' => $macro_hash)
+		->json_is('/deleted'     => Mojo::JSON::true)
+		->json_is('/dependents'  => 2);
+
+	ok(!Renderer::ContentCache::has_problem('pg_dep_alpha'), 'dependent problem alpha evicted');
+	ok(!Renderer::ContentCache::has_problem('pg_dep_beta'),  'dependent problem beta evicted');
+	ok( Renderer::ContentCache::has_problem('pg_independent'), 'unrelated problem untouched');
+	is(Renderer::ContentCache::pg_hash_for_path('Library/Alpha/p.pg'), undef, 'path index entry alpha pruned');
+	is(Renderer::ContentCache::pg_hash_for_path('Library/Beta/p.pg'),  undef, 'path index entry beta pruned');
+	is(Renderer::ContentCache::pg_hash_for_path('Library/Other/o.pg'), 'pg_independent', 'unrelated path index untouched');
+};
+
 subtest 'invalidate_macro: bad signature → 401 (does not delete)' => sub {
 	my $hash = 'sha256:protected-by-signature';
 	my $path = File::Spec->catfile($macros_dir, $hash);

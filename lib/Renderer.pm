@@ -317,6 +317,7 @@ sub _register_routes ($self) {
 	$r->post('/render-api/audit')->to('audit#audit');
 	$r->post('/render-api/hint')->to('render#hint');
 	$r->post('/render-api/solution')->to('render#solution');
+	$r->post('/render-api/admin/inspect-cache')->to('AdminInspect#inspectCache');
 	$r->any('/render-ptx')->to('render#render_ptx');
 	$r->any('/health' => sub ($c) {
 		my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };

@@ -20,6 +20,7 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 use Mojo::JSON qw(decode_json);
 use File::Spec;
 
+use Renderer::ContentCache;
 use Renderer::OPLAuthed qw(verify_request);
 use Renderer::Telemetry;
 use Renderer::Render::Subprocess qw(render_in_subprocess);
@@ -39,8 +40,27 @@ async sub callback ($c) {
 			return $c->render(json => { error => 'missing hash' }, status => 400);
 		}
 		my $deleted = eval { unlink File::Spec->catfile("$ENV{RENDER_ROOT}/private/macros", $hash) } // 0;
-		$c->log->info("Macro invalidated: $hash (deleted=$deleted)");
-		return $c->render(json => { invalidated => $hash, deleted => $deleted ? \1 : \0 });
+
+		# WW3-R42: cascade. Removing the macro file leaves every problem
+		# manifest that pinned to this hash stranded — _read_manifest_macros
+		# silently drops the entry, render fails on loadMacros. Walk the
+		# problem cache (naive scan) and invalidate every dependent dir.
+		my $dependents = Renderer::ContentCache::find_problems_using_macro($hash);
+		for my $pg_hash (@$dependents) {
+			Renderer::ContentCache::invalidate($pg_hash);
+		}
+
+		$c->log->info(
+			"Macro invalidated",
+			hash       => $hash,
+			deleted    => $deleted ? \1 : \0,
+			dependents => scalar @$dependents,
+		);
+		return $c->render(json => {
+			invalidated => $hash,
+			deleted     => $deleted ? \1 : \0,
+			dependents  => scalar @$dependents,
+		});
 	}
 
 	# Default action: render (original callback behavior)

@@ -89,9 +89,22 @@ sub fetch_remote_source_p ($c, $url, $pg_hash_hint = undef) {
 		if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
-				$c->log->info("ContentCache HIT: $pg_hash (zero network)");
-				$c->stash(_cache_status => 'hit');
-				return Mojo::Promise->resolve($cached_source, $pg_hash);
+				# WW3-R42: same consistency check as the sourceFilePath PATH HIT.
+				my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
+				if ($ok) {
+					$c->log->info("ContentCache HIT: $pg_hash (zero network)");
+					$c->stash(_cache_status => 'hit');
+					return Mojo::Promise->resolve($cached_source, $pg_hash);
+				}
+				$c->log->warn(
+					"ContentCache URL HIT inconsistent — evicting and re-fetching",
+					pg_hash                     => $pg_hash,
+					url                         => $url,
+					macros_missing_from_disk    => $report->{macros_missing_from_disk},
+					load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},
+				);
+				Renderer::ContentCache::invalidate($pg_hash);
+				$pg_hash = undef;
 			}
 		}
 
@@ -120,9 +133,26 @@ sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
 		if ($result->{not_modified} && $pg_hash) {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
-				$c->log->info("ContentCache 304: $pg_hash");
-				$c->stash(_cache_status => 'miss_304');
-				return ($cached_source, $pg_hash);
+				# WW3-R42: 304 means the OPL source is unchanged, but says
+				# nothing about the renderer-side macro cache. Verify.
+				my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
+				if ($ok) {
+					$c->log->info("ContentCache 304: $pg_hash");
+					$c->stash(_cache_status => 'miss_304');
+					return ($cached_source, $pg_hash);
+				}
+				$c->log->warn(
+					"ContentCache 304 but cache inconsistent — evicting and re-fetching",
+					pg_hash                     => $pg_hash,
+					macros_missing_from_disk    => $report->{macros_missing_from_disk},
+					load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},
+				);
+				Renderer::ContentCache::invalidate($pg_hash);
+				return $client->fetch_problem_p($url, request_meta => \%meta)->then(sub {
+					my $retry = shift;
+					return (undef, undef) if $retry->{error} || $retry->{not_modified};
+					return _stage_problem_response($c, $retry, $url);
+				});
 			}
 			# Cache index thought we had it (we sent If-None-Match) but the
 			# bytes are missing on disk. Force an unconditional re-fetch.
@@ -152,7 +182,13 @@ sub _stage_problem_response ($c, $result, $url) {
 	my $fetched_hash = $result->{pg_hash};
 	my $client       = $c->opl_client;
 
+	# WW3-R42: stage atomicity. Previously, fetch_macro failure logged a
+	# warning and we pushed the entry anyway — manifest claimed N macros,
+	# disk had M < N, render silently degraded. Now: any macro fetch failure
+	# aborts the whole stage. No manifest is written; next render attempt
+	# retries fresh against OPL.
 	my @macros_to_link;
+	my @fetch_failures;
 	for my $macro (@{ $result->{macros} // [] }) {
 		next unless $macro->{hash} && $macro->{source_type}
 			&& ($macro->{source_type} eq 'custom' || $macro->{source_type} eq 'override');
@@ -170,8 +206,13 @@ sub _stage_problem_response ($c, $result, $url) {
 					}
 					Renderer::ContentCache::stage_macro($cache_hash, $source_bytes);
 				} else {
-					$c->log->warn("ContentCache: failed to fetch macro $macro->{name}");
+					push @fetch_failures, $macro->{name};
+					next;
 				}
+			} else {
+				# No URL to fetch from and not on disk. Can't satisfy this dep.
+				push @fetch_failures, $macro->{name};
+				next;
 			}
 		}
 
@@ -180,6 +221,17 @@ sub _stage_problem_response ($c, $result, $url) {
 			hash        => $cache_hash,
 			source_type => $macro->{source_type},
 		};
+	}
+
+	if (@fetch_failures) {
+		$c->log->error(
+			"ContentCache stage aborted — macro fetch failures",
+			pg_hash         => $fetched_hash,
+			url             => $url,
+			failed_macros   => \@fetch_failures,
+		);
+		$c->stash(_cache_status => 'stage_failed');
+		return (undef, undef);
 	}
 
 	Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
@@ -216,9 +268,28 @@ sub resolve_source_file_path_p ($c, $file_path, $pg_hash_hint = undef) {
 	if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
 		my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 		if ($cached_source) {
-			$c->log->info("ContentCache PATH HIT: $pg_hash (zero network)");
-			$c->stash(_cache_status => 'hit');
-			return Mojo::Promise->resolve($cached_source, $pg_hash, undef);
+			# WW3-R42: PATH HIT used to return immediately, never revalidating
+			# the cache against either disk-truth (was the macro file actually
+			# staged? did invalidate_macro delete it?) or OPL-truth (did the
+			# problem's macro deps change?). Result: stale manifests served
+			# silently forever. Now: cheap disk-only consistency check; on
+			# failure, evict the problem dir and fall through to fresh fetch.
+			my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
+			if ($ok) {
+				$c->log->info("ContentCache PATH HIT: $pg_hash (zero network)");
+				$c->stash(_cache_status => 'hit');
+				return Mojo::Promise->resolve($cached_source, $pg_hash, undef);
+			}
+
+			$c->log->warn(
+				"ContentCache PATH HIT inconsistent — evicting and re-fetching",
+				pg_hash                     => $pg_hash,
+				macros_missing_from_disk    => $report->{macros_missing_from_disk},
+				load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},
+			);
+			Renderer::ContentCache::invalidate($pg_hash);
+			# Drop the stale pg_hash so the OPL refetch below doesn't conditional-GET against it.
+			$pg_hash = undef;
 		}
 	}
 

@@ -174,7 +174,41 @@ sub get_injected_macros {
 sub _read_manifest_macros {
 	my ($dir, $manifest_path) = @_;
 
-	open my $fh, '<:encoding(UTF-8)', $manifest_path or return {};
+	my $entries = _read_manifest_entries($manifest_path);
+	return {} unless $entries;
+
+	my %injected;
+	for my $entry (@$entries) {
+		next unless ref $entry eq 'HASH' && $entry->{name} && $entry->{hash};
+		my $macro_path = File::Spec->catfile($PRIVATE, 'macros', $entry->{hash});
+		unless (-f $macro_path) {
+			# WW3-R42: manifest references a macro hash whose source file is not
+			# on disk. Two known triggers: (a) stage-time fetch_macro failure
+			# left a half-written manifest, (b) invalidate_macro callback deleted
+			# the file but didn't invalidate dependent problem manifests. Both
+			# silently degraded the render. Now: loud log + skip. PATH HIT
+			# consistency check in SourceResolver should catch this earlier and
+			# force a re-stage.
+			(my $pg_hash = $dir) =~ s{.*/}{};
+			$log->error("Manifest references missing macro file",
+				pg_hash    => $pg_hash,
+				macro_name => $entry->{name},
+				macro_hash => $entry->{hash});
+			next;
+		}
+		open my $mfh, '<:encoding(UTF-8)', $macro_path or next;
+		local $/;
+		$injected{ $entry->{name} } = <$mfh>;
+		close $mfh;
+	}
+	return \%injected;
+}
+
+# Read manifest.json and return its entries (arrayref) or undef on parse error.
+# Shared by _read_manifest_macros, verify_consistent, inspect.
+sub _read_manifest_entries {
+	my ($manifest_path) = @_;
+	open my $fh, '<:encoding(UTF-8)', $manifest_path or return undef;
 	local $/;
 	my $body = <$fh>;
 	close $fh;
@@ -182,20 +216,123 @@ sub _read_manifest_macros {
 	my $entries = eval { decode_json($body) };
 	if ($@ || ref $entries ne 'ARRAY') {
 		$log->warn("Manifest at $manifest_path is not a JSON array; ignoring");
-		return {};
+		return undef;
 	}
+	return $entries;
+}
 
-	my %injected;
+# Manifest-consistency check for a cached problem.
+# Returns ($ok, $report). $ok is true iff:
+#   * a manifest exists, AND
+#   * every manifest entry's macro file is present on disk.
+#
+# The `load_macros_not_in_manifest` field is informational only — standard
+# macros (PGstandard.pl, PGML.pl, MathObjects.pl, …) are intentionally absent
+# from the manifest (the stage-time filter only captures source_type custom
+# or override). So the source-vs-manifest delta is expected non-empty under
+# normal operation and can't be a consistency signal on its own. The admin
+# inspect endpoint still surfaces it for human review.
+#
+# $report is a hashref:
+#   {
+#     manifest                    => [ {name,hash,source_type}, ... ],
+#     macros_on_disk              => [ "sha256:...", ... ],
+#     macros_missing_from_disk    => [ "sha256:...", ... ],
+#     source_load_macros          => [ "name.pl", ... ],
+#     load_macros_not_in_manifest => [ "name.pl", ... ],  # informational
+#   }
+sub verify_consistent {
+	my ($pg_hash) = @_;
+	my $dir = _problem_dir($pg_hash);
+	return (0, { reason => 'no_problem_dir' }) unless -d $dir;
+
+	my $manifest_path = File::Spec->catfile($dir, 'manifest.json');
+	my $entries = -f $manifest_path ? _read_manifest_entries($manifest_path) : undef;
+	return (0, { reason => 'no_manifest' }) unless defined $entries;
+
+	my @on_disk;
+	my @missing;
+	my %manifest_names;
 	for my $entry (@$entries) {
 		next unless ref $entry eq 'HASH' && $entry->{name} && $entry->{hash};
+		$manifest_names{ $entry->{name} } = 1;
 		my $macro_path = File::Spec->catfile($PRIVATE, 'macros', $entry->{hash});
-		next unless -f $macro_path;
-		open my $mfh, '<:encoding(UTF-8)', $macro_path or next;
-		local $/;
-		$injected{ $entry->{name} } = <$mfh>;
-		close $mfh;
+		if (-f $macro_path) {
+			push @on_disk, $entry->{hash};
+		} else {
+			push @missing, $entry->{hash};
+		}
 	}
-	return \%injected;
+
+	# Parse the cached problem.pg's loadMacros() for the informational delta.
+	my $source = read_problem($pg_hash);
+	my @source_macros = $source ? @{ _parse_load_macros($source) } : ();
+	my @not_in_manifest = grep { !$manifest_names{$_} } @source_macros;
+
+	my $report = {
+		manifest                    => $entries,
+		macros_on_disk              => \@on_disk,
+		macros_missing_from_disk    => \@missing,
+		source_load_macros          => \@source_macros,
+		load_macros_not_in_manifest => \@not_in_manifest,
+	};
+
+	my $ok = !@missing;
+	return ($ok, $report);
+}
+
+# Find every cached problem whose manifest references the given macro hash.
+# Returns arrayref of pg_hash strings. Used by the invalidate_macro cascade
+# in Callback.pm — when OPL invalidates a macro hash, every problem manifest
+# that pinned to it is now stale and must be evicted.
+#
+# Naive scan: walks private/problems/*/manifest.json. O(N) in problem count.
+# Acceptable at current scale; if invalidate_macro batches grow, swap for an
+# indexed reverse map at .macro_to_problems/<hash>.
+sub find_problems_using_macro {
+	my ($macro_hash) = @_;
+	my $problems_dir = File::Spec->catdir($PRIVATE, 'problems');
+	return [] unless -d $problems_dir;
+
+	opendir my $dh, $problems_dir or return [];
+	my @entries = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+	closedir $dh;
+
+	my @hits;
+	for my $pg_hash (@entries) {
+		my $manifest_path = File::Spec->catfile($problems_dir, $pg_hash, 'manifest.json');
+		next unless -f $manifest_path;
+		my $manifest_entries = _read_manifest_entries($manifest_path);
+		next unless $manifest_entries;
+		for my $e (@$manifest_entries) {
+			next unless ref $e eq 'HASH' && $e->{hash};
+			if ($e->{hash} eq $macro_hash) {
+				push @hits, $pg_hash;
+				last;
+			}
+		}
+	}
+	return \@hits;
+}
+
+# Minimal loadMacros() parser — mirrors OPL::Macro::Parser::parse_load_macros
+# in OPLv3. Renderer-side copy because the renderer doesn't depend on OPL
+# code. Kept private; only verify_consistent calls it.
+sub _parse_load_macros {
+	my ($source) = @_;
+	return [] unless defined $source && length $source;
+
+	my @macros;
+	while ($source =~ /loadMacros\s*\((.*?)\)/sg) {
+		my $args = $1;
+		while ($args =~ /["']([^"']+\.pl)["']/g) {
+			push @macros, $1;
+		}
+	}
+
+	my %seen;
+	@macros = grep { !$seen{$_}++ } @macros;
+	return \@macros;
 }
 
 # Evict problem directories older than $max_age_hours (by mtime).
