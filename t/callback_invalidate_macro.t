@@ -142,4 +142,40 @@ subtest 'invalidate_macro: bad signature → 401 (does not delete)' => sub {
 	ok(-f $path, 'macro file untouched when signature rejects');
 };
 
+# ── invalidate_problem (LT-080) ──────────────────────────────────────
+
+subtest 'invalidate_problem: evicts one problem cache dir by pg_hash' => sub {
+	require Renderer::ContentCache;
+	Renderer::ContentCache::stage_problem(
+		'pg_invalidate_target',
+		"DOCUMENT(); ENDDOCUMENT();",
+	);
+	Renderer::ContentCache::save_path_index('Library/Inv/p.pg', 'pg_invalidate_target');
+	ok(Renderer::ContentCache::has_problem('pg_invalidate_target'),
+		'sanity: problem cached pre-invalidate');
+
+	signed_post({ action => 'invalidate_problem', pg_hash => 'pg_invalidate_target' })
+		->status_is(200)
+		->json_is('/invalidated' => 'pg_invalidate_target')
+		->json_is('/evicted'     => Mojo::JSON::true);
+
+	ok(!Renderer::ContentCache::has_problem('pg_invalidate_target'),
+		'problem cache dir evicted');
+	is(Renderer::ContentCache::pg_hash_for_path('Library/Inv/p.pg'), undef,
+		'path index entry pruned');
+};
+
+subtest 'invalidate_problem: missing pg_hash → 400' => sub {
+	signed_post({ action => 'invalidate_problem' })
+		->status_is(400)
+		->json_like('/error' => qr/missing pg_hash/);
+};
+
+subtest 'invalidate_problem: unknown pg_hash → 200 evicted=false' => sub {
+	signed_post({ action => 'invalidate_problem', pg_hash => 'pg_never_cached' })
+		->status_is(200)
+		->json_is('/invalidated' => 'pg_never_cached')
+		->json_is('/evicted'     => Mojo::JSON::false);
+};
+
 done_testing();

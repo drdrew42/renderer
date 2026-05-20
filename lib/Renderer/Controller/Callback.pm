@@ -3,11 +3,13 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 # POST /render-api/callback
 #
-# Ed25519-signed by OPL. Two actions, dispatched by the request body's
+# Ed25519-signed by OPL. Actions, dispatched by the request body's
 # `action` field:
 #
-#   * invalidate_macro — delete a macro by hash from the cache. Cheap;
-#     no PG fork.
+#   * invalidate_macro — delete a macro by hash from the cache, and cascade
+#     to dependent problem dirs (WW3-R42). Cheap; no PG fork.
+#   * invalidate_problem — evict one problem's cache dir by pg_hash, fired
+#     when its resource set changes (LT-080). Cheap; no PG fork.
 #   * (default — render) — render a problem and return html_hash for
 #     OPL-side verification. Originates from LT-016.
 #
@@ -60,6 +62,27 @@ async sub callback ($c) {
 			invalidated => $hash,
 			deleted     => $deleted ? \1 : \0,
 			dependents  => scalar @$dependents,
+		});
+	}
+
+	# Dispatch: invalidate_problem — evict one problem's cache dir. LT-080.
+	# Fired by OPL when a problem's resource set changes (link / replace).
+	# The macro-manifest consistency check (WW3-R42) doesn't cover resources,
+	# so a resource change needs an explicit push-invalidation. Cheap; no fork.
+	if (($req->{action} // '') eq 'invalidate_problem') {
+		my $pg_hash = $req->{pg_hash};
+		unless ($pg_hash) {
+			return $c->render(json => { error => 'missing pg_hash' }, status => 400);
+		}
+		my $evicted = Renderer::ContentCache::invalidate($pg_hash);
+		$c->log->info(
+			"Problem cache invalidated",
+			pg_hash => $pg_hash,
+			evicted => $evicted ? \1 : \0,
+		);
+		return $c->render(json => {
+			invalidated => $pg_hash,
+			evicted     => $evicted ? \1 : \0,
 		});
 	}
 
