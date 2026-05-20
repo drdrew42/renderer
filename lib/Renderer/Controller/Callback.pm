@@ -55,7 +55,7 @@ async sub callback ($c) {
 		$c->log->info(
 			"Macro invalidated",
 			hash       => $hash,
-			deleted    => $deleted ? \1 : \0,
+			deleted    => $deleted ? 1 : 0,
 			dependents => scalar @$dependents,
 		);
 		return $c->render(json => {
@@ -78,7 +78,7 @@ async sub callback ($c) {
 		$c->log->info(
 			"Problem cache invalidated",
 			pg_hash => $pg_hash,
-			evicted => $evicted ? \1 : \0,
+			evicted => $evicted ? 1 : 0,
 		);
 		return $c->render(json => {
 			invalidated => $pg_hash,
