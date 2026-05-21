@@ -38,6 +38,7 @@ async sub callback ($c) {
 	# Dispatch: invalidate_macro doesn't need the render pipeline
 	if (($req->{action} // '') eq 'invalidate_macro') {
 		my $hash = $req->{hash};
+		my $name = $req->{name};   # OPL includes the macro name for logging
 		unless ($hash) {
 			return $c->render(json => { error => 'missing hash' }, status => 400);
 		}
@@ -53,7 +54,7 @@ async sub callback ($c) {
 		}
 
 		$c->log->info(
-			"Macro invalidated",
+			"Macro " . ($name // $hash) . " invalidated",
 			hash       => $hash,
 			deleted    => $deleted ? 1 : 0,
 			dependents => scalar @$dependents,
