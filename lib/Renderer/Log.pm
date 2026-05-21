@@ -42,14 +42,19 @@ sub apply_json_format ($log, $component = undef) {
 
 	$log->format(sub {
 		my ($time, $level, @lines) = @_;
+		# A leading hashref carries structured fields — merge them to the top
+		# level of the entry so log aggregators can query them directly.
+		# Envelope fields win on conflict. Plain string args become `message`.
+		my %extra = (@lines && ref $lines[0] eq 'HASH') ? %{ shift @lines } : ();
 		my %entry = (
+			%extra,
 			timestamp => Mojo::Date->new($time)->to_datetime,
 			level     => $level,
 			pid       => $$,
 			service   => 'renderer',
-			message   => join(' ', @lines),
 		);
 		$entry{component} = $component if defined $component;
+		$entry{message}   = join(' ', @lines) if @lines;
 		return encode_json(\%entry) . "\n";
 	});
 

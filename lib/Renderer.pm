@@ -284,7 +284,7 @@ sub _register_request_hooks ($self) {
 		# Renderer-specific fields
 		$entry{cache_status} = $c->stash('_cache_status') if $c->stash('_cache_status');
 		$entry{pg_hash}      = $c->stash('pg_hash')       if $c->stash('pg_hash');
-		$self->log->info(Mojo::JSON::encode_json(\%entry));
+		$self->log->info(\%entry);
 	});
 }
 
