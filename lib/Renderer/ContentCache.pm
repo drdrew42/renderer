@@ -357,7 +357,7 @@ sub sweep {
 		next unless -d $dir;
 		my $mtime = (stat($dir))[9];
 		if ($mtime < $cutoff) {
-			remove_tree($dir);
+			_remove_tree($dir);
 			$evicted_hashes{$entry} = 1;
 			$evicted++;
 		}
@@ -369,13 +369,29 @@ sub sweep {
 	return $evicted;
 }
 
+# remove_tree wrapper. File::Path's per-file carp ("cannot unlink file …
+# No such file or directory", etc.) is raw, non-JSON STDERR noise and is
+# common under concurrent invalidation, where a directory vanishes
+# mid-removal. Suppress the carp via `error =>`, treat a vanished path as
+# the benign race it is, and route any genuine failure through the
+# structured logger instead.
+sub _remove_tree {
+	my ($dir) = @_;
+	remove_tree($dir, { error => \my $err });
+	for my $e (@{ $err // [] }) {
+		my ($file, $message) = %$e;
+		next if $message =~ /No such file or directory/;
+		$log->warn("remove_tree failed for " . ($file || $dir) . ": $message");
+	}
+}
+
 # Remove a single problem directory and its index entries.
 sub invalidate {
 	my ($pg_hash) = @_;
 	my $dir = _problem_dir($pg_hash);
 	return 0 unless -d $dir;
 
-	remove_tree($dir);
+	_remove_tree($dir);
 	_delete_index_entries_where(sub { $_[0] eq $pg_hash });
 
 	return 1;
