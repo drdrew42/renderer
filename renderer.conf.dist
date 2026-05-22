@@ -113,9 +113,21 @@
   STATIC_EXPIRES => 86400,
 
   # --- Hypnotoad (production server) ---
+  #
+  # accepts: connections a worker handles before Hypnotoad gracefully retires
+  # and replaces it. This was historically 400 — a deliberately low memory-
+  # recycling safety net, set when we expected PG's known memory leak to
+  # accumulate in the long-lived worker. It does not: PG renders in a
+  # per-render forked subprocess (Renderer::Render::Subprocess) and the leak
+  # dies with each render's child — the worker never runs PG in-process. The
+  # low value also made workers churn every ~10-15 min on health-check traffic
+  # alone (ALB + Docker HEALTHCHECK probes to /health, which the access log
+  # deliberately suppresses), and every churn fires a fresh OPL re-registration.
+  # Raised to 10000: workers still recycle periodically (sheds any slow non-PG
+  # accumulation, picks up restarts gracefully) but not on health-check noise.
   hypnotoad => {
     listen => ['http://*:3000'],
-    accepts => 400,
+    accepts => 10000,
     workers => 10,
     spare => 5,
     clients => 100,
