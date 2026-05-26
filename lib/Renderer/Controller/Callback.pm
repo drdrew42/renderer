@@ -56,12 +56,17 @@ async sub callback ($c) {
 			Renderer::ContentCache::invalidate($pg_hash);
 		}
 
-		$c->log->info(
-			"Macro " . ($name // $hash) . " invalidated",
-			hash       => $hash,
-			deleted    => $deleted ? 1 : 0,
-			dependents => scalar @$dependents,
-		);
+		# Only log when something actually happened; the access log already
+		# records the callback arrival. Skip when neither the file nor any
+		# dependent problem dir was touched.
+		if ($deleted || @$dependents) {
+			$c->log->info(
+				"Macro " . ($name // $hash) . " invalidated",
+				hash       => $hash,
+				deleted    => $deleted ? 1 : 0,
+				dependents => scalar @$dependents,
+			);
+		}
 		return $c->render(json => {
 			invalidated => $hash,
 			deleted     => $deleted ? \1 : \0,
@@ -79,11 +84,16 @@ async sub callback ($c) {
 			return $c->render(json => { error => 'missing file_path' }, status => 400);
 		}
 		my $evicted = Renderer::ContentCache::invalidate_path($file_path);
-		$c->log->info(
-			"Path index invalidated",
-			file_path => $file_path,
-			evicted   => $evicted ? 1 : 0,
-		);
+		# No-op on a fresh path (nothing to drop) is the common case for
+		# authored-source creation; don't spam. Access log + 200 already
+		# confirm the callback arrived.
+		if ($evicted) {
+			$c->log->info(
+				"Path index invalidated",
+				file_path => $file_path,
+				evicted   => 1,
+			);
+		}
 		return $c->render(json => {
 			invalidated => $file_path,
 			evicted     => $evicted ? \1 : \0,
@@ -100,11 +110,15 @@ async sub callback ($c) {
 			return $c->render(json => { error => 'missing pg_hash' }, status => 400);
 		}
 		my $evicted = Renderer::ContentCache::invalidate($pg_hash);
-		$c->log->info(
-			"Problem cache invalidated",
-			pg_hash => $pg_hash,
-			evicted => $evicted ? 1 : 0,
-		);
+		# Resource upload for an uncached problem-hash is common; don't spam.
+		# Access log + 200 already confirm the callback arrived.
+		if ($evicted) {
+			$c->log->info(
+				"Problem cache invalidated",
+				pg_hash => $pg_hash,
+				evicted => 1,
+			);
+		}
 		return $c->render(json => {
 			invalidated => $pg_hash,
 			evicted     => $evicted ? \1 : \0,
