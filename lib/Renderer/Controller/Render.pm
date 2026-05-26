@@ -185,6 +185,10 @@ async sub render_ptx ($c) {
 	$c->render_later;
 	my $res = await WeBWorK::PreTeXt::render_ptx($c->req->params->to_hash);
 
+	# Client disconnect during the PreTeXt await tears down the tx; subsequent
+	# $c->render / $c->res would croak. Drop the abandoned response.
+	return unless $c->tx;
+
 	return $c->render(text => $res) unless ref($res) eq 'HASH';
 
 	$c->res->headers->content_type('text/xml; charset=utf-8');
@@ -254,6 +258,8 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	my $message = $expected_typ eq 'solution'
 		? ($res->{solution} // '')
 		: join('', @{ $res->{hints} // [] });
+	# Client disconnect during the renderer await tears down the tx; drop.
+	return unless $c->tx;
 	return $c->render(json => { status => 200, message => $message });
 }
 
@@ -269,6 +275,10 @@ sub exception ($c, $message, $status, @extra) {
 	my $id = $c->logID;
 	$message = "[$id] " . (ref $message eq 'ARRAY' ? join "\n", @$message : $message);
 	$c->log->error("($status) EXCEPTION: $message");
+	# If the client disconnected during an async chain, the transaction is
+	# already torn down. respond_to / res below would croak. Log the error
+	# (which we already did above) and bail — no one is on the line.
+	return undef unless $c->tx;
 	$c->respond_to(
 		json => {
 			json => {

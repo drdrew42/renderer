@@ -143,6 +143,11 @@ async sub callback ($c) {
 	my $eval_err = $@;
 	$CALLBACK_SEMAPHORE--;
 
+	# Caller (OPL) disconnected during the PG fork — every $c->render below
+	# would croak on a destroyed tx. Drop quietly; the callback's only side
+	# effect on the renderer is the render itself, which already ran.
+	return unless $c->tx;
+
 	if ($eval_err) {
 		return $c->render(json => { outcome => 'error', warnings => 0, error => "$eval_err" }, status => 200);
 	}
