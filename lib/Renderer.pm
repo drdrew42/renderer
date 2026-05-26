@@ -273,6 +273,12 @@ sub _register_request_hooks ($self) {
 		my $res = $c->res;
 		my $path = $req->url->path->to_string;
 		return if $path eq '/health';
+		# Static-asset GETs are noise — public_file route serves js/, css/,
+		# node_modules/, images/, fonts/, webfonts/, favicons. Skip them so
+		# the access log stays focused on render-api + callback traffic.
+		return if $req->method eq 'GET'
+			&& $path =~ m{^/(?:js|css|node_modules|images|fonts|webfonts)/}i;
+		return if $req->method eq 'GET' && $path =~ m{^/favicon}i;
 		my %entry = (
 			type        => 'request',
 			method      => $req->method,

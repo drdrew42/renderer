@@ -397,6 +397,18 @@ sub invalidate {
 	return 1;
 }
 
+# Drop just the path→hash binding. Leaves content cache and the hash itself
+# untouched, so direct-by-hash requests (signed render tokens locked to a
+# historical version) keep working. Use when the bytes at a path change but
+# the old hash is still legitimately addressable.
+sub invalidate_path {
+	my ($file_path) = @_;
+	my $idx = _path_index_path($file_path);
+	return 0 unless -f $idx;
+	unlink $idx;
+	return 1;
+}
+
 # Walk both .url_index and .path_index, deleting any entry whose stored
 # pg_hash satisfies the predicate. Each index file holds a single hash
 # (chomp'd) that maps a URL or path to a problem directory.

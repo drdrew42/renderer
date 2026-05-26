@@ -10,6 +10,9 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 #     to dependent problem dirs (WW3-R42). Cheap; no PG fork.
 #   * invalidate_problem — evict one problem's cache dir by pg_hash, fired
 #     when its resource set changes (LT-080). Cheap; no PG fork.
+#   * invalidate_path — drop the path_index binding for a file_path, fired
+#     when authored source bytes at that path change. Content cache by hash
+#     is preserved (signed render tokens stay resolvable). Cheap; no PG fork.
 #   * (default — render) — render a problem and return html_hash for
 #     OPL-side verification. Originates from LT-016.
 #
@@ -63,6 +66,27 @@ async sub callback ($c) {
 			invalidated => $hash,
 			deleted     => $deleted ? \1 : \0,
 			dependents  => scalar @$dependents,
+		});
+	}
+
+	# Dispatch: invalidate_path — drop the .path_index binding for a file_path.
+	# Fired by OPL when the bytes at an authored path change (saveProblem). The
+	# content cache for the old pg_hash is intentionally left intact so signed
+	# render tokens locked to a historical version still resolve. Cheap; no fork.
+	if (($req->{action} // '') eq 'invalidate_path') {
+		my $file_path = $req->{file_path};
+		unless (defined $file_path && length $file_path) {
+			return $c->render(json => { error => 'missing file_path' }, status => 400);
+		}
+		my $evicted = Renderer::ContentCache::invalidate_path($file_path);
+		$c->log->info(
+			"Path index invalidated",
+			file_path => $file_path,
+			evicted   => $evicted ? 1 : 0,
+		);
+		return $c->render(json => {
+			invalidated => $file_path,
+			evicted     => $evicted ? \1 : \0,
 		});
 	}
 
