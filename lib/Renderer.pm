@@ -259,9 +259,14 @@ sub _register_helpers ($self) {
 	$self->helper(exception    => sub { Renderer::Controller::Render::exception(@_) });
 }
 
-# Per-request structured log line — one JSON entry per non-/health request,
-# emitted in after_dispatch with status, duration, request_id, and renderer-
-# specific fields (cache_status, pg_hash) when stashed.
+# Per-request structured log line — one JSON entry per non-/health request.
+#
+# Emission point is the tx finish event (after the response is fully written),
+# not after_dispatch (which fires when the response is merely *constructed*).
+# This way the log reflects what was actually delivered: a 200 with
+# bytes_sent=0 and a long delivered_ms is an unmistakable signal that the
+# write phase silently went sideways (wide-character in headers truncating
+# the response, proxy disconnect mid-stream, etc.).
 sub _register_request_hooks ($self) {
 	require Time::HiRes;
 	$self->hook(before_dispatch => sub ($c) {
@@ -270,7 +275,6 @@ sub _register_request_hooks ($self) {
 	$self->hook(after_dispatch => sub ($c) {
 		my $start = $c->stash('_request_start') // return;
 		my $req = $c->req;
-		my $res = $c->res;
 		my $path = $req->url->path->to_string;
 		return if $path eq '/health';
 		# Static-asset GETs are noise — public_file route serves js/, css/,
@@ -279,24 +283,30 @@ sub _register_request_hooks ($self) {
 		return if $req->method eq 'GET'
 			&& $path =~ m{^/(?:js|css|node_modules|images|fonts|webfonts)/}i;
 		return if $req->method eq 'GET' && $path =~ m{^/favicon}i;
-		my %entry = (
-			type        => 'request',
-			method      => $req->method,
-			path        => $path,
-			status      => $res->code,
-			duration_ms => sprintf('%.1f', (Time::HiRes::time() - $start) * 1000),
-			request_id  => $req->request_id,
-		);
-		# Renderer-specific fields
-		$entry{cache_status} = $c->stash('_cache_status') if $c->stash('_cache_status');
-		$entry{pg_hash}      = $c->stash('pg_hash')       if $c->stash('pg_hash');
-		# Source-resolution trail: ordered events appended by SourceResolver at
-		# each decision point (input shape, path_index hit/miss, OPL fetch,
-		# verify outcome, etc.). Survives mid-render bails because we emit it
-		# from after_dispatch — partial trace beats no trace.
-		my $trace = $c->stash('_source_trace');
-		$entry{source_trace} = $trace if $trace && @$trace;
-		$self->log->info(\%entry);
+		# Capture stash-derived fields now (the controller is still live);
+		# emit at tx-finish so we report actual delivery.
+		my $cache_status = $c->stash('_cache_status');
+		my $pg_hash      = $c->stash('pg_hash');
+		my $trace        = $c->stash('_source_trace');
+		my $app          = $self;
+		$c->tx->on(finish => sub ($tx) {
+			my $res = $tx->res;
+			my $err = $tx->error;
+			my %entry = (
+				type         => 'request',
+				method       => $req->method,
+				path         => $path,
+				status       => $res->code,
+				duration_ms  => sprintf('%.1f', (Time::HiRes::time() - $start) * 1000),
+				bytes_sent   => $res->body_size // 0,
+				request_id   => $req->request_id,
+			);
+			$entry{tx_error}     = $err->{message} if $err && $err->{message};
+			$entry{cache_status} = $cache_status   if $cache_status;
+			$entry{pg_hash}      = $pg_hash        if $pg_hash;
+			$entry{source_trace} = $trace          if $trace && @$trace;
+			$app->log->info(\%entry);
+		});
 	});
 }
 
