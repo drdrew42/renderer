@@ -290,6 +290,12 @@ sub _register_request_hooks ($self) {
 		# Renderer-specific fields
 		$entry{cache_status} = $c->stash('_cache_status') if $c->stash('_cache_status');
 		$entry{pg_hash}      = $c->stash('pg_hash')       if $c->stash('pg_hash');
+		# Source-resolution trail: ordered events appended by SourceResolver at
+		# each decision point (input shape, path_index hit/miss, OPL fetch,
+		# verify outcome, etc.). Survives mid-render bails because we emit it
+		# from after_dispatch — partial trace beats no trace.
+		my $trace = $c->stash('_source_trace');
+		$entry{source_trace} = $trace if $trace && @$trace;
 		$self->log->info(\%entry);
 	});
 }

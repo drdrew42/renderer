@@ -28,6 +28,16 @@ our @EXPORT_OK = qw(
 	resolve_source_file_path_p
 );
 
+# Append one event to the per-request source-resolution trail. The whole
+# array is emitted by the after_dispatch hook (see Renderer::_register_
+# request_hooks), so events survive mid-render bails. Keep events small
+# and field names stable — these get grepped.
+sub _trace ($c, $event, %fields) {
+	my $trail = $c->stash('_source_trace') || [];
+	push @$trail, { event => $event, %fields };
+	$c->stash(_source_trace => $trail);
+}
+
 # Mutates $inputs_ref to populate problemSource / sourceFilePath / pg_hash
 # from whichever entry shape was supplied. Returns 1 on success or undef on
 # failure (after $c->exception has rendered the error). Caller bails with
@@ -35,6 +45,11 @@ our @EXPORT_OK = qw(
 async sub resolve_source ($c, $inputs_ref) {
 
 	if ($inputs_ref->{problemSourceURL}) {
+		_trace($c, 'input',
+			kind => 'url',
+			url  => $inputs_ref->{problemSourceURL},
+			(defined $inputs_ref->{pg_hash} ? (hash_hint => $inputs_ref->{pg_hash}) : ()),
+		);
 		my ($source, $pg_hash)
 			= await fetch_remote_source_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash});
 		return $c->exception('Failed to retrieve problem source.', 500) unless $source;
@@ -50,6 +65,12 @@ async sub resolve_source ($c, $inputs_ref) {
 	}
 
 	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{sourceFilePath}) {
+		_trace($c, 'input',
+			kind => 'path',
+			path => $inputs_ref->{sourceFilePath},
+			(defined $inputs_ref->{pg_hash}    ? (hash_hint     => $inputs_ref->{pg_hash}) : ()),
+			(defined $inputs_ref->{problemSource} ? (editor_preview => 1)                  : ()),
+		);
 		if ($inputs_ref->{problemSource}) {
 			# Editor preview: use the editor's source but resolve the path
 			# for macro dependencies (pg_hash → injectedMacros at render time).
@@ -74,6 +95,7 @@ async sub resolve_source ($c, $inputs_ref) {
 	}
 
 	# problemSource bytes already in hand (peer-signed body, JWT claim, etc.).
+	_trace($c, 'input', kind => 'inline');
 	return 1;
 }
 
@@ -86,16 +108,31 @@ sub fetch_remote_source_p ($c, $url, $pg_hash_hint = undef) {
 		# Try to resolve pg_hash from hint or url_index
 		my $pg_hash = $pg_hash_hint || Renderer::ContentCache::pg_hash_for_url($url);
 
+		if ($no_cache) {
+			_trace($c, 'no_cache');
+		} elsif ($pg_hash_hint) {
+			_trace($c, 'url_index', source => 'hint', hash => $pg_hash_hint);
+		} elsif ($pg_hash) {
+			_trace($c, 'url_index', source => 'index', hit => 1, hash => $pg_hash);
+		} else {
+			_trace($c, 'url_index', source => 'index', hit => 0);
+		}
 		if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
 			my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 			if ($cached_source) {
 				# WW3-R42: same consistency check as the sourceFilePath PATH HIT.
 				my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
 				if ($ok) {
+					_trace($c, 'served', via => 'url_hit', hash => $pg_hash);
 					$c->log->info("ContentCache HIT: $pg_hash (zero network)");
 					$c->stash(_cache_status => 'hit');
 					return Mojo::Promise->resolve($cached_source, $pg_hash);
 				}
+				_trace($c, 'verify_failed',
+					hash                        => $pg_hash,
+					macros_missing_from_disk    => $report->{macros_missing_from_disk},
+					load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},
+				);
 				$c->log->warn(
 					"ContentCache URL HIT inconsistent — evicting and re-fetching",
 					pg_hash                     => $pg_hash,
@@ -109,6 +146,7 @@ sub fetch_remote_source_p ($c, $url, $pg_hash_hint = undef) {
 		}
 
 		# Cache miss (or noCache forced) — fetch with conditional GET
+		_trace($c, 'opl_lookup', url => $url, (defined $pg_hash ? (conditional_hash => $pg_hash) : ()));
 		$c->log->info("ContentCache BYPASS (noCache)") if $no_cache;
 		return _fetch_content_addressed_p($c, $url, $no_cache ? undef : $pg_hash);
 	}
@@ -137,10 +175,12 @@ sub _fetch_content_addressed_p ($c, $url, $pg_hash) {
 				# nothing about the renderer-side macro cache. Verify.
 				my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
 				if ($ok) {
+					_trace($c, 'served', via => 'opl_304', hash => $pg_hash);
 					$c->log->info("ContentCache 304: $pg_hash");
 					$c->stash(_cache_status => 'miss_304');
 					return ($cached_source, $pg_hash);
 				}
+				_trace($c, 'verify_failed', when => '304', hash => $pg_hash);
 				$c->log->warn(
 					"ContentCache 304 but cache inconsistent — evicting and re-fetching",
 					pg_hash                     => $pg_hash,
@@ -236,6 +276,7 @@ sub _stage_problem_response ($c, $result, $url) {
 
 	Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
 	Renderer::ContentCache::save_url_index($url, $fetched_hash);
+	_trace($c, 'staged', hash => $fetched_hash, macros => scalar @macros_to_link);
 	$c->log->info("ContentCache STAGED: $fetched_hash from $url");
 	$c->stash(_cache_status => 'miss_200');
 
@@ -265,6 +306,15 @@ sub resolve_source_file_path_p ($c, $file_path, $pg_hash_hint = undef) {
 	# 1. Path index + cache — zero network (unless noCache)
 	my $no_cache = $c->stash('_no_cache');
 	my $pg_hash = $no_cache ? undef : ($pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized));
+	if ($no_cache) {
+		_trace($c, 'no_cache');
+	} elsif ($pg_hash_hint) {
+		_trace($c, 'path_index', source => 'hint', hash => $pg_hash_hint);
+	} elsif ($pg_hash) {
+		_trace($c, 'path_index', source => 'index', hit => 1, hash => $pg_hash);
+	} else {
+		_trace($c, 'path_index', source => 'index', hit => 0);
+	}
 	if (!$no_cache && $pg_hash && Renderer::ContentCache::has_problem($pg_hash)) {
 		my $cached_source = Renderer::ContentCache::read_problem($pg_hash);
 		if ($cached_source) {
@@ -276,11 +326,17 @@ sub resolve_source_file_path_p ($c, $file_path, $pg_hash_hint = undef) {
 			# failure, evict the problem dir and fall through to fresh fetch.
 			my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
 			if ($ok) {
+				_trace($c, 'served', via => 'path_hit', hash => $pg_hash);
 				$c->log->info("ContentCache PATH HIT: $pg_hash (zero network)");
 				$c->stash(_cache_status => 'hit');
 				return Mojo::Promise->resolve($cached_source, $pg_hash, undef);
 			}
 
+			_trace($c, 'verify_failed',
+				hash                        => $pg_hash,
+				macros_missing_from_disk    => $report->{macros_missing_from_disk},
+				load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},
+			);
 			$c->log->warn(
 				"ContentCache PATH HIT inconsistent — evicting and re-fetching",
 				pg_hash                     => $pg_hash,
@@ -296,12 +352,16 @@ sub resolve_source_file_path_p ($c, $file_path, $pg_hash_hint = undef) {
 	# 2. OPL lookup — delegate to existing fetch flow with client-built URL
 	my $opl_url = $c->opl_client->problem_url_by_path($normalized);
 
+	_trace($c, 'opl_lookup', url => $opl_url, (defined $pg_hash ? (conditional_hash => $pg_hash) : ()));
 	$c->log->info("sourceFilePath OPL lookup: $opl_url");
 
 	return _fetch_content_addressed_p($c, $opl_url, $pg_hash)->then(sub {
 		my ($source, $fetched_hash) = @_;
 		if ($source && $fetched_hash) {
 			Renderer::ContentCache::save_path_index($normalized, $fetched_hash);
+			_trace($c, 'served', via => 'opl_fetch', hash => $fetched_hash);
+		} elsif (!$source) {
+			_trace($c, 'opl_fetch_failed');
 		}
 		return ($source, $fetched_hash, undef);
 	});
