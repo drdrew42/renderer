@@ -171,6 +171,12 @@ async sub problem ($c) {
 		}
 	}
 
+	# If the client disconnected during the PG fork / async chain, Mojo has
+	# already destroyed the transaction. Calling format() would invoke
+	# url_for_file helpers that touch $c->req and croak "Transaction already
+	# destroyed". No one is on the other end to receive the response anyway —
+	# just drop the abandoned render quietly so the worker stays clean.
+	return unless $c->tx;
 	return $c->format($return_object);
 }
 
