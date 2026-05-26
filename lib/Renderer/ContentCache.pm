@@ -397,15 +397,37 @@ sub invalidate {
 	return 1;
 }
 
-# Drop just the path→hash binding. Leaves content cache and the hash itself
-# untouched, so direct-by-hash requests (signed render tokens locked to a
-# historical version) keep working. Use when the bytes at a path change but
-# the old hash is still legitimately addressable.
+# Drop the path→hash binding plus any url_index entries pointing at the
+# same hash. Leaves the content cache and the hash itself untouched, so
+# direct-by-hash requests (signed render tokens locked to a historical
+# version) keep working. Use when the bytes at a path change but the old
+# hash is still legitimately addressable.
+#
+# The url_index sweep covers the URL-flow caller path: when OPL serves a
+# problem by path, the renderer indexes the fetch URL (e.g.
+# `/api/problems/path/<file>`) → pg_hash. If we only dropped the path
+# binding, a URL-flow caller hitting the same path-form URL would still
+# resolve to the old hash via url_index. Sweeping by bound hash catches
+# this. Hash-form URLs (`/api/problems/<hash>`) that happen to be indexed
+# at the same hash get swept too — harmless: they re-fetch from OPL,
+# OPL returns the same hash content, the renderer re-indexes.
 sub invalidate_path {
 	my ($file_path) = @_;
 	my $idx = _path_index_path($file_path);
 	return 0 unless -f $idx;
+
+	# Capture the bound hash before we unlink so we know what url_index
+	# entries to sweep.
+	my $bound_hash;
+	if (open my $fh, '<', $idx) {
+		chomp($bound_hash = <$fh>);
+		close $fh;
+	}
 	unlink $idx;
+
+	_delete_url_index_entries_where(sub { $_[0] eq $bound_hash })
+		if defined $bound_hash && length $bound_hash;
+
 	return 1;
 }
 
@@ -414,20 +436,31 @@ sub invalidate_path {
 # (chomp'd) that maps a URL or path to a problem directory.
 sub _delete_index_entries_where {
 	my ($predicate) = @_;
-	for my $index_dir ('.url_index', '.path_index') {
-		my $idx_path = File::Spec->catdir($PRIVATE, $index_dir);
-		next unless -d $idx_path;
-		opendir my $ih, $idx_path or next;
-		while (my $f = readdir $ih) {
-			next if $f eq '.' || $f eq '..';
-			my $file = File::Spec->catfile($idx_path, $f);
-			open my $fh, '<', $file or next;
-			chomp(my $hash = <$fh>);
-			close $fh;
-			unlink $file if $predicate->($hash);
-		}
-		closedir $ih;
+	_sweep_index_dir('.path_index', $predicate);
+	_sweep_index_dir('.url_index',  $predicate);
+}
+
+# url_index-only sweep — used by invalidate_path so it doesn't clobber
+# path_index entries for other paths that happen to hash to the same value.
+sub _delete_url_index_entries_where {
+	my ($predicate) = @_;
+	_sweep_index_dir('.url_index', $predicate);
+}
+
+sub _sweep_index_dir {
+	my ($index_dir, $predicate) = @_;
+	my $idx_path = File::Spec->catdir($PRIVATE, $index_dir);
+	return unless -d $idx_path;
+	opendir my $ih, $idx_path or return;
+	while (my $f = readdir $ih) {
+		next if $f eq '.' || $f eq '..';
+		my $file = File::Spec->catfile($idx_path, $f);
+		open my $fh, '<', $file or next;
+		chomp(my $hash = <$fh>);
+		close $fh;
+		unlink $file if $predicate->($hash);
 	}
+	closedir $ih;
 }
 
 # --- private helpers ---
