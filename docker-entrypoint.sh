@@ -12,6 +12,13 @@ set -e
 
 RENDER_ROOT="${RENDER_ROOT:-/usr/app}"
 
+# Ensure the private/ scratch dir exists. /health uses it as a liveness check
+# and ContentCache stages problems under it. private/ is in .dockerignore so
+# it doesn't ship with the image; previously Identity.pm's auto-generate path
+# created it as a side effect of make_path on .identity/, but when IDENTITY_*
+# env vars supply the keypair, that side effect doesn't run.
+mkdir -p "$RENDER_ROOT/private"
+
 # A. Cache wipe (default-on, opt-out via PRESERVE_CACHE)
 if [ -z "$PRESERVE_CACHE" ]; then
     rm -rf "$RENDER_ROOT/private/problems" "$RENDER_ROOT/private/macros"
