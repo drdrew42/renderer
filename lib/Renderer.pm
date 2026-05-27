@@ -50,7 +50,16 @@ sub startup ($self) {
 sub _configure_app ($self) {
 	$self->plugin('Config');
 	$self->plugin('TagHelpers');
-	$self->secrets($self->config('secrets'));
+	# Cookie signing secret: RENDERER_COOKIE_SECRET env wins, config fallback.
+	# Warn (don't die) if the .dist placeholder is still in effect — local dev
+	# keeps working with the conf default; production should override via env.
+	my $cookie_secrets = $ENV{RENDERER_COOKIE_SECRET}
+		? [ $ENV{RENDERER_COOKIE_SECRET} ]
+		: $self->config('secrets');
+	$self->secrets($cookie_secrets);
+	warn "WARN: cookie 'secrets' is at the .dist placeholder 'abracadabra'; "
+		. "set RENDERER_COOKIE_SECRET in production\n"
+		if grep { $_ eq 'abracadabra' } @$cookie_secrets;
 	for (qw(problemJWTsecret webworkJWTsecret STRICT_JWT)) {
 		$ENV{$_} //= $self->config($_);
 	}
