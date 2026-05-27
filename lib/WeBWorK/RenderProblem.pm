@@ -246,6 +246,10 @@ sub standaloneRenderer {
 	# the orchestrator still gets full grading data. See
 	# vault://WeBWorK/PG/Render Flag Inventory.
 	# `hideAttemptsTable` is an accepted alias — same cascade, same effect.
+	# DEPRECATED: remove `hideAttemptsTable` after Summer 2026 to give ADAPT's
+	# live JWTs time to expire (they're long-lived; flag cutover happens at
+	# mint, but in-flight tokens continue to bear the old name until natural
+	# expiry). After cutoff: drop the OR, accept hideFeedback only.
 	my $hideFeedback   = ($inputs_ref->{hideFeedback} || $inputs_ref->{hideAttemptsTable}) ? 1 : 0;
 	my $displayResults = !$hideFeedback && $inputs_ref->{answersSubmitted} ? 1 : 0;
 	my $forceResults   = !$hideFeedback && $displayResults && $inputs_ref->{showPartialCorrectAnswers};

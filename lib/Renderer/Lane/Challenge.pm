@@ -113,6 +113,8 @@ sub apply ($c, $params) {
 	# flows to JWTanswerURL — only the student's visual signal is gone.
 	# Must arrive via claim so students can't toggle it back from the form.
 	# `hideAttemptsTable` is an accepted alias.
+	# DEPRECATED: remove `hideAttemptsTable` propagation after Summer 2026 —
+	# after ADAPT's live JWTs (which may bear the legacy claim) have expired.
 	$params->{hideFeedback} = $claims->{hideFeedback}
 		if $claims->{hideFeedback};
 	$params->{hideAttemptsTable} = $claims->{hideAttemptsTable}
