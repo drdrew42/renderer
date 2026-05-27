@@ -96,7 +96,7 @@ sub formatRenderedProblem {
 	# flags always win — translate only when the flag isn't already set.
 	if ($formatName eq 'static') {
 		$inputs_ref->{hideCheckAnswersButton}   //= 1;
-		$inputs_ref->{showCorrectAnswersButton} //= '0';
+		$inputs_ref->{showCorrectAnswersButton} //= 0;
 	}
 	$formatName = 'default' if $formatName eq 'simple' || $formatName eq 'static';
 
@@ -280,10 +280,10 @@ sub formatRenderedProblem {
 		showSummary              => $showSummary,
 		showScoreSummary         => $submitMode && !$renderErrorOccurred && $problemResult,
 		answerhashXML            => $answerhashXML,
-		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? '0' : '',
+		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? 0 : 1,
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton}
-			// ($inputs_ref->{isInstructor} ? '' : '0'),
-		showFooter   => $inputs_ref->{showFooter} // '0',
+			// ($inputs_ref->{isInstructor} ? 1 : 0),
+		showFooter   => $inputs_ref->{showFooter} // 0,
 		pretty_print => \&pretty_print,
 	);
 

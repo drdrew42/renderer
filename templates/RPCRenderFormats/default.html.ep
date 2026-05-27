@@ -105,15 +105,14 @@
 					%# visible. Replaces the previous `formatName ne 'static'` magic-
 					%# string check; static now expresses itself via the three
 					%# button-hide flags set at the dispatcher boundary.
-					% my $any_button = ($showCheckAnswersButton ne '0')
-					%               || ($showCorrectAnswersButton ne '0');
+					% my $any_button = $showCheckAnswersButton || $showCorrectAnswersButton;
 					% if ($any_button) {
 						<div class="submit-buttons-container col-12 mb-2">
-							% if ($showCheckAnswersButton ne '0') {
+							% if ($showCheckAnswersButton) {
 								<%= submit_button $lh->maketext('Submit Answers'),
 									name => 'submitAnswers', class => 'btn btn-primary mb-1' %>
 							% }
-							% if ($showCorrectAnswersButton ne '0') {
+							% if ($showCorrectAnswersButton) {
 								<%= submit_button $lh->maketext('Show Correct Answers'),
 									name => 'showCorrectAnswers', class => 'btn btn-primary mb-1' %>
 							% }
@@ -182,7 +181,7 @@
 		% }
 	</div>
 	% # Show the footer unless it is explicity disabled.
-	% if ($showFooter ne '0') {
+	% if ($showFooter) {
 		<div id="footer">
 			WeBWorK &copy; 2000-2022 |
 			host: <%= $SITE_URL %> |
