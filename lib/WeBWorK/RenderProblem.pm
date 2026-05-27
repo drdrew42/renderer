@@ -239,8 +239,16 @@ sub standaloneRenderer {
 	my $showSolutions      = $perms->{showSolutions};
 	my $showHints          = $perms->{showHints};
 
-	my $displayResults = $inputs_ref->{answersSubmitted} ? 1 : 0;
-	my $forceResults   = $displayResults && $inputs_ref->{showPartialCorrectAnswers};
+	# Exam-mode suppression: when the caller (via JWT claim) asserts
+	# hideFeedback, kill the PG content post-processor entirely. No
+	# verdict CSS, no popovers, no button, no summary text built. Layer 1
+	# (answer eval) and Layer 4 (answerJWT to JWTanswerURL) are untouched —
+	# the orchestrator still gets full grading data. See
+	# vault://WeBWorK/PG/Render Flag Inventory.
+	# `hideAttemptsTable` is an accepted alias — same cascade, same effect.
+	my $hideFeedback   = ($inputs_ref->{hideFeedback} || $inputs_ref->{hideAttemptsTable}) ? 1 : 0;
+	my $displayResults = !$hideFeedback && $inputs_ref->{answersSubmitted} ? 1 : 0;
+	my $forceResults   = !$hideFeedback && $displayResults && $inputs_ref->{showPartialCorrectAnswers};
 
 	my $pg = WeBWorK::PG->new(
 		inputs_ref              => {%$inputs_ref},                        # preserve original values
@@ -251,7 +259,7 @@ sub standaloneRenderer {
 		# loadMacros() finds them without filesystem search (PGloadfiles.pm).
 		($inputs_ref->{injectedMacros} ? (injectedMacros => $inputs_ref->{injectedMacros}) : ()),
 		processAnswers          => $processAnswers,
-		showFeedback            => 1,
+		showFeedback            => $hideFeedback ? 0 : 1,                 # exam-mode kill-switch (outer gate)
 		showAttemptResults      => $displayResults,                       # respects showPartialCorrectAnswers
 		forceShowAttemptResults => $forceResults,                         # overrides showPartialCorrectAnswers
 		showAttemptAnswers      => 0,                                     # MathQuill renders inline as student types; no separate echo path
