@@ -18,7 +18,6 @@ use WeBWorK::Utils::Tags;
 use Renderer::Constants   qw( PLATFORM_NAME );
 use Renderer::Util::JWT   qw( mint_jwt );
 use Renderer::Permissions qw( resolve_permissions reveal_state );
-use Renderer::RenderMode  qw( resolve_render_mode );
 
 ##################################################
 # create log files :: expendable
@@ -232,17 +231,12 @@ sub standaloneRenderer {
 	$inputs_ref->{hideFeedback} ||= $inputs_ref->{hideAttemptsTable}
 		if $inputs_ref->{hideAttemptsTable};
 
-	# Render-mode resolution — see Renderer::RenderMode. Flattens
-	# $inputs_ref->{renderMode} into the primitive flag bundle that mode
-	# owns (hideFeedback, hideCheckAnswersButton, showCorrectAnswersButton,
-	# isInstructor, etc.) before any downstream code reads those flags.
-	# Modes pre-populate primitives the orchestrator's intent owns; the
-	# permissions resolver below still runs to expand isInstructor → revealAll.
-	# Mode-aware logic ends here — everything past this line reads primitives.
-	# Returns the list of caller-supplied keys the bundle replaced; we
-	# bubble it out on $ret->{_mode_overrides} below for debug introspection
-	# (same pattern as $pg->{_reveal_state}).
-	my $mode_overrides = resolve_render_mode($inputs_ref);
+	# Render-mode resolution happened upstream in
+	# Renderer::Render::ParseRequest::dispatch — pre-fork, parent process.
+	# By the time we get here, $inputs_ref already carries the resolved
+	# primitive flags (hideFeedback, hideCheckAnswersButton,
+	# showCorrectAnswersButton, isInstructor, etc.). Mode-aware logic ends
+	# at the dispatch layer; everything from this point on reads primitives.
 
 	# Permission model — see Renderer::Permissions for the full rule set.
 	# Single decision point; no defaulting logic in this function. PG's 0/2
@@ -321,10 +315,6 @@ sub standaloneRenderer {
 		problem_state    => $pg->{state},
 		flags            => $pg->{flags},
 	};
-	# Surface render-mode override list (see resolve_render_mode call above).
-	# Only set when the bundle actually replaced caller-supplied primitives;
-	# absent means either custom mode or caller-bundle agreement.
-	$ret->{_mode_overrides} = $mode_overrides if $mode_overrides && @$mode_overrides;
 	if (ref($pg->{pgcore}) eq 'PGcore') {
 		$ret->{internal_debug_messages} = $pg->{pgcore}->get_internal_debug_messages();
 		$ret->{warning_messages}        = $pg->{pgcore}->get_warning_messages();
