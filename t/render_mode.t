@@ -105,38 +105,37 @@ subtest 'mode passes through caller value when bundle does not lock that primiti
 	is($i->{hideFeedback},       0, 'default bundle still applies hideFeedback');
 };
 
-# ─── Override tracking via stash ──────────────────────────────────────
+# ─── Override tracking via return value ────────────────────────────────
 
-{
-	package MockController;
-	sub new   { bless { stash => {} }, shift }
-	sub stash { my ($self, $k, $v) = @_;
-		if (@_ == 3) { $self->{stash}{$k} = $v }
-		else         { return $self->{stash}{$k} }
-	}
-}
-
-subtest '_mode_overrides stash records replaced caller values' => sub {
-	my $c = MockController->new;
+subtest 'return value records replaced caller values' => sub {
 	my $i = {
 		renderMode             => 'no-feedback',
 		hideFeedback           => 0,        # mode overrides to 1
 		hideCheckAnswersButton => 0,        # matches bundle, no override
 		showCorrectAnswers     => 1,        # mode overrides to 0
 	};
-	resolve_render_mode($i, $c);
-	my $overrides = $c->stash('_mode_overrides');
+	my $overrides = resolve_render_mode($i);
+	is(ref($overrides), 'ARRAY', 'returns an arrayref');
 	is_deeply([ sort @$overrides ],
 		[ sort qw(hideFeedback showCorrectAnswers) ],
 		'only conflicting keys recorded');
 };
 
-subtest 'no stash key emitted when no caller values were replaced' => sub {
-	my $c = MockController->new;
+subtest 'empty override list when bundle and caller agree' => sub {
 	my $i = { renderMode => 'no-feedback' };
-	resolve_render_mode($i, $c);
-	is($c->stash('_mode_overrides'), undef,
-		'no override list when bundle and caller agree');
+	my $overrides = resolve_render_mode($i);
+	is(ref($overrides), 'ARRAY', 'returns an arrayref');
+	is(scalar @$overrides, 0, 'no overrides recorded');
+};
+
+subtest 'custom and unknown modes return empty arrayref' => sub {
+	my $overrides;
+	$overrides = resolve_render_mode({ renderMode => 'custom', hideFeedback => 1 });
+	is(scalar @$overrides, 0, 'custom: no overrides (passthrough)');
+	$overrides = resolve_render_mode({ renderMode => 'garbage', hideFeedback => 1 });
+	is(scalar @$overrides, 0, 'unknown: no overrides (forward-compat)');
+	$overrides = resolve_render_mode({});
+	is(scalar @$overrides, 0, 'absent: no overrides');
 };
 
 # ─── Side effects: only touches keys the bundle owns ──────────────────

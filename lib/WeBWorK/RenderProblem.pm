@@ -239,9 +239,10 @@ sub standaloneRenderer {
 	# Modes pre-populate primitives the orchestrator's intent owns; the
 	# permissions resolver below still runs to expand isInstructor → revealAll.
 	# Mode-aware logic ends here — everything past this line reads primitives.
-	# TODO: wire $c through process_pg_file to capture _mode_overrides stash
-	# (currently no debug introspection for mode-replaced caller values).
-	resolve_render_mode($inputs_ref);
+	# Returns the list of caller-supplied keys the bundle replaced; we
+	# bubble it out on $ret->{_mode_overrides} below for debug introspection
+	# (same pattern as $pg->{_reveal_state}).
+	my $mode_overrides = resolve_render_mode($inputs_ref);
 
 	# Permission model — see Renderer::Permissions for the full rule set.
 	# Single decision point; no defaulting logic in this function. PG's 0/2
@@ -320,6 +321,10 @@ sub standaloneRenderer {
 		problem_state    => $pg->{state},
 		flags            => $pg->{flags},
 	};
+	# Surface render-mode override list (see resolve_render_mode call above).
+	# Only set when the bundle actually replaced caller-supplied primitives;
+	# absent means either custom mode or caller-bundle agreement.
+	$ret->{_mode_overrides} = $mode_overrides if $mode_overrides && @$mode_overrides;
 	if (ref($pg->{pgcore}) eq 'PGcore') {
 		$ret->{internal_debug_messages} = $pg->{pgcore}->get_internal_debug_messages();
 		$ret->{warning_messages}        = $pg->{pgcore}->get_warning_messages();

@@ -1,6 +1,8 @@
 package Renderer::RenderMode;
 
-# resolve_render_mode($inputs_ref, $c=undef) → mutates $inputs_ref in place
+# resolve_render_mode($inputs_ref) → mutates $inputs_ref in place + returns
+#                                     the list of caller-supplied primitive
+#                                     keys the mode bundle replaced.
 #
 # Translates the $inputs_ref->{renderMode} intent claim into the primitive
 # flag bundle that mode owns. Downstream code (RenderProblem,
@@ -33,9 +35,10 @@ package Renderer::RenderMode;
 #
 # Override posture: mode wins over caller-supplied primitives, silently.
 # Picking a mode is opting into its bundle. The set of overridden keys is
-# stashed on the Mojo controller under _mode_overrides for debug
-# introspection (mirrors the existing _trust_lane / _is_first_render
-# stash pattern).
+# returned as an arrayref so the caller can surface it on the render
+# return-object (mirrors the existing $pg->{_reveal_state} pattern — info
+# that needs to bubble from inside standaloneRenderer back to the controller
+# without plumbing $c through the call chain).
 #
 # Sensitivity: renderMode is policy. A student must not be able to override
 # the orchestrator's mode from the rendered form. Lane::Problem's bulk
@@ -93,17 +96,17 @@ sub mode_bundle ($mode) {
 	return $BUNDLES{$mode} // $BUNDLES{custom};
 }
 
-sub resolve_render_mode ($inputs_ref, $c = undef) {
+sub resolve_render_mode ($inputs_ref) {
 	my $mode   = $inputs_ref->{renderMode} // 'custom';
 	my $bundle = $BUNDLES{$mode} // {};    # unknown mode → passthrough
-	return unless %$bundle;
+	return [] unless %$bundle;
 
 	my @overrides;
 	for my $k (sort keys %$bundle) {
 		my $bundle_val = $bundle->{$k};
 		# Caller supplied a value that the bundle is changing → record it.
-		# Stringy-equal compare (all bundle values are 0/1; caller may send
-		# either, or stringy truthy/falsy that we coerce on read elsewhere).
+		# Truthy compare — all bundle values are 0/1, caller-supplied values
+		# already coerced to bool at the inputs_ref boundary upstream.
 		if (defined $inputs_ref->{$k}
 			&& (!!$inputs_ref->{$k}) != (!!$bundle_val))
 		{
@@ -111,8 +114,7 @@ sub resolve_render_mode ($inputs_ref, $c = undef) {
 		}
 		$inputs_ref->{$k} = $bundle_val;
 	}
-	$c->stash(_mode_overrides => \@overrides) if $c && @overrides;
-	return;
+	return \@overrides;
 }
 
 1;
