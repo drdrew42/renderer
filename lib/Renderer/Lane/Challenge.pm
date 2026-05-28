@@ -108,6 +108,11 @@ sub apply ($c, $params) {
 	$params->{hideElements} = $claims->{hideElements}
 		if ref $claims->{hideElements} eq 'ARRAY';
 
+	# Render-mode intent claim (WW3-R43). Resolved into primitive flags by
+	# Renderer::RenderMode at the RenderProblem boundary.
+	$params->{renderMode} = $claims->{renderMode}
+		if defined $claims->{renderMode};
+
 	# Exam-mode feedback suppression: kills the PG post-processor (no
 	# verdict CSS classes, popovers, buttons, or summary). Score still
 	# flows to JWTanswerURL — only the student's visual signal is gone.

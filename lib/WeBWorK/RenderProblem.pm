@@ -18,6 +18,7 @@ use WeBWorK::Utils::Tags;
 use Renderer::Constants   qw( PLATFORM_NAME );
 use Renderer::Util::JWT   qw( mint_jwt );
 use Renderer::Permissions qw( resolve_permissions reveal_state );
+use Renderer::RenderMode  qw( resolve_render_mode );
 
 ##################################################
 # create log files :: expendable
@@ -223,6 +224,25 @@ sub standaloneRenderer {
 	# OR them together so any signal triggers it.
 	$inputs_ref->{answersSubmitted} ||= $isSubmit;
 
+	# Collapse the hideAttemptsTable alias into canonical hideFeedback before
+	# mode resolution. Lets the mode's override posture work correctly — a
+	# mode setting hideFeedback=0 (e.g. "default") wins over a stale legacy
+	# alias claim. DEPRECATED: remove this collapse after Summer 2026 along
+	# with the alias itself.
+	$inputs_ref->{hideFeedback} ||= $inputs_ref->{hideAttemptsTable}
+		if $inputs_ref->{hideAttemptsTable};
+
+	# Render-mode resolution — see Renderer::RenderMode. Flattens
+	# $inputs_ref->{renderMode} into the primitive flag bundle that mode
+	# owns (hideFeedback, hideCheckAnswersButton, showCorrectAnswersButton,
+	# isInstructor, etc.) before any downstream code reads those flags.
+	# Modes pre-populate primitives the orchestrator's intent owns; the
+	# permissions resolver below still runs to expand isInstructor → revealAll.
+	# Mode-aware logic ends here — everything past this line reads primitives.
+	# TODO: wire $c through process_pg_file to capture _mode_overrides stash
+	# (currently no debug introspection for mode-replaced caller values).
+	resolve_render_mode($inputs_ref);
+
 	# Permission model — see Renderer::Permissions for the full rule set.
 	# Single decision point; no defaulting logic in this function. PG's 0/2
 	# magic value for showCorrectAnswers is the only translation that stays
@@ -239,18 +259,12 @@ sub standaloneRenderer {
 	my $showSolutions      = $perms->{showSolutions};
 	my $showHints          = $perms->{showHints};
 
-	# Exam-mode suppression: when the caller (via JWT claim) asserts
-	# hideFeedback, kill the PG content post-processor entirely. No
-	# verdict CSS, no popovers, no button, no summary text built. Layer 1
-	# (answer eval) and Layer 4 (answerJWT to JWTanswerURL) are untouched —
-	# the orchestrator still gets full grading data. See
+	# Feedback suppression: hideFeedback (set via mode bundle or claim) kills
+	# the PG content post-processor entirely — no verdict CSS, no popovers,
+	# no button, no summary text built. Layer 1 (answer eval) and Layer 4
+	# (answerJWT to JWTanswerURL) are untouched. See
 	# vault://WeBWorK/PG/Render Flag Inventory.
-	# `hideAttemptsTable` is an accepted alias — same cascade, same effect.
-	# DEPRECATED: remove `hideAttemptsTable` after Summer 2026 to give ADAPT's
-	# live JWTs time to expire (they're long-lived; flag cutover happens at
-	# mint, but in-flight tokens continue to bear the old name until natural
-	# expiry). After cutoff: drop the OR, accept hideFeedback only.
-	my $hideFeedback   = ($inputs_ref->{hideFeedback} || $inputs_ref->{hideAttemptsTable}) ? 1 : 0;
+	my $hideFeedback   = $inputs_ref->{hideFeedback} ? 1 : 0;
 	my $displayResults = !$hideFeedback && $inputs_ref->{answersSubmitted} ? 1 : 0;
 	my $forceResults   = !$hideFeedback && $displayResults && $inputs_ref->{showPartialCorrectAnswers};
 
