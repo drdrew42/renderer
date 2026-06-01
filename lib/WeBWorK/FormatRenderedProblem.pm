@@ -137,7 +137,8 @@ sub formatRenderedProblem {
 	my $problemUUID      = $inputs_ref->{problemUUID}      // '';
 	my $problemResult    = $rh_result->{problem_result}    // {};
 	my $showSummary      = $inputs_ref->{showSummary}      // 1;
-	my $showScoreSummary = $inputs_ref->{showScoreSummary} // 0;
+	my $scoresExist      = $submitMode && !$renderErrorOccurred && $problemResult;
+	my $showScoreSummary = ( $inputs_ref->{showScoreSummary} // 0 ) && $scoresExist;
 	# allow the request to override the display of partial correct answers
 	my $showPartialCorrectAnswers = $inputs_ref->{showPartialCorrectAnswers}
 		// $rh_result->{flags}{showPartialCorrectAnswers};
@@ -278,7 +279,7 @@ sub formatRenderedProblem {
 		hideElementsCSS          => $hideElementsCSS,
 		resultSummary            => $resultSummary,
 		showSummary              => $showSummary,
-		showScoreSummary         => $submitMode && !$renderErrorOccurred && $problemResult,
+		showScoreSummary         => $showScoreSummary,
 		answerhashXML            => $answerhashXML,
 		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? 0 : 1,
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton}
