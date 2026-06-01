@@ -44,7 +44,6 @@ sub apply_prefix ($c, $params) {
 		$claims = decode_jwt(
 			token      => $sessionJWT,
 			key        => $ENV{webworkJWTsecret},
-			verify_iss => $ENV{SITE_HOST},
 		);
 		1;
 	} or do {
