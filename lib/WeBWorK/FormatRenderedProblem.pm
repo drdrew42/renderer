@@ -137,8 +137,12 @@ sub formatRenderedProblem {
 	my $problemUUID      = $inputs_ref->{problemUUID}      // '';
 	my $problemResult    = $rh_result->{problem_result}    // {};
 	my $showSummary      = $inputs_ref->{showSummary}      // 1;
-	my $scoresExist      = $submitMode && !$renderErrorOccurred && $problemResult;
-	my $showScoreSummary = ( $inputs_ref->{showScoreSummary} // 0 ) && $scoresExist;
+	# A score is reportable only when the problem was submitted, rendered
+	# cleanly, and problem_result actually carries a score (the value the
+	# default.html.ep template dereferences). Coerce to a plain boolean so
+	# the JSON output format emits true/false, not a truthy hashref.
+	my $scoresExist      = $submitMode && !$renderErrorOccurred && defined $problemResult->{score} ? 1 : 0;
+	my $showScoreSummary = ( $inputs_ref->{showScoreSummary} // 0 ) && $scoresExist ? 1 : 0;
 	# allow the request to override the display of partial correct answers
 	my $showPartialCorrectAnswers = $inputs_ref->{showPartialCorrectAnswers}
 		// $rh_result->{flags}{showPartialCorrectAnswers};
