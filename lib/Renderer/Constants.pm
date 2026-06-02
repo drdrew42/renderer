@@ -6,6 +6,7 @@ use Exporter 'import';
 
 our @EXPORT_OK = qw(
 	SENSITIVE_PARAMS
+	SOURCE_OVERRIDE_FIELDS
 	ANSWER_RESPONSE_SUBJECT
 	ANSWER_RESPONSE_DEFAULT_MESSAGE
 	PLATFORM_NAME
@@ -30,6 +31,20 @@ use constant SENSITIVE_PARAMS => qw(
 	solutionsRequested
 	answersRevealed
 	solutionsRevealed
+);
+
+# Problem-source fields a sidecar problemJWT may override on an in-flight
+# sessionJWT (LTW-088). Whitelist — trust/routing/state claims (JWTanswerURL,
+# parent_origin, isInstructor, the reveal/submit ratchet) never cross from a
+# sidecar; only "what content" does. Applied ATOMICALLY: any sidecar source
+# field triggers replacement of the entire nested source bundle, so a stale
+# pg_hash can never ride alongside a freshly-pointed problemSourceURL (the
+# SourceResolver serves cached content by hash, zero-network).
+use constant SOURCE_OVERRIDE_FIELDS => qw(
+	problemSourceURL
+	sourceFilePath
+	pg_hash
+	problemSource
 );
 
 # answerJWT response envelope defaults (legacy lane sendAnswerJWT and

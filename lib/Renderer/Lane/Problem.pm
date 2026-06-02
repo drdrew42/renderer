@@ -27,25 +27,38 @@ no warnings qw(experimental::signatures);
 use Crypt::JWT qw(decode_jwt);
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(apply);
+our @EXPORT_OK = qw(apply decode_claims);
 
-sub apply ($c, $params) {
-	$c->log->info("Received JWT: using problemJWT");
-
+# decode_claims($c, $token) → (\%claims, undef) | (undef, $err)
+#
+# Decode a problemJWT under problemJWTsecret with verify_aud => SITE_HOST and
+# hoist the LibreTexts `webwork` provider wrapper. Shared by apply() (body
+# lane) and Renderer::Lane::Session's sidecar source-override (LTW-088) so
+# both decode a problemJWT through exactly one path. Returns the error string
+# rather than croaking so the caller decides how to short-circuit.
+sub decode_claims ($c, $token) {
 	my $claims;
 	eval {
 		$claims = decode_jwt(
-			token      => $params->{problemJWT},
+			token      => $token,
 			key        => $ENV{problemJWTsecret},
 			verify_aud => $ENV{SITE_HOST},
 		);
 		1;
 	} or do {
-		return $c->croak($@, 3);
+		return (undef, $@);
 	};
 
 	# LibreTexts wraps claims under a provider key.
 	$claims = $claims->{webwork} if defined $claims->{webwork};
+	return ($claims, undef);
+}
+
+sub apply ($c, $params) {
+	$c->log->info("Received JWT: using problemJWT");
+
+	my ($claims, $err) = decode_claims($c, $params->{problemJWT});
+	return $c->croak($err, 3) if $err;
 
 	# `isInstructor` claim-only: drop any raw-form value first so the claim
 	# is the only possible source. Prevents form-param elevation when the

@@ -205,6 +205,11 @@ sub _apply_lanes ($c, $params, $ctx) {
 	# runs.
 	if (defined $params->{problemJWT}) {
 		Renderer::Lane::Problem::apply($c, $params) or return;
+		# Sidecar source-override (LTW-088): no-op unless apply_prefix stashed
+		# a differing sidecar problemJWT. Runs after the body lane merges the
+		# nested claims so the source bundle is replaced last; pre-finalize so
+		# it lands before the render subprocess forks.
+		Renderer::Lane::Session::apply_source_override($c, $params) or return;
 	} elsif (defined $params->{challengeJWT}) {
 		Renderer::Lane::Challenge::apply($c, $params) or return;
 	} elsif (defined $params->{submissionJWT}) {
