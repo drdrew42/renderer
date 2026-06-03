@@ -37,9 +37,9 @@ sub init {
 	return unless $ENV{OPL_API_URL};
 	return unless Renderer::Identity::has_identity();
 
-	my $callback_url = _build_callback_url();
+	my $callback_url = _build_callback_url($app);
 	unless ($callback_url) {
-		$app->log->warn("Registration: cannot determine callback URL (SITE_HOST not set)");
+		$app->log->warn("Registration: cannot determine callback URL (no ECS metadata, no RENDERER_URL, no SITE_HOST)");
 		return;
 	}
 
@@ -159,9 +159,51 @@ sub _schedule_retry {
 }
 
 sub _build_callback_url {
+	my ($app) = @_;
+
+	# ECS Fargate: every task has a stable private IP for its lifetime. When
+	# OPL pushes invalidations to that IP directly (rather than the public ALB),
+	# every task receives every callback — no LB-lottery skew. The renderer's
+	# security group already permits ECS→ECS ingress (EcsSecurityGroupSelf in
+	# the CFN template), so OPL can reach us on port 3000.
+	if (my $meta_uri = $ENV{ECS_CONTAINER_METADATA_URI_V4}) {
+		my $ip = _fetch_task_ipv4($app, $meta_uri);
+		if ($ip) {
+			$app->log->info("Registration: using ECS task private IP $ip for callback URL");
+			return "http://${ip}:3000/render-api/callback";
+		}
+		$app->log->warn("Registration: ECS metadata present but IP fetch failed; falling back to public URL");
+	}
+
+	# Public-URL fallback: homelab, dev, single-instance prod, or any deployment
+	# without ECS task-IP addressability. Prefer RENDERER_URL (the canonical
+	# public origin); fall back to SITE_HOST + baseURL for legacy configs.
+	if (my $renderer_url = $ENV{RENDERER_URL}) {
+		$renderer_url =~ s{/+$}{};
+		return "${renderer_url}/render-api/callback";
+	}
 	my $host = $ENV{SITE_HOST} // return undef;
 	my $base = $ENV{baseURL}   // '';
 	return "${host}${base}/render-api/callback";
+}
+
+sub _fetch_task_ipv4 {
+	my ($app, $meta_uri) = @_;
+	my $tx = eval {
+		$app->ua->connect_timeout(2)->request_timeout(2)->get("$meta_uri/task")
+	};
+	return undef if $@ || !$tx;
+	my $res = $tx->result or return undef;
+	return undef unless $res->is_success;
+	my $json = eval { $res->json } or return undef;
+	for my $container (@{ $json->{Containers} // [] }) {
+		for my $net (@{ $container->{Networks} // [] }) {
+			for my $addr (@{ $net->{IPv4Addresses} // [] }) {
+				return $addr if $addr =~ /^\d+\.\d+\.\d+\.\d+$/;
+			}
+		}
+	}
+	return undef;
 }
 
 # Canonical request signing: verify an inbound peer signature.
