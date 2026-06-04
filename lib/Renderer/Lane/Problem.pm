@@ -43,6 +43,17 @@ sub decode_claims ($c, $token) {
 			token      => $token,
 			key        => $ENV{problemJWTsecret},
 			verify_aud => $ENV{SITE_HOST},
+			# The renderer is not the issuer of a problemJWT's `exp` — the LMS
+			# (ADAPT/LibreTexts) is. We must not enforce it: the nested
+			# ("matryoshka") problemJWT is embedded verbatim in our sessionJWT
+			# and is meant to outlive its own launch-TTL across a continuing
+			# session, so honoring `exp` here breaks every render past the
+			# launch window (and instructor review). Once a problemJWT is
+			# accepted into our session, the session — not the launch token —
+			# governs continuation lifetime. Provenance is still the HMAC under
+			# problemJWTsecret; persistence/scoring is still gated by the
+			# JWTanswerURL POST the LMS controls.
+			verify_exp => 0,
 		);
 		1;
 	} or do {

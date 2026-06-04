@@ -6,6 +6,7 @@ use Crypt::JWT qw(encode_jwt);
 
 use lib 'lib';
 use Renderer::Lane::Session qw(apply_prefix apply_source_override);
+use Renderer::Lane::Problem qw(decode_claims);
 
 # Pure-function unit tests for the LTW-088 sidecar source-override: a sidecar
 # problemJWT submitted in tandem with a sessionJWT overrides the nested
@@ -159,6 +160,34 @@ subtest 'malformed sidecar → croak (rejected as a bad request)' => sub {
 	ok(!$rv, 'returns falsy (short-circuits the controller)');
 	ok($c->stash('_sidecar_problemJWT'), 'sidecar was present');
 	is(ref $c->{croaked}, 'HASH', 'croak was invoked on decode failure');
+};
+
+# ─── expired problemJWT: exp is the LMS's, never enforced by us ───────────
+# The renderer is not the issuer of a problemJWT's `exp` (the LMS is), and a
+# nested problemJWT rides verbatim inside our sessionJWT — it must outlive its
+# own launch-TTL across a continuing session. decode_claims therefore passes
+# verify_exp => 0. Regression guard: an expired problemJWT must still decode.
+
+subtest 'expired problemJWT still decodes (exp not enforced by the renderer)' => sub {
+	my $c = MockController->new;
+	# exp an hour in the past; with leeway 0 this would croak under Crypt::JWT's
+	# default verify_exp.
+	my $expired = problem_jwt(problemSourceURL => 'http://x', exp => time() - 3600);
+
+	my ($claims, $err) = decode_claims($c, $expired);
+	ok(!$err, 'no decode error on an expired problemJWT') or diag($err);
+	is($claims->{problemSourceURL}, 'http://x', 'claims extracted from expired token');
+};
+
+subtest 'expired sidecar still applies its source override' => sub {
+	my %params = (problemSourceURL => 'http://old');
+	my $c = MockController->new;
+	$c->stash(_sidecar_problemJWT =>
+		problem_jwt(problemSourceURL => 'http://new', exp => time() - 3600));
+
+	ok(apply_source_override($c, \%params), 'override applied despite expired sidecar');
+	is($params{problemSourceURL}, 'http://new', 'expired sidecar source still crossed');
+	ok(!defined $c->{croaked}, 'expired exp did not croak the request');
 };
 
 done_testing;
