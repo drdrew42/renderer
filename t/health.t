@@ -21,7 +21,7 @@ use Test::Mojo;
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 
 # Ensure required directories exist
@@ -40,12 +40,8 @@ unless (-d $private_dir) {
 }
 
 subtest 'health 200 when private/ exists' => sub {
-	$t->get_ok('/health')
-		->status_is(200)
-		->json_is('/status'  => 'ok')
-		->json_is('/service' => 'Renderer')
-		->json_has('/pg_version')
-		->json_has('/renderer_version');
+	$t->get_ok('/health')->status_is(200)->json_is('/status' => 'ok')->json_is('/service' => 'Renderer')
+		->json_has('/pg_version')->json_has('/renderer_version');
 };
 
 subtest 'health 503 when private/ missing' => sub {
@@ -56,10 +52,7 @@ subtest 'health 503 when private/ missing' => sub {
 		return;
 	};
 
-	$t->get_ok('/health')
-		->status_is(503)
-		->json_is('/status'  => 'error')
-		->json_is('/service' => 'Renderer');
+	$t->get_ok('/health')->status_is(503)->json_is('/status' => 'error')->json_is('/service' => 'Renderer');
 
 	# Restore
 	rename $backup, $private_dir or die "Cannot restore private/: $!";

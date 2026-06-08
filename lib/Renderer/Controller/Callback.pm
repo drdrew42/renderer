@@ -32,7 +32,7 @@ use Renderer::Render::Subprocess qw(render_in_subprocess);
 
 # Concurrency guard. Independent of the audit pool so a burst of OPL
 # probes doesn't starve live renders (and vice versa).
-my $CALLBACK_SEMAPHORE = 0;
+my $CALLBACK_SEMAPHORE      = 0;
 my $CALLBACK_MAX_CONCURRENT = $ENV{CALLBACK_MAX_CONCURRENT} // 4;
 
 async sub callback ($c) {
@@ -41,7 +41,7 @@ async sub callback ($c) {
 	# Dispatch: invalidate_macro doesn't need the render pipeline
 	if (($req->{action} // '') eq 'invalidate_macro') {
 		my $hash = $req->{hash};
-		my $name = $req->{name};   # OPL includes the macro name for logging
+		my $name = $req->{name};    # OPL includes the macro name for logging
 		unless ($hash) {
 			return $c->render(json => { error => 'missing hash' }, status => 400);
 		}
@@ -67,11 +67,13 @@ async sub callback ($c) {
 				dependents => scalar @$dependents,
 			);
 		}
-		return $c->render(json => {
-			invalidated => $hash,
-			deleted     => $deleted ? \1 : \0,
-			dependents  => scalar @$dependents,
-		});
+		return $c->render(
+			json => {
+				invalidated => $hash,
+				deleted     => $deleted ? \1 : \0,
+				dependents  => scalar @$dependents,
+			}
+		);
 	}
 
 	# Dispatch: invalidate_path — drop the .path_index binding for a file_path.
@@ -94,10 +96,12 @@ async sub callback ($c) {
 				evicted   => 1,
 			);
 		}
-		return $c->render(json => {
-			invalidated => $file_path,
-			evicted     => $evicted ? \1 : \0,
-		});
+		return $c->render(
+			json => {
+				invalidated => $file_path,
+				evicted     => $evicted ? \1 : \0,
+			}
+		);
 	}
 
 	# Dispatch: invalidate_problem — evict one problem's cache dir. LT-080.
@@ -119,10 +123,12 @@ async sub callback ($c) {
 				evicted => 1,
 			);
 		}
-		return $c->render(json => {
-			invalidated => $pg_hash,
-			evicted     => $evicted ? \1 : \0,
-		});
+		return $c->render(
+			json => {
+				invalidated => $pg_hash,
+				evicted     => $evicted ? \1 : \0,
+			}
+		);
 	}
 
 	# Default action: render (original callback behavior)
@@ -151,10 +157,8 @@ async sub callback ($c) {
 		return $c->render(json => { outcome => 'error', warnings => 0, error => 'missing pg_source' }, status => 200);
 	}
 
-	my $ww_return_json = eval {
-		await render_in_subprocess(\$inputs{problemSource}, \%inputs, 'callback', $c->log);
-	};
-	my $eval_err = $@;
+	my $ww_return_json = eval { await render_in_subprocess(\$inputs{problemSource}, \%inputs, 'callback', $c->log); };
+	my $eval_err       = $@;
 	$CALLBACK_SEMAPHORE--;
 
 	# Caller (OPL) disconnected during the PG fork — every $c->render below
@@ -166,26 +170,33 @@ async sub callback ($c) {
 		return $c->render(json => { outcome => 'error', warnings => 0, error => "$eval_err" }, status => 200);
 	}
 	if (ref $ww_return_json eq 'HASH' && $ww_return_json->{_error}) {
-		return $c->render(json => { outcome => 'error', warnings => 0, error => $ww_return_json->{_error}{message} }, status => 200);
+		return $c->render(
+			json   => { outcome => 'error', warnings => 0, error => $ww_return_json->{_error}{message} },
+			status => 200
+		);
 	}
 
 	my $return_object;
 	eval { $return_object = decode_json($ww_return_json); 1; } or do {
-		return $c->render(json => { outcome => 'error', warnings => 0, error => 'JSON decode failed' }, status => 200);
+		return $c->render(
+			json   => { outcome => 'error', warnings => 0, error => 'JSON decode failed' },
+			status => 200
+		);
 	};
 
 	my $warnings = scalar(@{ $return_object->{warning_messages} // [] });
 	my $outcome  = $warnings ? 'warning' : 'success';
 
 	# Compute html_hash using the same normalization as telemetry
-	my $html_hash = Renderer::Telemetry::content_hash(
-		$return_object->{text}, $return_object->{answers});
+	my $html_hash = Renderer::Telemetry::content_hash($return_object->{text}, $return_object->{answers});
 
-	return $c->render(json => {
-		html_hash => $html_hash,
-		outcome   => $outcome,
-		warnings  => $warnings,
-	});
+	return $c->render(
+		json => {
+			html_hash => $html_hash,
+			outcome   => $outcome,
+			warnings  => $warnings,
+		}
+	);
 }
 
 1;

@@ -35,7 +35,7 @@ no warnings qw(experimental::signatures);
 use Crypt::JWT qw(decode_jwt);
 
 use Renderer::Lane::Problem qw(decode_claims);
-use Renderer::Constants qw(SOURCE_OVERRIDE_FIELDS);
+use Renderer::Constants     qw(SOURCE_OVERRIDE_FIELDS);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply_prefix apply_source_override);
@@ -52,8 +52,8 @@ sub apply_prefix ($c, $params) {
 	my $claims;
 	eval {
 		$claims = decode_jwt(
-			token      => $sessionJWT,
-			key        => $ENV{webworkJWTsecret},
+			token => $sessionJWT,
+			key   => $ENV{webworkJWTsecret},
 		);
 		1;
 	} or do {
@@ -125,7 +125,7 @@ sub apply_source_override ($c, $params) {
 	# NB: assign to an array first — a bareword constant inside a {} hash
 	# slice subscript autoquotes to a string instead of calling the sub.
 	my @source_fields = SOURCE_OVERRIDE_FIELDS;
-	my %bundle = map { $_ => $claims->{$_} }
+	my %bundle        = map { $_ => $claims->{$_} }
 		grep { defined $claims->{$_} } @source_fields;
 	return 1 unless %bundle;
 

@@ -80,11 +80,12 @@ sub stage_problem {
 	my @entries;
 	for my $macro (@{ $macros_aref // [] }) {
 		next unless $macro->{name} && $macro->{hash};
-		push @entries, {
-			name => $macro->{name},
-			hash => $macro->{hash},
-			(defined $macro->{source_type} ? (source_type => $macro->{source_type}) : ()),
-		};
+		push @entries,
+			{
+				name => $macro->{name},
+				hash => $macro->{hash},
+				(defined $macro->{source_type} ? (source_type => $macro->{source_type}) : ()),
+			};
 	}
 
 	my $manifest_path = File::Spec->catfile($dir, 'manifest.json');
@@ -190,10 +191,12 @@ sub _read_manifest_macros {
 			# consistency check in SourceResolver should catch this earlier and
 			# force a re-stage.
 			(my $pg_hash = $dir) =~ s{.*/}{};
-			$log->error("Manifest references missing macro file",
+			$log->error(
+				"Manifest references missing macro file",
 				pg_hash    => $pg_hash,
 				macro_name => $entry->{name},
-				macro_hash => $entry->{hash});
+				macro_hash => $entry->{hash}
+			);
 			next;
 		}
 		open my $mfh, '<:encoding(UTF-8)', $macro_path or next;
@@ -247,7 +250,7 @@ sub verify_consistent {
 	return (0, { reason => 'no_problem_dir' }) unless -d $dir;
 
 	my $manifest_path = File::Spec->catfile($dir, 'manifest.json');
-	my $entries = -f $manifest_path ? _read_manifest_entries($manifest_path) : undef;
+	my $entries       = -f $manifest_path ? _read_manifest_entries($manifest_path) : undef;
 	return (0, { reason => 'no_manifest' }) unless defined $entries;
 
 	my @on_disk;
@@ -265,8 +268,8 @@ sub verify_consistent {
 	}
 
 	# Parse the cached problem.pg's loadMacros() for the informational delta.
-	my $source = read_problem($pg_hash);
-	my @source_macros = $source ? @{ _parse_load_macros($source) } : ();
+	my $source          = read_problem($pg_hash);
+	my @source_macros   = $source ? @{ _parse_load_macros($source) } : ();
 	my @not_in_manifest = grep { !$manifest_names{$_} } @source_macros;
 
 	my $report = {
@@ -339,10 +342,10 @@ sub _parse_load_macros {
 # Also sweeps stale url_index and path_index entries pointing to evicted hashes.
 # Returns the number of problem directories removed.
 sub sweep {
-	my (%opts) = @_;
-	my $max_age_hours = $opts{max_age_hours} // ($ENV{CACHE_TTL_HOURS} || 168);  # default 1 week
-	my $cutoff = time - ($max_age_hours * 3600);
-	my $evicted = 0;
+	my (%opts)        = @_;
+	my $max_age_hours = $opts{max_age_hours} // ($ENV{CACHE_TTL_HOURS} || 168);    # default 1 week
+	my $cutoff        = time - ($max_age_hours * 3600);
+	my $evicted       = 0;
 
 	my $problems_dir = File::Spec->catdir($PRIVATE, 'problems');
 	return 0 unless -d $problems_dir;

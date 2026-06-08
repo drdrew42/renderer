@@ -14,7 +14,7 @@ use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 #
 # This controller is the route-bound thin layer that orchestrates them.
 
-use Mojo::JSON qw(encode_json decode_json);
+use Mojo::JSON  qw(encode_json decode_json);
 use Time::HiRes qw(time);
 
 use WeBWorK::PreTeXt;
@@ -29,7 +29,7 @@ use Renderer::Util::JWT qw(mint_jwt);
 
 async sub problem ($c) {
 	my $render_start = time;
-	my $inputs_ref = $c->parseRequest;
+	my $inputs_ref   = $c->parseRequest;
 	return unless $inputs_ref;
 
 	# Resolve problemSourceURL / sourceFilePath / problemSource into a
@@ -59,7 +59,7 @@ async sub problem ($c) {
 	}
 
 	$c->render_later;    # tell Mojo that this might take a while
-	my $log_id = $inputs_ref->{pg_hash} || $file_path || '(no-source-id)';
+	my $log_id         = $inputs_ref->{pg_hash} || $file_path || '(no-source-id)';
 	my $ww_return_json = await render_in_subprocess(\$problem_contents, $inputs_ref, $log_id, $c->log);
 
 	if (ref $ww_return_json eq 'HASH' && $ww_return_json->{_error}) {
@@ -82,12 +82,11 @@ async sub problem ($c) {
 	#       Problem-lane only; challenge-lane peeks aren't notified here
 	#       because the orchestrator owns chain history via mode atoms.
 	# The renderer is dumb here: a JWT-declared answerURL means "report back."
-	my $ratchet_flipped = $return_object->{_reveal_state} && (
-		($return_object->{_reveal_state}{answers_revealed_out}   || 0)
-			> ($return_object->{_reveal_state}{answers_revealed_in}   || 0)
-		|| ($return_object->{_reveal_state}{solutions_revealed_out} || 0)
-			> ($return_object->{_reveal_state}{solutions_revealed_in} || 0)
-	);
+	my $ratchet_flipped = $return_object->{_reveal_state}
+		&& (($return_object->{_reveal_state}{answers_revealed_out} || 0) >
+			($return_object->{_reveal_state}{answers_revealed_in} || 0)
+			|| ($return_object->{_reveal_state}{solutions_revealed_out} || 0) >
+			($return_object->{_reveal_state}{solutions_revealed_in} || 0));
 
 	if ($inputs_ref->{JWTanswerURL} && ($inputs_ref->{submitAnswers} || $ratchet_flipped)) {
 		# Emission gate. The renderer's contract is validate-then-render; we
@@ -132,8 +131,8 @@ async sub problem ($c) {
 		# PG's error surface: flags.error_flag is the boolean; $errors is the
 		# blob string. Either signals "this render errored." Count as 0/1 today;
 		# LT-050 can bump to a real count.
-		my $error_count = ($return_object->{flags}{error_flag}
-			|| $return_object->{errors}) ? 1 : 0;
+		my $error_count =
+			($return_object->{flags}{error_flag} || $return_object->{errors}) ? 1 : 0;
 
 		Renderer::Telemetry::record_render(
 			pg_hash   => $inputs_ref->{pg_hash},
@@ -145,8 +144,7 @@ async sub problem ($c) {
 		# Seed diversity: first-render only, error-free (an errored render's
 		# html_hash carries the error template, not a content variant).
 		if ($c->stash('_is_first_render') && !$error_count && defined $return_object->{text}) {
-			my $html_hash = Renderer::Telemetry::content_hash(
-				$return_object->{text}, $return_object->{answers});
+			my $html_hash = Renderer::Telemetry::content_hash($return_object->{text}, $return_object->{answers});
 			Renderer::Telemetry::record_seed_observation(
 				pg_hash   => $inputs_ref->{pg_hash},
 				seed      => $inputs_ref->{problemSeed},
@@ -240,8 +238,8 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	}
 
 	my $res = await $renderer->({
-		problemSource  => $params->{problemSource},
-		problemSeed    => $params->{problemSeed},
+		problemSource => $params->{problemSource},
+		problemSeed   => $params->{problemSeed},
 		($injectedMacros && %$injectedMacros ? (injectedMacros => $injectedMacros) : ()),
 	});
 
@@ -255,9 +253,7 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	# the body HTML (or "" when the problem has no SOLUTION block). For hint,
 	# message is the concatenation of all hint bodies in source order (or ""
 	# when there are no HINT blocks).
-	my $message = $expected_typ eq 'solution'
-		? ($res->{solution} // '')
-		: join('', @{ $res->{hints} // [] });
+	my $message = $expected_typ eq 'solution' ? ($res->{solution} // '') : join('', @{ $res->{hints} // [] });
 	# Client disconnect during the renderer await tears down the tx; drop.
 	return unless $c->tx;
 	return $c->render(json => { status => 200, message => $message });
@@ -314,11 +310,13 @@ sub jweFromRequest ($c) {
 	my $inputs_ref = $c->parseRequest;
 	return unless $inputs_ref;
 	$inputs_ref->{aud} = $ENV{SITE_HOST};
-	return $c->render(text => mint_jwt(
-		$ENV{problemJWTsecret}, $inputs_ref,
-		alg => 'PBES2-HS512+A256KW',
-		enc => 'A256GCM',
-	));
+	return $c->render(
+		text => mint_jwt(
+			$ENV{problemJWTsecret}, $inputs_ref,
+			alg => 'PBES2-HS512+A256KW',
+			enc => 'A256GCM',
+		)
+	);
 }
 
 sub jwtFromRequest ($c) {

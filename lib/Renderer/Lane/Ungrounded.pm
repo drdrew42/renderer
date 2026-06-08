@@ -34,9 +34,9 @@ sub apply ($c, $params) {
 
 	# Self-mint (UX opinion). Default on; SELF_MINT_DISABLED=1 to opt out.
 	unless ($ENV{SELF_MINT_DISABLED}) {
-		$params->{aud}            = $ENV{SITE_HOST};
+		$params->{aud} = $ENV{SITE_HOST};
 		$params->{isInstructor} //= 0;
-		$params->{sessionID}    ||= time;
+		$params->{sessionID} ||= time;
 		$params->{problemJWT} = mint_jwt(
 			$ENV{problemJWTsecret}, $params,
 			alg => 'PBES2-HS512+A256KW',

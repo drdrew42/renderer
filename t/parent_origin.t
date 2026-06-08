@@ -11,7 +11,7 @@ BEGIN {
 }
 
 use Test::Mojo;
-use Crypt::JWT   qw(encode_jwt);
+use Crypt::JWT qw(encode_jwt);
 use Crypt::Ed25519;
 use MIME::Base64 qw(encode_base64);
 use Mojo::JSON   qw(encode_json);
@@ -25,14 +25,12 @@ $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 $ENV{SITE_HOST}        //= 'https://test.example.com';
 
-$ENV{RENDERER_PEERS} = encode_json([
-	{ name => 'test-editor', public_key => encode_base64($peer_pub, '') },
-]);
+$ENV{RENDERER_PEERS} = encode_json([ { name => 'test-editor', public_key => encode_base64($peer_pub, '') }, ]);
 
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -45,8 +43,8 @@ unless (-f "$render_root/logs/resource_usage.log") {
 
 sub peer_headers {
 	my ($method, $path, $body, %opts) = @_;
-	my $ts   = $opts{timestamp} // time;
-	my $name = $opts{peer_name} // 'test-editor';
+	my $ts        = $opts{timestamp} // time;
+	my $name      = $opts{peer_name} // 'test-editor';
 	my $canonical = "$method\n$path\n$ts\n$body";
 	utf8::encode($canonical);
 	my $sig = Crypt::Ed25519::sign($canonical, $peer_pub, $peer_sec);
@@ -98,10 +96,10 @@ subtest 'peer-signed: parent_origin in signed body → data-parent-origin in HTM
 	);
 	my $headers = peer_headers('POST', '/render-api', $body);
 
-	$t->post_ok('/render-api', $headers, $body)
-		->status_is(200)
-		->content_like(qr{<html[^>]*\bdata-parent-origin="\Q$portal_origin\E"},
-			'data-parent-origin attribute present on <html> tag');
+	$t->post_ok('/render-api', $headers, $body)->status_is(200)->content_like(
+		qr{<html[^>]*\bdata-parent-origin="\Q$portal_origin\E"},
+		'data-parent-origin attribute present on <html> tag'
+	);
 };
 
 subtest 'peer-signed: no parent_origin → data-parent-origin absent' => sub {
@@ -112,8 +110,7 @@ subtest 'peer-signed: no parent_origin → data-parent-origin absent' => sub {
 	);
 	my $headers = peer_headers('POST', '/render-api', $body);
 
-	$t->post_ok('/render-api', $headers, $body)
-		->status_is(200)
+	$t->post_ok('/render-api', $headers, $body)->status_is(200)
 		->content_unlike(qr/data-parent-origin/, 'attribute omitted entirely when unset');
 };
 
@@ -122,14 +119,15 @@ subtest 'peer-signed: no parent_origin → data-parent-origin absent' => sub {
 subtest 'unauthenticated parent_origin URL param → stripped, attribute absent' => sub {
 	# Self-mint path (STRICT_JWT off): raw param should not reach the template.
 	local $ENV{STRICT_JWT} = 0;
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		parent_origin => 'https://attacker.example.com',
-	})->status_is(200)
-	  ->content_unlike(qr/data-parent-origin/,
-		'raw parent_origin URL param does not render without JWT/peer-sig');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+			parent_origin => 'https://attacker.example.com',
+		}
+	)->status_is(200)
+		->content_unlike(qr/data-parent-origin/, 'raw parent_origin URL param does not render without JWT/peer-sig');
 };
 
 # ─── JWT lane ──────────────────────────────────────────────────────────────
@@ -141,12 +139,13 @@ subtest 'JWT lane: parent_origin claim → data-parent-origin in HTML' => sub {
 		parent_origin => $portal_origin,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_like(qr{<html[^>]*\bdata-parent-origin="\Q$portal_origin\E"},
-		'JWT claim propagates to HTML attribute');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_like(qr{<html[^>]*\bdata-parent-origin="\Q$portal_origin\E"},
+			'JWT claim propagates to HTML attribute');
 };
 
 subtest 'JWT lane: no parent_origin claim → attribute absent' => sub {
@@ -155,12 +154,12 @@ subtest 'JWT lane: no parent_origin claim → attribute absent' => sub {
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(qr/data-parent-origin/,
-		'attribute omitted when claim is absent');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_unlike(qr/data-parent-origin/, 'attribute omitted when claim is absent');
 };
 
 # ─── Raw-param override resistance with JWT present ────────────────────────
@@ -174,13 +173,15 @@ subtest 'JWT lane: raw parent_origin URL param cannot override JWT-absent claim'
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $jwt,
-		outputFormat  => 'default',
-		parent_origin => 'https://attacker.example.com',
-	})->status_is(200)
-	  ->content_unlike(qr/data-parent-origin/,
-		'unauthenticated URL param cannot smuggle parent_origin past the strip');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => $jwt,
+			outputFormat  => 'default',
+			parent_origin => 'https://attacker.example.com',
+		}
+	)->status_is(200)
+		->content_unlike(qr/data-parent-origin/,
+			'unauthenticated URL param cannot smuggle parent_origin past the strip');
 };
 
 done_testing();

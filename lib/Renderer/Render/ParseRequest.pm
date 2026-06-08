@@ -47,7 +47,7 @@ sub dispatch ($c) {
 	my %ctx;
 
 	_parse_envelope($c, \%params, \%ctx) or return;
-	_apply_lanes   ($c, \%params, \%ctx) or return;
+	_apply_lanes($c, \%params, \%ctx)    or return;
 
 	return \%params;
 }
@@ -94,9 +94,7 @@ sub _parse_envelope ($c, $params, $ctx) {
 	{
 		my @body = grep { defined $params->{$_} } qw(problemJWT challengeJWT submissionJWT);
 		if (@body > 1) {
-			return $c->exception(
-				'Ambiguous envelope: ' . join(' + ', @body) . ' present together.', 400,
-			);
+			return $c->exception('Ambiguous envelope: ' . join(' + ', @body) . ' present together.', 400,);
 		}
 	}
 
@@ -118,12 +116,8 @@ sub _parse_envelope ($c, $params, $ctx) {
 		return $c->exception('verdict_signed requires challengeJWT.', 400)
 			unless defined $params->{challengeJWT};
 
-		my ($folded, $err) = verifyAndFoldVerdict(
-			$params->{sessionJWT},
-			$params->{verdict_signed},
-			$ENV{problemJWTsecret},
-			$ENV{webworkJWTsecret},
-		);
+		my ($folded, $err) = verifyAndFoldVerdict($params->{sessionJWT}, $params->{verdict_signed},
+			$ENV{problemJWTsecret}, $ENV{webworkJWTsecret},);
 		if ($err) {
 			$c->log->error("verdict_signed fold rejected: $err");
 			return $c->exception("verdict_signed: $err", 400);
@@ -136,8 +130,10 @@ sub _parse_envelope ($c, $params, $ctx) {
 	# Reject raw-param pg_hash + problemSource without an upstream JWT —
 	# legitimate callers carry pg_hash inside the JWT; the bare combo is
 	# attacker-shaped (rendering chosen source under a cached identity).
-	if (defined $params->{pg_hash} && defined $params->{problemSource}
-		&& !defined $params->{problemJWT} && !defined $params->{sessionJWT})
+	if (defined $params->{pg_hash}
+		&& defined $params->{problemSource}
+		&& !defined $params->{problemJWT}
+		&& !defined $params->{sessionJWT})
 	{
 		$c->log->error('pg_hash + problemSource without JWT — rejecting.');
 		return $c->exception('Malformed request.', 400);
@@ -162,7 +158,7 @@ sub _parse_envelope ($c, $params, $ctx) {
 
 	# Stash flags consumed by downstream phases.
 	$c->stash(_is_first_render => !defined $params->{sessionJWT} ? 1 : 0);
-	$c->stash(_no_cache        => $params->{noCache} ? 1 : 0);
+	$c->stash(_no_cache        => $params->{noCache}             ? 1 : 0);
 
 	# Strip security-sensitive params from untrusted inputs. Peer-signed
 	# bodies are exempt — a verified peer signature IS the trust gate, and
@@ -221,9 +217,7 @@ sub _apply_lanes ($c, $params, $ctx) {
 		# Public/student instances should set this; VPC-isolated editor
 		# renderers can leave it unset to opt into the self-mint UX.
 		if ($ENV{STRICT_JWT}) {
-			return $c->exception(
-				'Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401,
-			);
+			return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401,);
 		}
 		Renderer::Lane::Ungrounded::apply($c, $params) or return;
 	}

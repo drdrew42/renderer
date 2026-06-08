@@ -12,8 +12,8 @@ use TestHelper qw(temp_render_root);
 
 use Crypt::Ed25519;
 use MIME::Base64 qw(encode_base64);
-use Mojo::JSON qw(encode_json);
-use File::Path qw(make_path);
+use Mojo::JSON   qw(encode_json);
+use File::Path   qw(make_path);
 use File::Spec;
 
 # WW3-R42: signed /render-api/admin/inspect-cache endpoint.
@@ -26,9 +26,7 @@ $ENV{baseURL}     = '';
 delete $ENV{OPL_API_URL};
 
 my ($opl_pub, $opl_sec) = Crypt::Ed25519::generate_keypair();
-$ENV{RENDERER_PEERS} = encode_json([
-	{ name => 'opl', public_key => encode_base64($opl_pub, '') },
-]);
+$ENV{RENDERER_PEERS} = encode_json([ { name => 'opl', public_key => encode_base64($opl_pub, '') }, ]);
 
 my $t = TestHelper::test_app();
 
@@ -37,10 +35,12 @@ make_path(File::Spec->catdir($root, 'private', 'macros'));
 sub signed_post ($body_hash) {
 	my $body = encode_json($body_hash);
 	my $sig  = Crypt::Ed25519::sign($body, $opl_pub, $opl_sec);
-	return $t->post_ok('/render-api/admin/inspect-cache' => {
-		'Content-Type'          => 'application/json',
-		'X-Telemetry-Signature' => encode_base64($sig, ''),
-	} => $body);
+	return $t->post_ok(
+		'/render-api/admin/inspect-cache' => {
+			'Content-Type'          => 'application/json',
+			'X-Telemetry-Signature' => encode_base64($sig, ''),
+		} => $body
+	);
 }
 
 require Renderer::ContentCache;
@@ -57,13 +57,9 @@ subtest 'inspect: consistent cache → consistent:true' => sub {
 		],
 	);
 
-	signed_post({ pg_hash => 'pg_inspect_ok' })
-		->status_is(200)
-		->json_is('/pg_hash'    => 'pg_inspect_ok')
-		->json_is('/exists'     => Mojo::JSON::true)
-		->json_is('/consistent' => Mojo::JSON::true)
-		->json_is('/report/macros_missing_from_disk' => [])
-		->json_is('/report/load_macros_not_in_manifest' => []);
+	signed_post({ pg_hash => 'pg_inspect_ok' })->status_is(200)->json_is('/pg_hash' => 'pg_inspect_ok')
+		->json_is('/exists'                          => Mojo::JSON::true)->json_is('/consistent' => Mojo::JSON::true)
+		->json_is('/report/macros_missing_from_disk' => [])->json_is('/report/load_macros_not_in_manifest' => []);
 };
 
 subtest 'inspect: missing-macro-file cache → consistent:false + report shows it' => sub {
@@ -80,35 +76,28 @@ subtest 'inspect: missing-macro-file cache → consistent:false + report shows i
 	# Simulate invalidate_macro racing — unlink one macro file without cascading.
 	unlink File::Spec->catfile($root, 'private', 'macros', 'sha256:insp_d');
 
-	signed_post({ pg_hash => 'pg_inspect_bad' })
-		->status_is(200)
-		->json_is('/consistent' => Mojo::JSON::false)
+	signed_post({ pg_hash => 'pg_inspect_bad' })->status_is(200)->json_is('/consistent' => Mojo::JSON::false)
 		->json_is('/report/macros_missing_from_disk' => ['sha256:insp_d']);
 };
 
 subtest 'inspect: nonexistent pg_hash → consistent:false + reason no_problem_dir' => sub {
-	signed_post({ pg_hash => 'pg_inspect_missing' })
-		->status_is(200)
-		->json_is('/exists'            => Mojo::JSON::false)
-		->json_is('/consistent'        => Mojo::JSON::false)
-		->json_is('/report/reason'     => 'no_problem_dir');
+	signed_post({ pg_hash => 'pg_inspect_missing' })->status_is(200)->json_is('/exists' => Mojo::JSON::false)
+		->json_is('/consistent' => Mojo::JSON::false)->json_is('/report/reason' => 'no_problem_dir');
 };
 
 subtest 'inspect: missing pg_hash field → 400' => sub {
-	signed_post({})
-		->status_is(400)
-		->json_like('/error' => qr/missing pg_hash/);
+	signed_post({})->status_is(400)->json_like('/error' => qr/missing pg_hash/);
 };
 
 subtest 'inspect: bad signature → 401' => sub {
-	my $body = encode_json({ pg_hash => 'whatever' });
+	my $body    = encode_json({ pg_hash => 'whatever' });
 	my $bad_sig = Crypt::Ed25519::sign('different bytes', $opl_pub, $opl_sec);
-	$t->post_ok('/render-api/admin/inspect-cache' => {
-		'Content-Type'          => 'application/json',
-		'X-Telemetry-Signature' => encode_base64($bad_sig, ''),
-	} => $body)
-		->status_is(401)
-		->json_like('/error' => qr/invalid signature/);
+	$t->post_ok(
+		'/render-api/admin/inspect-cache' => {
+			'Content-Type'          => 'application/json',
+			'X-Telemetry-Signature' => encode_base64($bad_sig, ''),
+		} => $body
+	)->status_is(401)->json_like('/error' => qr/invalid signature/);
 };
 
 done_testing();

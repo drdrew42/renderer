@@ -21,7 +21,7 @@ $ENV{SITE_HOST}        //= 'https://test.example.com';
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -63,7 +63,7 @@ subtest 'startup populates third_party_css and third_party_js defaults' => sub {
 	is(ref($css), 'ARRAY', 'third_party_css is an arrayref');
 	is(ref($js),  'ARRAY', 'third_party_js is an arrayref');
 	ok(scalar @$css >= 3, 'third_party_css has the expected default entries');
-	ok(scalar @$js  >= 6, 'third_party_js has the expected default entries');
+	ok(scalar @$js >= 6,  'third_party_js has the expected default entries');
 };
 
 # Asset-name matcher tolerant of static-assets.json fingerprinting.
@@ -89,10 +89,12 @@ subtest 'rendered HTML includes all bundled JS assets' => sub {
 		problemSeed   => 1234,
 	);
 
-	my $tx = $t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)->tx;
+	my $tx = $t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->tx;
 
 	my $body = $tx->res->body;
 	# Each entry: [basename, extension]. The asset_present matcher tolerates
@@ -109,10 +111,10 @@ subtest 'rendered HTML includes all bundled JS assets' => sub {
 		[ 'submithelper',     'js' ],
 		[ 'css-message',      'js' ],
 		[ 'draft-tracker',    'js' ],
-	) {
+		)
+	{
 		my ($basename, $ext) = @$spec;
-		ok(asset_present($body, $basename, $ext),
-			"rendered HTML includes $basename.$ext (with or without hash)");
+		ok(asset_present($body, $basename, $ext), "rendered HTML includes $basename.$ext (with or without hash)");
 	}
 };
 
@@ -122,19 +124,17 @@ subtest 'rendered HTML includes all bundled CSS assets' => sub {
 		problemSeed   => 1234,
 	);
 
-	my $tx = $t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)->tx;
+	my $tx = $t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->tx;
 
 	my $body = $tx->res->body;
-	for my $spec (
-		[ 'bootstrap', 'css' ],
-		[ 'jquery-ui', 'css' ],
-	) {
+	for my $spec ([ 'bootstrap', 'css' ], [ 'jquery-ui', 'css' ],) {
 		my ($basename, $ext) = @$spec;
-		ok(asset_present($body, $basename, $ext),
-			"rendered HTML includes $basename.$ext (with or without hash)");
+		ok(asset_present($body, $basename, $ext), "rendered HTML includes $basename.$ext (with or without hash)");
 	}
 	# fontawesome-free rides from node_modules under that directory name —
 	# the directory token is the stable signal regardless of fingerprinting.
@@ -154,15 +154,15 @@ subtest 'config override replaces baked defaults' => sub {
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
-	ok(!asset_present($body, 'submithelper', 'js'),
-		'removed asset is absent from HTML');
-	ok(asset_present($body, 'problem', 'js'),
-		'untouched assets still present');
+	ok(!asset_present($body, 'submithelper', 'js'), 'removed asset is absent from HTML');
+	ok(asset_present($body,  'problem',      'js'), 'untouched assets still present');
 
 	# Restore for downstream test files that share this app instance.
 	$t->app->config(third_party_js => $orig);

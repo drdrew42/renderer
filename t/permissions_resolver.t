@@ -12,10 +12,10 @@ use Renderer::Permissions qw(resolve_permissions);
 # ─── isInstructor normalization ───────────────────────────────────────────
 
 subtest 'isInstructor normalizes to strict 0/1' => sub {
-	is(resolve_permissions({})->{isInstructor},                       0, 'undef → 0');
-	is(resolve_permissions({ isInstructor => 0 })->{isInstructor},    0, '0 → 0');
-	is(resolve_permissions({ isInstructor => '' })->{isInstructor},   0, "'' → 0");
-	is(resolve_permissions({ isInstructor => 1 })->{isInstructor},    1, '1 → 1');
+	is(resolve_permissions({})->{isInstructor}, 0, 'undef → 0');
+	is(resolve_permissions({ isInstructor => 0 })->{isInstructor},   0, '0 → 0');
+	is(resolve_permissions({ isInstructor => '' })->{isInstructor},  0, "'' → 0");
+	is(resolve_permissions({ isInstructor => 1 })->{isInstructor},   1, '1 → 1');
 	is(resolve_permissions({ isInstructor => 'y' })->{isInstructor}, 1, "truthy string → 1");
 };
 
@@ -75,12 +75,13 @@ subtest 'returns hashref with exactly the documented keys' => sub {
 	my $p = resolve_permissions({});
 	is(ref($p), 'HASH', 'returns a hashref');
 	my @keys = sort keys %$p;
-	is_deeply(\@keys,
+	is_deeply(
+		\@keys,
 		[ sort qw(isInstructor showCorrectAnswers showSolutions showHints) ],
-		'no extra keys, no missing keys');
+		'no extra keys, no missing keys'
+	);
 	for my $k (@keys) {
-		ok($p->{$k} == 0 || $p->{$k} == 1,
-			"$k is strict 0/1 (no magic value, no undef)");
+		ok($p->{$k} == 0 || $p->{$k} == 1, "$k is strict 0/1 (no magic value, no undef)");
 	}
 };
 

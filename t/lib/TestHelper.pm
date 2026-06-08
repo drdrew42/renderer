@@ -27,7 +27,8 @@ sub temp_render_root {
 	# Renderer.pm requires renderer.conf.dist to boot
 	my $conf_file = File::Spec->catfile($dir, 'renderer.conf.dist');
 	open my $cfh, '>', $conf_file or die "Cannot create renderer.conf.dist: $!";
-	print $cfh "{\n  secrets => ['test'],\n  problemJWTsecret => 'test-problem-secret',\n  webworkJWTsecret => 'test-session-secret',\n};\n";
+	print $cfh
+		"{\n  secrets => ['test'],\n  problemJWTsecret => 'test-problem-secret',\n  webworkJWTsecret => 'test-session-secret',\n};\n";
 	close $cfh;
 
 	return $dir;
@@ -37,9 +38,7 @@ sub temp_render_root {
 # RENDER_ROOT must already be set in %ENV before calling this.
 sub test_app {
 	# Ensure pg_config.yml exists — PG needs it at startup
-	my $pg_conf = File::Spec->catfile(
-		$ENV{RENDER_ROOT}, 'lib', 'PG', 'conf', 'pg_config.yml'
-	);
+	my $pg_conf = File::Spec->catfile($ENV{RENDER_ROOT}, 'lib', 'PG', 'conf', 'pg_config.yml');
 	unless (-f $pg_conf) {
 		# If we're running from the repo root, the real file is under lib/
 		my $real_conf = File::Spec->catfile($ENV{RENDER_ROOT}, 'lib', 'PG', 'conf', 'pg_config.yml.dist');

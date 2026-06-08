@@ -19,7 +19,7 @@ $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 
 # Boot the app — Renderer.pm's BEGIN block auto-derives RENDER_ROOT.
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 
 # Ensure required directories exist
@@ -41,13 +41,13 @@ Hello world
 END_PGML
 ENDDOCUMENT();
 PG
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'simple',
-		problemSeed   => 1234,
-	})
-		->status_is(200)
-		->content_like(qr/Hello world/i, 'rendered output contains problem text');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'simple',
+			problemSeed   => 1234,
+		}
+	)->status_is(200)->content_like(qr/Hello world/i, 'rendered output contains problem text');
 };
 
 # --- Content-addressed: pre-staged cache hit ---
@@ -69,13 +69,13 @@ PG
 
 	local $ENV{CONTENT_ADDRESSED} = 1;
 
-	$t->post_ok('/render-api' => form => {
-		sourceFilePath => 'test/cached_problem.pg',
-		outputFormat   => 'simple',
-		problemSeed    => 5678,
-	})
-		->status_is(200)
-		->content_like(qr/Cached problem/i, 'rendered output from cached problem');
+	$t->post_ok(
+		'/render-api' => form => {
+			sourceFilePath => 'test/cached_problem.pg',
+			outputFormat   => 'simple',
+			problemSeed    => 5678,
+		}
+	)->status_is(200)->content_like(qr/Cached problem/i, 'rendered output from cached problem');
 };
 
 # --- Content-addressed: unresolvable sourceFilePath → 404 ---
@@ -83,12 +83,13 @@ PG
 subtest 'content-addressed 404 on missing sourceFilePath' => sub {
 	local $ENV{CONTENT_ADDRESSED} = 1;
 
-	$t->post_ok('/render-api' => form => {
-		sourceFilePath => 'nonexistent/path/to/problem.pg',
-		outputFormat   => 'simple',
-		problemSeed    => 9999,
-	})
-		->status_is(404);
+	$t->post_ok(
+		'/render-api' => form => {
+			sourceFilePath => 'nonexistent/path/to/problem.pg',
+			outputFormat   => 'simple',
+			problemSeed    => 9999,
+		}
+	)->status_is(404);
 };
 
 # --- Editor preview: problemSource + sourceFilePath both set ---
@@ -99,26 +100,25 @@ subtest 'content-addressed 404 on missing sourceFilePath' => sub {
 
 subtest 'editor preview: problemSource overrides cached source, path still resolves pg_hash' => sub {
 	require Renderer::ContentCache;
-	my $cached_hash    = 'test_render_api_editor_preview_hash';
-	my $cached_source  = "DOCUMENT();\nBEGIN_PGML\nCACHED VERSION\nEND_PGML\nENDDOCUMENT();";
-	my $editor_source  = "DOCUMENT();\nloadMacros('PGstandard.pl', 'PGML.pl');\nBEGIN_PGML\nEDITOR VERSION\nEND_PGML\nENDDOCUMENT();";
+	my $cached_hash   = 'test_render_api_editor_preview_hash';
+	my $cached_source = "DOCUMENT();\nBEGIN_PGML\nCACHED VERSION\nEND_PGML\nENDDOCUMENT();";
+	my $editor_source =
+		"DOCUMENT();\nloadMacros('PGstandard.pl', 'PGML.pl');\nBEGIN_PGML\nEDITOR VERSION\nEND_PGML\nENDDOCUMENT();";
 
 	Renderer::ContentCache::stage_problem($cached_hash, $cached_source);
 	Renderer::ContentCache::save_path_index('test/editor_preview.pg', $cached_hash);
 
 	local $ENV{CONTENT_ADDRESSED} = 1;
 
-	$t->post_ok('/render-api' => form => {
-		problemSource  => $editor_source,
-		sourceFilePath => 'test/editor_preview.pg',
-		outputFormat   => 'simple',
-		problemSeed    => 4242,
-	})
-		->status_is(200)
-		->content_like(qr/EDITOR VERSION/i,
-			'editor source rendered (not the cached bytes)')
-		->content_unlike(qr/CACHED VERSION/i,
-			'cached source not used when editor source supplied');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource  => $editor_source,
+			sourceFilePath => 'test/editor_preview.pg',
+			outputFormat   => 'simple',
+			problemSeed    => 4242,
+		}
+	)->status_is(200)->content_like(qr/EDITOR VERSION/i, 'editor source rendered (not the cached bytes)')
+		->content_unlike(qr/CACHED VERSION/i, 'cached source not used when editor source supplied');
 };
 
 done_testing();

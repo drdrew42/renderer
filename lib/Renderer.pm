@@ -53,9 +53,7 @@ sub _configure_app ($self) {
 	# Cookie signing secret: RENDERER_COOKIE_SECRET env wins, config fallback.
 	# Warn (don't die) if the .dist placeholder is still in effect — local dev
 	# keeps working with the conf default; production should override via env.
-	my $cookie_secrets = $ENV{RENDERER_COOKIE_SECRET}
-		? [ $ENV{RENDERER_COOKIE_SECRET} ]
-		: $self->config('secrets');
+	my $cookie_secrets = $ENV{RENDERER_COOKIE_SECRET} ? [ $ENV{RENDERER_COOKIE_SECRET} ] : $self->config('secrets');
 	$self->secrets($cookie_secrets);
 	warn "WARN: cookie 'secrets' is at the .dist placeholder 'abracadabra'; "
 		. "set RENDERER_COOKIE_SECRET in production\n"
@@ -76,8 +74,8 @@ sub _configure_app ($self) {
 		'node_modules/@fortawesome/fontawesome-free/css/all.min.css',
 	];
 	$self->config->{third_party_js} //= [
-		[ 'node_modules/jquery/dist/jquery.min.js',                            {} ],
-		[ 'node_modules/jquery-ui-dist/jquery-ui.min.js',                      {} ],
+		[ 'node_modules/jquery/dist/jquery.min.js',                 {} ],
+		[ 'node_modules/jquery-ui-dist/jquery-ui.min.js',           {} ],
 		[ 'js/apps/MathJaxConfig/mathjax-config.js',                { defer => undef } ],
 		[ 'node_modules/mathjax/es5/tex-svg.js',                    { defer => undef, id => 'MathJax-script' } ],
 		[ 'node_modules/bootstrap/dist/js/bootstrap.bundle.min.js', { defer => undef } ],
@@ -153,11 +151,11 @@ sub _configure_urls ($self) {
 	# Hypnotoad tuning from environment (Fargate vCPU count differs from bare metal).
 	# Env vars override config file values; unset vars leave config defaults intact.
 	my $hyp = $self->config->{hypnotoad} //= {};
-	$hyp->{workers}          = $ENV{HYPNOTOAD_WORKERS}          + 0 if $ENV{HYPNOTOAD_WORKERS};
-	$hyp->{accepts}          = $ENV{HYPNOTOAD_ACCEPTS}          + 0 if $ENV{HYPNOTOAD_ACCEPTS};
-	$hyp->{requests}         = $ENV{HYPNOTOAD_REQUESTS}         + 0 if $ENV{HYPNOTOAD_REQUESTS};
-	$hyp->{spare}            = $ENV{HYPNOTOAD_SPARE}            + 0 if $ENV{HYPNOTOAD_SPARE};
-	$hyp->{clients}          = $ENV{HYPNOTOAD_CLIENTS}          + 0 if $ENV{HYPNOTOAD_CLIENTS};
+	$hyp->{workers}          = $ENV{HYPNOTOAD_WORKERS} + 0          if $ENV{HYPNOTOAD_WORKERS};
+	$hyp->{accepts}          = $ENV{HYPNOTOAD_ACCEPTS} + 0          if $ENV{HYPNOTOAD_ACCEPTS};
+	$hyp->{requests}         = $ENV{HYPNOTOAD_REQUESTS} + 0         if $ENV{HYPNOTOAD_REQUESTS};
+	$hyp->{spare}            = $ENV{HYPNOTOAD_SPARE} + 0            if $ENV{HYPNOTOAD_SPARE};
+	$hyp->{clients}          = $ENV{HYPNOTOAD_CLIENTS} + 0          if $ENV{HYPNOTOAD_CLIENTS};
 	$hyp->{graceful_timeout} = $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT} + 0 if $ENV{HYPNOTOAD_GRACEFUL_TIMEOUT};
 
 	configureURLs();
@@ -179,14 +177,13 @@ sub _configure_cors ($self) {
 
 	$self->hook(
 		before_dispatch => sub {
-			my $c = shift;
+			my $c      = shift;
 			my $origin = $c->req->headers->origin // return;
 
-			my $allowed = $static_origin && ($static_origin eq '*' || $static_origin eq $origin)
-				? $static_origin
-				: Renderer::Registration::is_known_origin($origin)
-					? $origin
-					: undef;
+			my $allowed =
+				$static_origin && ($static_origin eq '*' || $static_origin eq $origin) ? $static_origin
+				: Renderer::Registration::is_known_origin($origin)                     ? $origin
+				:                                                                        undef;
 			return unless $allowed;
 
 			$c->res->headers->header('Access-Control-Allow-Origin'  => $allowed);
@@ -224,8 +221,10 @@ sub _configure_logging ($self) {
 	Renderer::Log::apply_json_format($self->log);
 
 	$self->log->info("Renderer logging to "
-		. ($ENV{LOG_TO_STDERR} ? 'stderr' : 'file')
-		. " (level: $level, format: " . ($ENV{LOG_FORMAT} // 'plain') . ")");
+			. ($ENV{LOG_TO_STDERR} ? 'stderr' : 'file')
+			. " (level: $level, format: "
+			. ($ENV{LOG_FORMAT} // 'plain')
+			. ")");
 
 	if ($self->config('INTERACTION_LOG')) {
 		my $interactionLogPath = "$ENV{RENDER_ROOT}/logs/interactions.log";
@@ -259,7 +258,7 @@ sub _register_helpers ($self) {
 		base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
 		log      => $self->log,
 	);
-	$self->helper(opl_client => sub { $client });
+	$self->helper(opl_client => sub {$client});
 
 	$self->helper(format       => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
 	$self->helper(parseRequest => sub { Renderer::Render::ParseRequest::dispatch(@_) });
@@ -278,45 +277,52 @@ sub _register_helpers ($self) {
 # the response, proxy disconnect mid-stream, etc.).
 sub _register_request_hooks ($self) {
 	require Time::HiRes;
-	$self->hook(before_dispatch => sub ($c) {
-		$c->stash('_request_start' => Time::HiRes::time());
-	});
-	$self->hook(after_dispatch => sub ($c) {
-		my $start = $c->stash('_request_start') // return;
-		my $req = $c->req;
-		my $path = $req->url->path->to_string;
-		return if $path eq '/health';
-		# Static-asset GETs are noise — public_file route serves js/, css/,
-		# node_modules/, images/, fonts/, webfonts/, favicons. Skip them so
-		# the access log stays focused on render-api + callback traffic.
-		return if $req->method eq 'GET'
-			&& $path =~ m{^/(?:js|css|node_modules|images|fonts|webfonts)/}i;
-		return if $req->method eq 'GET' && $path =~ m{^/favicon}i;
-		# Capture stash-derived fields now (the controller is still live);
-		# emit at tx-finish so we report actual delivery.
-		my $cache_status = $c->stash('_cache_status');
-		my $pg_hash      = $c->stash('pg_hash');
-		my $trace        = $c->stash('_source_trace');
-		my $app          = $self;
-		$c->tx->on(finish => sub ($tx) {
-			my $res = $tx->res;
-			my $err = $tx->error;
-			my %entry = (
-				type         => 'request',
-				method       => $req->method,
-				path         => $path,
-				status       => $res->code,
-				duration_ms  => sprintf('%.1f', (Time::HiRes::time() - $start) * 1000),
-				bytes_sent   => $res->body_size // 0,
-				request_id   => $req->request_id,
+	$self->hook(
+		before_dispatch => sub ($c) {
+			$c->stash('_request_start' => Time::HiRes::time());
+		}
+	);
+	$self->hook(
+		after_dispatch => sub ($c) {
+			my $start = $c->stash('_request_start') // return;
+			my $req   = $c->req;
+			my $path  = $req->url->path->to_string;
+			return if $path eq '/health';
+			# Static-asset GETs are noise — public_file route serves js/, css/,
+			# node_modules/, images/, fonts/, webfonts/, favicons. Skip them so
+			# the access log stays focused on render-api + callback traffic.
+			return
+				if $req->method eq 'GET'
+				&& $path =~ m{^/(?:js|css|node_modules|images|fonts|webfonts)/}i;
+			return if $req->method eq 'GET' && $path =~ m{^/favicon}i;
+			# Capture stash-derived fields now (the controller is still live);
+			# emit at tx-finish so we report actual delivery.
+			my $cache_status = $c->stash('_cache_status');
+			my $pg_hash      = $c->stash('pg_hash');
+			my $trace        = $c->stash('_source_trace');
+			my $app          = $self;
+			$c->tx->on(
+				finish => sub ($tx) {
+					my $res   = $tx->res;
+					my $err   = $tx->error;
+					my %entry = (
+						type        => 'request',
+						method      => $req->method,
+						path        => $path,
+						status      => $res->code,
+						duration_ms => sprintf('%.1f', (Time::HiRes::time() - $start) * 1000),
+						bytes_sent  => $res->body_size // 0,
+						request_id  => $req->request_id,
+					);
+					$entry{tx_error}     = $err->{message} if $err && $err->{message};
+					$entry{cache_status} = $cache_status   if $cache_status;
+					$entry{pg_hash}      = $pg_hash        if $pg_hash;
+					$entry{source_trace} = $trace          if $trace && @$trace;
+					$app->log->info(\%entry);
+				}
 			);
-			$entry{tx_error}     = $err->{message} if $err && $err->{message};
-			$entry{cache_status} = $cache_status   if $cache_status;
-			$entry{pg_hash}      = $pg_hash        if $pg_hash;
-			$entry{source_trace} = $trace          if $trace && @$trace;
-			$app->log->info(\%entry);
-		});
-	});
+		}
+	);
 }
 
 # Identity (Ed25519 keypair lifecycle), telemetry batch reporter, and explicit
@@ -350,15 +356,20 @@ sub _register_routes ($self) {
 	$r->post('/render-api/solution')->to('render#solution');
 	$r->post('/render-api/admin/inspect-cache')->to('AdminInspect#inspectCache');
 	$r->any('/render-ptx')->to('render#render_ptx');
-	$r->any('/health' => sub ($c) {
-		my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
-		$c->render(json => {
-			status           => $ok ? 'ok' : 'error',
-			service          => 'Renderer',
-			pg_version       => Renderer::Version::pg_version(),
-			renderer_version => Renderer::Version::renderer_version(),
-		}, status => $ok ? 200 : 503);
-	});
+	$r->any(
+		'/health' => sub ($c) {
+			my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
+			$c->render(
+				json => {
+					status           => $ok ? 'ok' : 'error',
+					service          => 'Renderer',
+					pg_version       => Renderer::Version::pg_version(),
+					renderer_version => Renderer::Version::renderer_version(),
+				},
+				status => $ok ? 200 : 503
+			);
+		}
+	);
 
 	# Enable problem editor & OPL browser -- NOT recommended for production environment!
 	supplementalRoutes($r) if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE'));

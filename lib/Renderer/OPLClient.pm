@@ -31,7 +31,7 @@ use warnings;
 use feature qw(signatures state);
 no warnings qw(experimental::signatures);
 
-use Mojo::JSON   qw(decode_json);
+use Mojo::JSON qw(decode_json);
 use Mojo::Promise;
 
 sub new ($class, %args) {
@@ -147,7 +147,7 @@ sub fetch_macro ($self, $macro_url) {
 		return ();
 	}
 
-	my $final_url     = $tx->req->url->to_string;
+	my $final_url = $tx->req->url->to_string;
 	my ($canonical_hash) = $final_url =~ m{/api/macros/(sha256:[0-9a-f]+)$};
 
 	return ($res->body, $canonical_hash);

@@ -63,9 +63,9 @@ package WeBWorK::VerdictJWT;
 use strict;
 use warnings;
 
-use Crypt::JWT qw(decode_jwt);
+use Crypt::JWT          qw(decode_jwt);
 use Renderer::Util::JWT qw(mint_jwt);
-use Exporter qw(import);
+use Exporter            qw(import);
 
 our @EXPORT_OK = qw(verifyAndFoldVerdict);
 
@@ -77,15 +77,13 @@ our @EXPORT_OK = qw(verifyAndFoldVerdict);
 sub verifyAndFoldVerdict {
 	my ($base_session_jwt, $verdict_signed, $orch_secret, $renderer_secret) = @_;
 
-	return (undef, 'base_session_jwt is required')    unless defined $base_session_jwt    && $base_session_jwt    ne '';
-	return (undef, 'verdict_signed is required')      unless defined $verdict_signed      && $verdict_signed      ne '';
-	return (undef, 'orchestrator_secret is required') unless defined $orch_secret         && $orch_secret         ne '';
-	return (undef, 'renderer_secret is required')     unless defined $renderer_secret     && $renderer_secret     ne '';
+	return (undef, 'base_session_jwt is required')    unless defined $base_session_jwt && $base_session_jwt ne '';
+	return (undef, 'verdict_signed is required')      unless defined $verdict_signed   && $verdict_signed ne '';
+	return (undef, 'orchestrator_secret is required') unless defined $orch_secret      && $orch_secret ne '';
+	return (undef, 'renderer_secret is required')     unless defined $renderer_secret  && $renderer_secret ne '';
 
 	# 1. Verify and decode the signed verdict.
-	my $verdict_claims = eval {
-		decode_jwt(token => $verdict_signed, key => $orch_secret, accepted_alg => 'HS256');
-	};
+	my $verdict_claims = eval { decode_jwt(token => $verdict_signed, key => $orch_secret, accepted_alg => 'HS256'); };
 	if ($@) {
 		return (undef, "verdict_signed: invalid signature ($@)");
 	}
@@ -101,22 +99,20 @@ sub verifyAndFoldVerdict {
 	return (undef, 'verdict_signed: missing verdict claim') unless ref $verdict eq 'HASH';
 
 	# 3. Verify and decode the base sessionJWT.
-	my $base_claims = eval {
-		decode_jwt(token => $base_session_jwt, key => $renderer_secret, accepted_alg => 'HS256');
-	};
+	my $base_claims =
+		eval { decode_jwt(token => $base_session_jwt, key => $renderer_secret, accepted_alg => 'HS256'); };
 	if ($@) {
 		return (undef, "base_session_jwt: invalid signature ($@)");
 	}
 
 	# 4. Embedded challengeJWT carries the play_id we cross-check against.
 	my $embedded_cjwt = $base_claims->{challenge_jwt};
-	return (undef, 'base_session_jwt: missing embedded challenge_jwt') unless defined $embedded_cjwt && $embedded_cjwt ne '';
+	return (undef, 'base_session_jwt: missing embedded challenge_jwt')
+		unless defined $embedded_cjwt && $embedded_cjwt ne '';
 
 	# Decode the embedded challengeJWT under the orchestrator's secret. The
 	# renderer trusts orchestrator-signed claims; this is the standard verify.
-	my $cjwt_claims = eval {
-		decode_jwt(token => $embedded_cjwt, key => $orch_secret, accepted_alg => 'HS256');
-	};
+	my $cjwt_claims = eval { decode_jwt(token => $embedded_cjwt, key => $orch_secret, accepted_alg => 'HS256'); };
 	if ($@) {
 		return (undef, "embedded challenge_jwt: invalid signature ($@)");
 	}
@@ -138,7 +134,7 @@ sub verifyAndFoldVerdict {
 	# Fold: build new state by merging verdict into base state. Field-by-field
 	# rather than hash-merge so we're explicit about which fields come from
 	# which side and the architecture stays legible.
-	my $base_state = ref $base_claims->{state} eq 'HASH' ? $base_claims->{state} : {};
+	my $base_state = ref $base_claims->{state} eq 'HASH' ? $base_claims->{state}     : {};
 	my @base_draws = ref $base_state->{draws} eq 'ARRAY' ? @{ $base_state->{draws} } : ();
 
 	# verdict.draw_next, when present, appends one new draw to draws[]. Closed
@@ -149,7 +145,7 @@ sub verifyAndFoldVerdict {
 	}
 
 	my $new_state = {
-		started_at     => $base_state->{started_at},   # preserved
+		started_at     => $base_state->{started_at},                                                     # preserved
 		current_focus  => $verdict->{current_focus},
 		next_available => ref $verdict->{next_available} eq 'ARRAY' ? $verdict->{next_available} : [],
 		draws          => \@base_draws,

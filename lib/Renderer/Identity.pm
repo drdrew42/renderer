@@ -4,9 +4,9 @@ use strict;
 use warnings;
 
 use Crypt::Ed25519;
-use Digest::SHA qw(sha256_hex);
+use Digest::SHA  qw(sha256_hex);
 use MIME::Base64 qw(encode_base64 decode_base64);
-use Encode qw(encode);
+use Encode       qw(encode);
 use File::Spec;
 use File::Path qw(make_path);
 
@@ -39,7 +39,11 @@ sub init {
 		$PUBLIC_KEY  = decode_base64($ENV{IDENTITY_PUBLIC_KEY_B64});
 		$PRIVATE_KEY = decode_base64($ENV{IDENTITY_PRIVATE_KEY_B64});
 		unless ($PUBLIC_KEY && $PRIVATE_KEY && length($PUBLIC_KEY) == 32 && length($PRIVATE_KEY) == 64) {
-			$log->warn("env var keypair invalid (pub=" . length($PUBLIC_KEY // '') . "B, priv=" . length($PRIVATE_KEY // '') . "B), falling through");
+			$log->warn("env var keypair invalid (pub="
+					. length($PUBLIC_KEY // '')
+					. "B, priv="
+					. length($PRIVATE_KEY // '')
+					. "B), falling through");
 			undef $PUBLIC_KEY;
 			undef $PRIVATE_KEY;
 		} else {
@@ -68,7 +72,7 @@ sub init {
 			_spew($pub_file, $PUBLIC_KEY);
 			$log->info("generated new keypair");
 			$log->info("to share across fleet, store in Secrets Manager:");
-			$log->info("  public_key:  " . encode_base64($PUBLIC_KEY, ''));
+			$log->info("  public_key:  " . encode_base64($PUBLIC_KEY,  ''));
 			$log->info("  private_key: " . encode_base64($PRIVATE_KEY, ''));
 		};
 		if ($@) {

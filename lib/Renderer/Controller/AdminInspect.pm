@@ -42,12 +42,14 @@ sub inspectCache ($c) {
 	my $exists = Renderer::ContentCache::has_problem($pg_hash);
 	my ($ok, $report) = Renderer::ContentCache::verify_consistent($pg_hash);
 
-	return $c->render(json => {
-		pg_hash    => $pg_hash,
-		exists     => $exists ? \1 : \0,
-		consistent => $ok     ? \1 : \0,
-		report     => $report,
-	});
+	return $c->render(
+		json => {
+			pg_hash    => $pg_hash,
+			exists     => $exists ? \1 : \0,
+			consistent => $ok     ? \1 : \0,
+			report     => $report,
+		}
+	);
 }
 
 1;

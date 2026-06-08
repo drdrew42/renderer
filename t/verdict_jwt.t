@@ -19,16 +19,16 @@ $ENV{SITE_HOST} //= 'https://render.test';
 sub make_challenge_jwt {
 	my (%overrides) = @_;
 	my $payload = {
-		iss          => 'https://ww3.test',
-		aud          => $ENV{SITE_HOST},
-		play_id      => '11111111-1111-1111-1111-111111111111',
-		challenge_id => 'sha256:abc',
-		shape        => 'closed',
-		problems     => [],
-		mode         => {},
-		constraints  => {},
+		iss                => 'https://ww3.test',
+		aud                => $ENV{SITE_HOST},
+		play_id            => '11111111-1111-1111-1111-111111111111',
+		challenge_id       => 'sha256:abc',
+		shape              => 'closed',
+		problems           => [],
+		mode               => {},
+		constraints        => {},
 		render_permissions => {},
-		answer_url   => 'https://ww3.test/assess/play/x/answer',
+		answer_url         => 'https://ww3.test/assess/play/x/answer',
 		%overrides,
 	};
 	return encode_jwt(payload => $payload, alg => 'HS256', key => $ORCH, auto_iat => 1);
@@ -62,10 +62,10 @@ sub make_verdict_signed {
 		aud                 => $ENV{SITE_HOST},
 		play_id             => $args{play_id} // '11111111-1111-1111-1111-111111111111',
 		challenge_id        => 'sha256:abc',
-		mint_sequence_basis => $args{basis} // 0,
+		mint_sequence_basis => $args{basis}   // 0,
 		verdict             => $args{verdict} // {
 			current_focus  => 1,
-			next_available => [1, 2],
+			next_available => [ 1, 2 ],
 			draw_next      => undef,
 			finalization   => undef,
 		},
@@ -83,7 +83,7 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 		state         => {
 			started_at     => '2026-04-27T17:00:00Z',
 			current_focus  => 0,
-			next_available => [0, 1, 2],
+			next_available => [ 0, 1, 2 ],
 			draws          => [],
 			finalization   => undef,
 		},
@@ -92,7 +92,7 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 		basis   => 5,
 		verdict => {
 			current_focus  => 1,
-			next_available => [1, 2],
+			next_available => [ 1, 2 ],
 			draw_next      => undef,
 			finalization   => undef,
 		},
@@ -103,13 +103,13 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 	ok($new_jwt, 'got a new sessionJWT');
 
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
-	is($claims->{mint_sequence}, 6, 'mint_sequence advanced by 1');
+	is($claims->{mint_sequence},        6, 'mint_sequence advanced by 1');
 	is($claims->{state}{current_focus}, 1, 'current_focus from verdict');
-	is_deeply($claims->{state}{next_available}, [1, 2], 'next_available from verdict');
+	is_deeply($claims->{state}{next_available}, [ 1, 2 ], 'next_available from verdict');
 	is($claims->{state}{started_at}, '2026-04-27T17:00:00Z', 'started_at preserved');
 	is_deeply($claims->{state}{draws}, [], 'draws[] empty (closed mode, no draw_next)');
 	is($claims->{state}{finalization}, undef, 'finalization undef');
-	is($claims->{challenge_jwt}, $cjwt, 'challenge_jwt re-embedded verbatim');
+	is($claims->{challenge_jwt},       $cjwt, 'challenge_jwt re-embedded verbatim');
 };
 
 subtest 'open mode: draw_next appends to draws[]' => sub {
@@ -121,14 +121,13 @@ subtest 'open mode: draw_next appends to draws[]' => sub {
 			started_at     => '2026-04-27T17:00:00Z',
 			current_focus  => 0,
 			next_available => [0],
-			draws          => [
-				{ draw_position => 0, pool_index => 5, pg_hash => 'sha256:x', seed => 11111, drawn_at => '...' },
-			],
-			finalization   => undef,
+			draws          =>
+				[ { draw_position => 0, pool_index => 5, pg_hash => 'sha256:x', seed => 11111, drawn_at => '...' }, ],
+			finalization => undef,
 		},
 	);
 	my $new_draw = { draw_position => 1, pool_index => 7, pg_hash => 'sha256:y', seed => 22222, drawn_at => '...' };
-	my $vsigned = make_verdict_signed(
+	my $vsigned  = make_verdict_signed(
 		basis   => 2,
 		verdict => {
 			current_focus  => 1,
@@ -141,13 +140,13 @@ subtest 'open mode: draw_next appends to draws[]' => sub {
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
 	is($err, undef, 'no error');
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
-	is(scalar @{$claims->{state}{draws}}, 2, 'draws[] now has 2 entries');
+	is(scalar @{ $claims->{state}{draws} },    2, 'draws[] now has 2 entries');
 	is($claims->{state}{draws}[1]{pool_index}, 7, 'new draw is the second entry');
 };
 
 subtest 'finalization: terminal verdict folds finalization into state' => sub {
-	my $cjwt = make_challenge_jwt();
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 3);
+	my $cjwt    = make_challenge_jwt();
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 3);
 	my $vsigned = make_verdict_signed(
 		basis   => 3,
 		verdict => {
@@ -168,8 +167,8 @@ subtest 'finalization: terminal verdict folds finalization into state' => sub {
 # Verification gates ----------------------------------------------------------
 
 subtest 'reject: verdict signed under wrong secret' => sub {
-	my $cjwt = make_challenge_jwt();
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 0);
+	my $cjwt  = make_challenge_jwt();
+	my $base  = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 0);
 	my $bogus = encode_jwt(
 		payload => { play_id => 'x', mint_sequence_basis => 0, verdict => {} },
 		alg     => 'HS256',
@@ -182,7 +181,7 @@ subtest 'reject: verdict signed under wrong secret' => sub {
 };
 
 subtest 'reject: base sessionJWT signed under wrong secret' => sub {
-	my $cjwt = make_challenge_jwt();
+	my $cjwt       = make_challenge_jwt();
 	my $bogus_base = encode_jwt(
 		payload => { challenge_jwt => $cjwt, state => {}, mint_sequence => 0 },
 		alg     => 'HS256',
@@ -196,8 +195,8 @@ subtest 'reject: base sessionJWT signed under wrong secret' => sub {
 };
 
 subtest 'reject: play_id mismatch between verdict and embedded challengeJWT' => sub {
-	my $cjwt = make_challenge_jwt(play_id => '11111111-1111-1111-1111-111111111111');
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 0);
+	my $cjwt    = make_challenge_jwt(play_id => '11111111-1111-1111-1111-111111111111');
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 0);
 	my $vsigned = make_verdict_signed(play_id => '99999999-9999-9999-9999-999999999999');
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
@@ -206,9 +205,9 @@ subtest 'reject: play_id mismatch between verdict and embedded challengeJWT' => 
 };
 
 subtest 'reject: mint_sequence_basis older than base.mint_sequence' => sub {
-	my $cjwt = make_challenge_jwt();
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 10);
-	my $vsigned = make_verdict_signed(basis => 7);  # stale
+	my $cjwt    = make_challenge_jwt();
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 10);
+	my $vsigned = make_verdict_signed(basis => 7);                                 # stale
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
 	is($new_jwt, undef, 'no new sessionJWT');
@@ -218,8 +217,8 @@ subtest 'reject: mint_sequence_basis older than base.mint_sequence' => sub {
 subtest 'accept: mint_sequence_basis equal to base.mint_sequence' => sub {
 	# basis == base.mint_sequence is the normal case (RESUME path: verdict
 	# was derived from session_k.state, basis == k).
-	my $cjwt = make_challenge_jwt();
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 4);
+	my $cjwt    = make_challenge_jwt();
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 4);
 	my $vsigned = make_verdict_signed(basis => 4);
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
@@ -276,7 +275,7 @@ subtest 'reject: empty inputs' => sub {
 
 subtest 'reject: base_session_jwt missing embedded challenge_jwt' => sub {
 	my $bogus_base = encode_jwt(
-		payload => { state => {}, mint_sequence => 0 },  # no challenge_jwt
+		payload => { state => {}, mint_sequence => 0 },    # no challenge_jwt
 		alg     => 'HS256',
 		key     => $RENDERER,
 	);
@@ -290,8 +289,8 @@ subtest 'reject: base_session_jwt missing embedded challenge_jwt' => sub {
 # Idempotency / determinism ---------------------------------------------------
 
 subtest 'fold preserves base challenge_jwt verbatim' => sub {
-	my $cjwt = make_challenge_jwt();
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 1);
+	my $cjwt    = make_challenge_jwt();
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 1);
 	my $vsigned = make_verdict_signed(basis => 1);
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);

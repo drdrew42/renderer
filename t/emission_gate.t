@@ -25,14 +25,12 @@ $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 $ENV{SITE_HOST}        //= 'https://test.example.com';
 
-$ENV{RENDERER_PEERS} = encode_json([
-	{ name => 'test-editor', public_key => encode_base64($peer_pub, '') },
-]);
+$ENV{RENDERER_PEERS} = encode_json([ { name => 'test-editor', public_key => encode_base64($peer_pub, '') }, ]);
 
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -43,7 +41,7 @@ unless (-f "$render_root/logs/resource_usage.log") {
 
 sub peer_headers {
 	my ($method, $path, $body) = @_;
-	my $ts = time;
+	my $ts        = time;
 	my $canonical = "$method\n$path\n$ts\n$body";
 	utf8::encode($canonical);
 	my $sig = Crypt::Ed25519::sign($canonical, $peer_pub, $peer_sec);
@@ -92,11 +90,13 @@ PG
 
 subtest 'self-mint: render proceeds without grounding' => sub {
 	local $ENV{STRICT_JWT} = 0;
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+		}
+	)->status_is(200);
 };
 
 # ─── Peer-signed lane ──────────────────────────────────────────────────────
@@ -109,8 +109,7 @@ subtest 'peer-signed: render proceeds' => sub {
 	);
 	my $headers = peer_headers('POST', '/render-api', $body);
 
-	$t->post_ok('/render-api', $headers, $body)
-		->status_is(200);
+	$t->post_ok('/render-api', $headers, $body)->status_is(200);
 };
 
 # ─── problemJWT lane (control) ─────────────────────────────────────────────
@@ -121,12 +120,14 @@ subtest 'problemJWT: submitAnswers proceeds (sets _can_emit_answer_jwt)' => sub 
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $jwt,
-		outputFormat  => 'default',
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => $jwt,
+			outputFormat  => 'default',
+			submitAnswers => 1,
+			AnSwEr0001    => '42',
+		}
+	)->status_is(200);
 };
 
 done_testing();

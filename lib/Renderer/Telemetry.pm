@@ -5,10 +5,10 @@ use warnings;
 
 use Time::HiRes qw(time);
 use Mojo::IOLoop;
-use Mojo::JSON qw(encode_json);
+use Mojo::JSON   qw(encode_json);
 use MIME::Base64 qw(encode_base64);
-use Digest::SHA qw(sha256_hex);
-use Encode qw(encode);
+use Digest::SHA  qw(sha256_hex);
+use Encode       qw(encode);
 use Renderer::Identity;
 use Renderer::Log qw(iso8601_now);
 
@@ -20,8 +20,8 @@ my @BUFFER;
 # Batch reporter state (set by init).
 my $APP;
 my $OPL_URL;
-my $FLUSH_INTERVAL  = 60;   # seconds between timer flushes
-my $FLUSH_THRESHOLD = 100;  # event count trigger
+my $FLUSH_INTERVAL  = 60;     # seconds between timer flushes
+my $FLUSH_THRESHOLD = 100;    # event count trigger
 
 # Call from app startup() to enable batch reporting.
 # Sets up a recurring timer to flush events to the OPL telemetry endpoint.
@@ -44,19 +44,19 @@ sub flush {
 	my $events = drain();
 	return unless @$events;
 
-	my $body = encode_json({ events => $events });
+	my $body    = encode_json({ events => $events });
 	my %headers = ('Content-Type' => 'application/json');
 
 	if (Renderer::Identity::has_identity()) {
 		my $sig = Renderer::Identity::sign($body);
 		if ($sig) {
-			$headers{'X-Telemetry-PublicKey'}  = Renderer::Identity::public_key_b64();
-			$headers{'X-Telemetry-Signature'}  = encode_base64($sig, '');
+			$headers{'X-Telemetry-PublicKey'} = Renderer::Identity::public_key_b64();
+			$headers{'X-Telemetry-Signature'} = encode_base64($sig, '');
 		}
 	}
 
 	$APP->ua->post_p($OPL_URL => \%headers => $body)->then(sub {
-		my $tx = shift;
+		my $tx   = shift;
 		my $code = $tx->res->code // 0;
 		if ($code == 200) {
 			my $accepted = $tx->res->json->{accepted} // 0;
@@ -82,15 +82,16 @@ sub record_render {
 	my (%args) = @_;
 	return unless $args{pg_hash};
 
-	push @BUFFER, {
-		type       => 'render',
-		pg_hash    => $args{pg_hash},
-		pg_version => $ENV{PG_VERSION} // 'unknown',
-		warnings   => $args{warnings}  // 0,
-		errors     => $args{errors}    // 0,
-		render_ms  => $args{render_ms} // 0,
-		timestamp  => iso8601_now(),
-	};
+	push @BUFFER,
+		{
+			type       => 'render',
+			pg_hash    => $args{pg_hash},
+			pg_version => $ENV{PG_VERSION} // 'unknown',
+			warnings   => $args{warnings}  // 0,
+			errors     => $args{errors}    // 0,
+			render_ms  => $args{render_ms} // 0,
+			timestamp  => iso8601_now(),
+		};
 	_maybe_flush();
 }
 
@@ -102,15 +103,16 @@ sub record_interaction {
 	return if $args{is_instructor};
 	return unless $args{pg_hash};
 
-	push @BUFFER, {
-		type       => 'interaction',
-		pg_hash    => $args{pg_hash},
-		pg_version => $ENV{PG_VERSION}  // 'unknown',
-		action     => $args{action}     // 'submit',
-		score      => $args{score},
-		attempt    => $args{attempt}    // 1,
-		timestamp  => iso8601_now(),
-	};
+	push @BUFFER,
+		{
+			type       => 'interaction',
+			pg_hash    => $args{pg_hash},
+			pg_version => $ENV{PG_VERSION} // 'unknown',
+			action     => $args{action}    // 'submit',
+			score      => $args{score},
+			attempt    => $args{attempt} // 1,
+			timestamp  => iso8601_now(),
+		};
 	_maybe_flush();
 }
 
@@ -123,14 +125,15 @@ sub record_seed_observation {
 	return unless $args{pg_hash};
 	return unless defined $args{seed} && defined $args{html_hash};
 
-	push @BUFFER, {
-		type       => 'seed_observation',
-		pg_hash    => $args{pg_hash},
-		pg_version => $ENV{PG_VERSION} // 'unknown',
-		seed       => $args{seed} + 0,
-		html_hash  => $args{html_hash},
-		timestamp  => iso8601_now(),
-	};
+	push @BUFFER,
+		{
+			type       => 'seed_observation',
+			pg_hash    => $args{pg_hash},
+			pg_version => $ENV{PG_VERSION} // 'unknown',
+			seed       => $args{seed} + 0,
+			html_hash  => $args{html_hash},
+			timestamp  => iso8601_now(),
+		};
 	_maybe_flush();
 }
 
@@ -163,9 +166,7 @@ sub content_hash {
 	# problems where answers are sparse but question text varies).
 	my $answer_suffix = '';
 	if ($answers && ref $answers eq 'HASH' && keys %$answers) {
-		my @correct = map {
-			$answers->{$_}{correct_ans} // ''
-		} sort keys %$answers;
+		my @correct = map { $answers->{$_}{correct_ans} // '' } sort keys %$answers;
 		$answer_suffix = "\x00" . join("\x00", @correct);
 	}
 

@@ -62,10 +62,8 @@ async sub process ($c, $inputs_ref, $return_object) {
 		#     interaction via stale-recovery)
 		if ($resp->{verdict_signed}) {
 			my ($folded, $err) = verifyAndFoldVerdict(
-				$return_object->{sessionJWT},
-				$resp->{verdict_signed},
-				$ENV{problemJWTsecret},
-				$ENV{webworkJWTsecret},
+				$return_object->{sessionJWT}, $resp->{verdict_signed},
+				$ENV{problemJWTsecret},       $ENV{webworkJWTsecret},
 			);
 			if ($err) {
 				$c->log->error("post-answer-URL verdict fold rejected: $err");
@@ -83,12 +81,8 @@ async sub process ($c, $inputs_ref, $return_object) {
 
 	# Legacy problemJWT path: POST raw answerJWT to JWTanswerURL as
 	# text/plain. The body is the JWT string itself (not a JSON envelope).
-	my $resp = await post_p(
-		$c,
-		$inputs_ref->{JWTanswerURL},
-		$return_object->{answerJWT},
-		content_type => 'text/plain',
-	);
+	my $resp =
+		await post_p($c, $inputs_ref->{JWTanswerURL}, $return_object->{answerJWT}, content_type => 'text/plain',);
 	$return_object->{JWTanswerURLstatus} = encode_status($resp);
 	return 1;
 }

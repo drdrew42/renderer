@@ -88,7 +88,7 @@ sub apply ($c, $params) {
 	$params->{isInstructor} //= 0;
 
 	$c->stash(_can_emit_answer_jwt => 1);
-	$c->stash(_trust_lane         => 'problem');
+	$c->stash(_trust_lane          => 'problem');
 	return 1;
 }
 

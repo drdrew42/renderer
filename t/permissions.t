@@ -34,7 +34,7 @@ sub upstream_problem_jwt {
 	);
 }
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 
 make_path("$render_root/private") unless -d "$render_root/private";
@@ -69,36 +69,42 @@ PG
 # ─── Instructor defaults ──────────────────────────────────────────────────
 
 subtest 'instructor: solutions and answers visible by default' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		isInstructor  => 1,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+			isInstructor  => 1,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	like($body, qr/solution accordion/, 'solutions visible by default for instructor');
 };
 
 subtest 'instructor: showSolutions inbound ignored (revealAll forces on)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		isInstructor  => 1,
-		showSolutions => 0,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+			isInstructor  => 1,
+			showSolutions => 0,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	like($body, qr/solution accordion/, 'instructor sees solutions regardless of inbound showSolutions=0');
 };
 
 subtest 'instructor: hints visible regardless of inbound showHints' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		isInstructor  => 1,
-		showHints     => 0,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+			isInstructor  => 1,
+			showHints     => 0,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	like($body, qr/hint accordion/, 'instructor sees hints regardless of inbound showHints=0');
 };
@@ -106,44 +112,52 @@ subtest 'instructor: hints visible regardless of inbound showHints' => sub {
 # ─── Student defaults ────────────────────────────────────────────────────
 
 subtest 'student: no solutions without showCorrectAnswers' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	unlike($body, qr/solution accordion/, 'no solutions for student by default');
 };
 
 subtest 'student: showCorrectAnswers does NOT imply solutions (hardwired off)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource      => $pg_source,
-		outputFormat       => 'default',
-		problemSeed        => 1234,
-		showCorrectAnswers => 1,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource      => $pg_source,
+			outputFormat       => 'default',
+			problemSeed        => 1234,
+			showCorrectAnswers => 1,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	unlike($body, qr/solution accordion/, 'solutions hardwired off for students; fetch via /render-api/solution');
 };
 
 subtest 'student: inbound showSolutions=1 is ignored (hardwired off)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		showSolutions => 1,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+			showSolutions => 1,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	unlike($body, qr/solution accordion/, 'showSolutions=1 from student form ignored');
 };
 
 subtest 'student: inbound showHints=1 is ignored (hardwired off)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-		showHints     => 1,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+			showHints     => 1,
+		}
+	)->status_is(200);
 	my $body = $t->tx->res->body;
 	unlike($body, qr/hint accordion/, 'hints hardwired off for students; fetch via /render-api/hint');
 };
@@ -151,12 +165,14 @@ subtest 'student: inbound showHints=1 is ignored (hardwired off)' => sub {
 # ─── Instructor JWT suppression ────────────────────────────────────────────
 
 subtest 'instructor gets no sessionJWT or answerJWT' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'debug',
-		problemSeed   => 1234,
-		isInstructor  => 1,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			isInstructor  => 1,
+		}
+	)->status_is(200);
 	my $json = $t->tx->res->json;
 	ok(!$json->{tokens}{sessionJWT}, 'no sessionJWT for instructor');
 	ok(!$json->{tokens}{answerJWT},  'no answerJWT for instructor');
@@ -168,35 +184,31 @@ subtest 'debug outputFormat returns diagnostic JSON' => sub {
 	# Post-R31: isLocked is gone entirely. The debug envelope still carries
 	# the top-level `lane` field (R27) and the resolved permissions; the
 	# lane-conditional isLocked block retired alongside the field.
-	$t->post_ok('/render-api' => form => {
-		problemSource      => $pg_source,
-		outputFormat       => 'debug',
-		problemSeed        => 1234,
-		isInstructor       => 1,
-		showCorrectAnswers => 1,
-	})->status_is(200)->json_has('/permissions')
-		->json_has('/problem')
-		->json_has('/macros')
-		->json_has('/result')
-		->json_is('/lane' => 'ungrounded')
-		->json_is('/permissions/isInstructor' => 1)
-		->json_is('/permissions/showCorrectAnswers' => 1)
-		->json_is('/render_error' => 0)
-		->json_hasnt('/permissions/isLocked',
-			'isLocked retired (WW3-R31) — never appears in debug output');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource      => $pg_source,
+			outputFormat       => 'debug',
+			problemSeed        => 1234,
+			isInstructor       => 1,
+			showCorrectAnswers => 1,
+		}
+	)->status_is(200)->json_has('/permissions')->json_has('/problem')->json_has('/macros')->json_has('/result')
+		->json_is('/lane'                           => 'ungrounded')->json_is('/permissions/isInstructor' => 1)
+		->json_is('/permissions/showCorrectAnswers' => 1)->json_is('/render_error' => 0)
+		->json_hasnt('/permissions/isLocked', 'isLocked retired (WW3-R31) — never appears in debug output');
 };
 
 subtest 'debug outputFormat: problem lane reports its lane identity' => sub {
 	my $jwt = upstream_problem_jwt();
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $jwt,
-		problemSource => $pg_source,
-		outputFormat  => 'debug',
-		problemSeed   => 1234,
-	})->status_is(200)
-	  ->json_is('/lane' => 'problem')
-	  ->json_hasnt('/permissions/isLocked',
-		'isLocked retired across all lanes (WW3-R31)');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => $jwt,
+			problemSource => $pg_source,
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+		}
+	)->status_is(200)->json_is('/lane' => 'problem')
+		->json_hasnt('/permissions/isLocked', 'isLocked retired across all lanes (WW3-R31)');
 };
 
 # ─── Reveal reporting (post-R31; renderer never terminates) ───────────────
@@ -209,29 +221,33 @@ subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' 
 	# answerJWT. The LMS reads (numCorrect+numIncorrect) for replay defense.
 	my $problemJWT = upstream_problem_jwt();
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $problemJWT,
-		problemSource => $pg_source,
-		outputFormat  => 'debug',
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => $problemJWT,
+			problemSource => $pg_source,
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			submitAnswers => 1,
+			AnSwEr0001    => '42',
+		}
+	)->status_is(200);
 
 	my $first = $t->tx->res->json;
 	ok($first->{tokens}{sessionJWT}, 'sessionJWT minted after correct submission');
 	ok($first->{tokens}{answerJWT},  'answerJWT minted after correct submission');
 
 	# Re-submit with the post-earn sessionJWT — renderer keeps emitting.
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $problemJWT,
-		problemSource => $pg_source,
-		sessionJWT    => $first->{tokens}{sessionJWT},
-		outputFormat  => 'debug',
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => $problemJWT,
+			problemSource => $pg_source,
+			sessionJWT    => $first->{tokens}{sessionJWT},
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			submitAnswers => 1,
+			AnSwEr0001    => '42',
+		}
+	)->status_is(200);
 
 	my $second = $t->tx->res->json;
 	ok($second->{tokens}{answerJWT},
@@ -242,40 +258,44 @@ subtest 'showCorrectAnswers: answersRevealed ratchets, renderer keeps emitting' 
 	my $problemJWT = upstream_problem_jwt();
 
 	# Wrong answer + reveal → peek-before-earn → ratchet fires
-	$t->post_ok('/render-api' => form => {
-		problemJWT         => $problemJWT,
-		problemSource      => $pg_source,
-		outputFormat       => 'debug',
-		problemSeed        => 9999,
-		submitAnswers      => 1,
-		showCorrectAnswers => 1,
-		AnSwEr0001         => '41',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT         => $problemJWT,
+			problemSource      => $pg_source,
+			outputFormat       => 'debug',
+			problemSeed        => 9999,
+			submitAnswers      => 1,
+			showCorrectAnswers => 1,
+			AnSwEr0001         => '41',
+		}
+	)->status_is(200);
 
-	my $submit = $t->tx->res->json;
-	my $sessionJWT = $submit->{tokens}{sessionJWT};
+	my $submit         = $t->tx->res->json;
+	my $sessionJWT     = $submit->{tokens}{sessionJWT};
 	my $session_claims = decode_jwt(token => $sessionJWT, key => $ENV{webworkJWTsecret});
-	is($session_claims->{answersRevealed}, 1,
-		'sessionJWT carries the answersRevealed ratchet (peek-before-earn fired)');
+	is($session_claims->{answersRevealed},
+		1, 'sessionJWT carries the answersRevealed ratchet (peek-before-earn fired)');
 
 	# Subsequent submit — renderer keeps emitting; the answerJWT carries the
 	# inbound cumulative so the LMS sees this submission was post-reveal.
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => $problemJWT,
-		problemSource => $pg_source,
-		sessionJWT    => $sessionJWT,
-		outputFormat  => 'debug',
-		problemSeed   => 9999,
-		submitAnswers => 1,
-		AnSwEr0001    => '42',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => $problemJWT,
+			problemSource => $pg_source,
+			sessionJWT    => $sessionJWT,
+			outputFormat  => 'debug',
+			problemSeed   => 9999,
+			submitAnswers => 1,
+			AnSwEr0001    => '42',
+		}
+	)->status_is(200);
 
 	my $follow_up = $t->tx->res->json;
-	my $answer = $follow_up->{tokens}{answerJWT};
+	my $answer    = $follow_up->{tokens}{answerJWT};
 	ok($answer, 'follow-up submit still produces answerJWT (no terminal state)');
 	my $answer_claims = decode_jwt(token => $answer, key => $ENV{problemJWTsecret});
-	is($answer_claims->{answersRevealed}, 1,
-		'answerJWT carries inbound cumulative — LMS sees the submission was post-reveal');
+	is($answer_claims->{answersRevealed},
+		1, 'answerJWT carries inbound cumulative — LMS sees the submission was post-reveal');
 };
 
 done_testing();

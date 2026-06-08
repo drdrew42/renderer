@@ -9,6 +9,7 @@ use Test::More;
 
 # ContentCache reads $ENV{RENDER_ROOT} at compile time, so set it first.
 my $RENDER_ROOT;
+
 BEGIN {
 	$RENDER_ROOT = tempdir(CLEANUP => 1);
 	make_path(File::Spec->catdir($RENDER_ROOT, 'private'));
@@ -45,13 +46,13 @@ subtest 'stage and read problem' => sub {
 	my $pg_hash = 'a1b2c3d4' x 4;
 	my $source  = "DOCUMENT();\nloadMacros('PGstandard.pl');\nENDDOCUMENT();";
 
-	ok(!Renderer::ContentCache::has_problem($pg_hash), 'has_problem false before staging');
+	ok(!Renderer::ContentCache::has_problem($pg_hash),           'has_problem false before staging');
 	ok(Renderer::ContentCache::stage_problem($pg_hash, $source), 'stage_problem succeeds');
-	ok(Renderer::ContentCache::has_problem($pg_hash), 'has_problem true after staging');
+	ok(Renderer::ContentCache::has_problem($pg_hash),            'has_problem true after staging');
 
 	# Verify the file was actually written
 	my $expected_dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $pg_hash);
-	ok(-d $expected_dir, 'problem directory created');
+	ok(-d $expected_dir,                                    'problem directory created');
 	ok(-f File::Spec->catfile($expected_dir, 'problem.pg'), 'problem.pg file exists');
 
 	# read_problem
@@ -62,7 +63,8 @@ subtest 'stage and read problem' => sub {
 # --- read_problem on unknown hash ---
 
 subtest 'read_problem unknown hash' => sub {
-	is(Renderer::ContentCache::read_problem('nonexistent_hash'), undef, 'read_problem returns undef for unknown hash');
+	is(Renderer::ContentCache::read_problem('nonexistent_hash'),
+		undef, 'read_problem returns undef for unknown hash');
 };
 
 # --- problem_path ---
@@ -125,7 +127,7 @@ subtest 'stage_problem writes manifest.json with macro entries' => sub {
 
 	# Manifest written, JSON parse, expected shape
 	my $manifest_path = File::Spec->catfile($RENDER_ROOT, 'private', 'problems', $pg_hash, 'manifest.json');
-	ok(-f $manifest_path, 'manifest.json exists');
+	ok(-f $manifest_path,        'manifest.json exists');
 	ok(!-f "$manifest_path.tmp", 'tmp file was renamed away (atomic install)');
 
 	open my $fh, '<', $manifest_path or die "Cannot read manifest: $!";
@@ -133,12 +135,12 @@ subtest 'stage_problem writes manifest.json with macro entries' => sub {
 	my $body = <$fh>;
 	close $fh;
 	my $parsed = Mojo::JSON::decode_json($body);
-	is(ref $parsed, 'ARRAY', 'manifest is a JSON array');
-	is(scalar @$parsed, 2, 'two entries');
-	is($parsed->[0]{name}, 'custom.pl',   'order preserved (entry 0)');
-	is($parsed->[1]{name}, 'override.pl', 'order preserved (entry 1)');
-	is($parsed->[0]{source_type}, 'custom',   'source_type captured verbatim (entry 0)');
-	is($parsed->[1]{source_type}, 'override', 'source_type captured verbatim (entry 1)');
+	is(ref $parsed,               'ARRAY',       'manifest is a JSON array');
+	is(scalar @$parsed,           2,             'two entries');
+	is($parsed->[0]{name},        'custom.pl',   'order preserved (entry 0)');
+	is($parsed->[1]{name},        'override.pl', 'order preserved (entry 1)');
+	is($parsed->[0]{source_type}, 'custom',      'source_type captured verbatim (entry 0)');
+	is($parsed->[1]{source_type}, 'override',    'source_type captured verbatim (entry 1)');
 
 	# Reader returns macros injected by name
 	my $injected = Renderer::ContentCache::get_injected_macros($pg_hash);
@@ -173,12 +175,12 @@ subtest 'stage_problem omits source_type field when not provided' => sub {
 # --- sweep: TTL-based eviction (WW3-R39 Phase 1) ---
 
 subtest 'sweep evicts stale problem dirs and their index entries' => sub {
-	my $stale_hash   = 'stale_problem_for_sweep';
-	my $fresh_hash   = 'fresh_problem_for_sweep';
-	my $stale_url    = 'https://opl.example.com/api/problems/hash/stale';
-	my $fresh_url    = 'https://opl.example.com/api/problems/hash/fresh';
-	my $stale_path   = 'Library/Sweep/stale.pg';
-	my $fresh_path   = 'Library/Sweep/fresh.pg';
+	my $stale_hash = 'stale_problem_for_sweep';
+	my $fresh_hash = 'fresh_problem_for_sweep';
+	my $stale_url  = 'https://opl.example.com/api/problems/hash/stale';
+	my $fresh_url  = 'https://opl.example.com/api/problems/hash/fresh';
+	my $stale_path = 'Library/Sweep/stale.pg';
+	my $fresh_path = 'Library/Sweep/fresh.pg';
 
 	# Stage two problems + index entries pointing to each
 	Renderer::ContentCache::stage_problem($stale_hash, 'DOCUMENT(); ENDDOCUMENT();');
@@ -190,22 +192,21 @@ subtest 'sweep evicts stale problem dirs and their index entries' => sub {
 
 	# Backdate the stale problem dir to 200h ago (past the 168h default TTL)
 	my $stale_dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $stale_hash);
-	my $past = time - (200 * 3600);
+	my $past      = time - (200 * 3600);
 	utime($past, $past, $stale_dir) or die "utime failed: $!";
 
 	my $evicted = Renderer::ContentCache::sweep();
 
-	ok($evicted >= 1, 'sweep reports >=1 evicted dir');
-	ok(!-d $stale_dir, 'stale problem dir removed');
-	ok(-d File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $fresh_hash),
-		'fresh problem dir untouched');
+	ok($evicted >= 1,                                                           'sweep reports >=1 evicted dir');
+	ok(!-d $stale_dir,                                                          'stale problem dir removed');
+	ok(-d File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $fresh_hash), 'fresh problem dir untouched');
 
 	# Index entries pointing to the evicted hash also gone
-	is(Renderer::ContentCache::pg_hash_for_url($stale_url),  undef, 'stale url_index entry swept');
+	is(Renderer::ContentCache::pg_hash_for_url($stale_url),   undef, 'stale url_index entry swept');
 	is(Renderer::ContentCache::pg_hash_for_path($stale_path), undef, 'stale path_index entry swept');
 
 	# Index entries for the fresh hash preserved
-	is(Renderer::ContentCache::pg_hash_for_url($fresh_url),  $fresh_hash, 'fresh url_index preserved');
+	is(Renderer::ContentCache::pg_hash_for_url($fresh_url),   $fresh_hash, 'fresh url_index preserved');
 	is(Renderer::ContentCache::pg_hash_for_path($fresh_path), $fresh_hash, 'fresh path_index preserved');
 };
 
@@ -230,8 +231,8 @@ subtest 'invalidate removes problem dir and both index entries' => sub {
 	ok(-d $dir, 'sanity: problem dir exists pre-invalidate');
 
 	ok(Renderer::ContentCache::invalidate($hash), 'invalidate returns truthy');
-	ok(!-d $dir, 'problem dir removed');
-	is(Renderer::ContentCache::pg_hash_for_url($url),  undef, 'url_index entry removed');
+	ok(!-d $dir,                                  'problem dir removed');
+	is(Renderer::ContentCache::pg_hash_for_url($url),   undef, 'url_index entry removed');
 	is(Renderer::ContentCache::pg_hash_for_path($path), undef, 'path_index entry removed');
 };
 
@@ -240,7 +241,7 @@ subtest 'invalidate leaves unrelated entries alone' => sub {
 	my $bystander_hash = 'bystander_for_partial_invalidate';
 	my $bystander_url  = 'https://opl.example.com/api/problems/hash/bystander';
 
-	Renderer::ContentCache::stage_problem($target_hash, 'DOCUMENT(); ENDDOCUMENT();');
+	Renderer::ContentCache::stage_problem($target_hash,    'DOCUMENT(); ENDDOCUMENT();');
 	Renderer::ContentCache::stage_problem($bystander_hash, 'DOCUMENT(); ENDDOCUMENT();');
 	Renderer::ContentCache::save_url_index($bystander_url, $bystander_hash);
 
@@ -248,8 +249,8 @@ subtest 'invalidate leaves unrelated entries alone' => sub {
 
 	ok(-d File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $bystander_hash),
 		'bystander problem dir untouched');
-	is(Renderer::ContentCache::pg_hash_for_url($bystander_url), $bystander_hash,
-		'bystander url_index entry preserved');
+	is(Renderer::ContentCache::pg_hash_for_url($bystander_url),
+		$bystander_hash, 'bystander url_index entry preserved');
 };
 
 subtest 'invalidate on unknown hash returns 0' => sub {

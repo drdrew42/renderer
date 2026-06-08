@@ -87,7 +87,7 @@ sub resolve_permissions ($inputs_ref) {
 # stays in pure-permission territory and doesn't reach into $pg internals.
 # Moved from WeBWorK::RenderProblem in WW3-R36.
 sub reveal_state ($inputs_ref, $recorded_score = 0) {
-	my $perms = resolve_permissions($inputs_ref);
+	my $perms               = resolve_permissions($inputs_ref);
 	my $answers_requested   = $perms->{showCorrectAnswers};
 	my $solutions_requested = $perms->{showSolutions};
 
@@ -96,10 +96,8 @@ sub reveal_state ($inputs_ref, $recorded_score = 0) {
 
 	my $earned = ($recorded_score // 0) >= 1;
 
-	my $answers_revealed_out =
-		($answers_revealed_in   || ($answers_requested   && !$earned)) ? 1 : 0;
-	my $solutions_revealed_out =
-		($solutions_revealed_in || ($solutions_requested && !$earned)) ? 1 : 0;
+	my $answers_revealed_out   = ($answers_revealed_in   || ($answers_requested   && !$earned)) ? 1 : 0;
+	my $solutions_revealed_out = ($solutions_revealed_in || ($solutions_requested && !$earned)) ? 1 : 0;
 
 	return {
 		answers_requested      => $answers_requested,

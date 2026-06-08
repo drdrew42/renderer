@@ -26,7 +26,7 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
-use Exporter qw(import);
+use Exporter   qw(import);
 use Crypt::JWT qw(encode_jwt);
 
 our @EXPORT_OK = qw(mint_jwt);

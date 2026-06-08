@@ -20,7 +20,7 @@ $ENV{SITE_HOST}        //= 'https://test.example.com';
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -60,11 +60,12 @@ subtest 'problemJWT: hideElements claim → inline <style> in <head>' => sub {
 		hideElements  => [ '.feedback-btn', '#hint-link' ],
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_like(
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_like(
 		qr{<style>\.feedback-btn,\s*\#hint-link\s*\{\s*display:\s*none\s*!important;\s*\}</style>},
 		'inline <style> block with both selectors and display:none !important',
 	);
@@ -76,11 +77,12 @@ subtest 'problemJWT: no hideElements claim → no <style> block emitted' => sub 
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_unlike(
 		qr{<style>[^<]*display:\s*none\s*!important[^<]*</style>},
 		'no hide-style block when claim absent',
 	);
@@ -93,11 +95,12 @@ subtest 'problemJWT: empty hideElements array → no <style> block' => sub {
 		hideElements  => [],
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_unlike(
 		qr{<style>[^<]*display:\s*none\s*!important[^<]*</style>},
 		'empty array treated like absent — no markup leak',
 	);
@@ -112,17 +115,16 @@ subtest 'problemJWT: selectors are xml_escaped' => sub {
 	my $jwt = make_problem_jwt(
 		problemSource => $pg_source,
 		problemSeed   => 1234,
-		hideElements  => [ q{</style><script>alert(1)</script><style>.a} ],
+		hideElements  => [q{</style><script>alert(1)</script><style>.a}],
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(
-		qr{<script>alert\(1\)</script>},
-		'malicious selector cannot break out of the <style> block',
-	);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)
+		->content_unlike(qr{<script>alert\(1\)</script>}, 'malicious selector cannot break out of the <style> block',);
 };
 
 # ─── Raw-param rejection ───────────────────────────────────────────────────

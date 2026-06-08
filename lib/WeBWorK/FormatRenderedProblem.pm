@@ -59,7 +59,7 @@ sub formatRenderedProblem {
 
 	# Third party CSS — config-driven (WW3-R24). Defaults baked into
 	# Renderer.pm startup; per-language asset resolution still happens here.
-	my $css_list = $c->config('third_party_css') // [];
+	my $css_list        = $c->config('third_party_css') // [];
 	my @third_party_css = map { getAssetURL($formLanguage, $_) } @$css_list;
 
 	# Add CSS files requested by problems via ADD_CSS_FILE() in the PG file
@@ -84,7 +84,7 @@ sub formatRenderedProblem {
 	# Third party JavaScript — config-driven (WW3-R24). Each entry is
 	# [path, attrs-hash]; attrs hash carries `defer`, `id`, etc. Defaults
 	# baked into Renderer.pm startup.
-	my $js_list = $c->config('third_party_js') // [];
+	my $js_list        = $c->config('third_party_js') // [];
 	my @third_party_js = map { [ getAssetURL($formLanguage, $_->[0]), $_->[1] ] } @$js_list;
 
 	# Get the requested format. (outputFormat or outputformat)
@@ -130,19 +130,19 @@ sub formatRenderedProblem {
 	my %PROBLEM_LANG_AND_DIR = get_problem_lang_and_dir($rh_result->{flags}, 'auto:en:ltr', $formLanguage);
 	my $PROBLEM_LANG_AND_DIR = join(' ', map {qq{$_="$PROBLEM_LANG_AND_DIR{$_}"}} keys %PROBLEM_LANG_AND_DIR);
 
-	my $submitMode      = defined($inputs_ref->{submitAnswers})      || $inputs_ref->{answersSubmitted} || 0;
+	my $submitMode      = defined($inputs_ref->{submitAnswers}) || $inputs_ref->{answersSubmitted} || 0;
 	my $showCorrectMode = defined($inputs_ref->{showCorrectAnswers}) || 0;
 	# A problemUUID should be added to the request as a parameter.  It is used by PG to create a proper UUID for use in
 	# aliases for resources.  It should be unique for a course, user, set, problem, and version.
-	my $problemUUID      = $inputs_ref->{problemUUID}      // '';
-	my $problemResult    = $rh_result->{problem_result}    // {};
-	my $showSummary      = $inputs_ref->{showSummary}      // 1;
+	my $problemUUID   = $inputs_ref->{problemUUID}   // '';
+	my $problemResult = $rh_result->{problem_result} // {};
+	my $showSummary   = $inputs_ref->{showSummary}   // 1;
 	# A score is reportable only when the problem was submitted, rendered
 	# cleanly, and problem_result actually carries a score (the value the
 	# default.html.ep template dereferences). Coerce to a plain boolean so
 	# the JSON output format emits true/false, not a truthy hashref.
-	my $scoresExist      = $submitMode && !$renderErrorOccurred && defined $problemResult->{score} ? 1 : 0;
-	my $showScoreSummary = ( $inputs_ref->{showScoreSummary} // 0 ) && $scoresExist ? 1 : 0;
+	my $scoresExist = $submitMode && !$renderErrorOccurred && defined $problemResult->{score} ? 1 : 0;
+	my $showScoreSummary = ($inputs_ref->{showScoreSummary} // 0) && $scoresExist ? 1 : 0;
 	# allow the request to override the display of partial correct answers
 	my $showPartialCorrectAnswers = $inputs_ref->{showPartialCorrectAnswers}
 		// $rh_result->{flags}{showPartialCorrectAnswers};
@@ -204,25 +204,24 @@ sub formatRenderedProblem {
 		my $debug = {
 			lane        => $trust_lane,
 			permissions => $perms,
-			problem => {
-				pg_hash        => $inputs_ref->{pg_hash} // '',
+			problem     => {
+				pg_hash        => $inputs_ref->{pg_hash}        // '',
 				sourceFilePath => $inputs_ref->{sourceFilePath} // '',
 				problemSeed    => $inputs_ref->{problemSeed},
 				problemUUID    => $problemUUID,
 			},
 			macros => {
-				injected => $inputs_ref->{injectedMacros} ? [
-					map { { name => $_->{name}, hash => $_->{hash} } }
-						@{ $inputs_ref->{injectedMacros} }
-				] : [],
+				injected => $inputs_ref->{injectedMacros}
+				? [ map { { name => $_->{name}, hash => $_->{hash} } } @{ $inputs_ref->{injectedMacros} } ]
+				: [],
 			},
 			result => {
 				score    => $rh_result->{problem_result}{score} // undef,
-				errors   => $rh_result->{errors} // '',
-				warnings => $rh_result->{warning_messages} // [],
+				errors   => $rh_result->{errors}                // '',
+				warnings => $rh_result->{warning_messages}      // [],
 				flags    => {
-					map { $_ => $rh_result->{flags}{$_} }
-						grep { defined $rh_result->{flags}{$_} }
+					map  { $_ => $rh_result->{flags}{$_} }
+					grep { defined $rh_result->{flags}{$_} }
 						qw(showPartialCorrectAnswers PROBLEM_GRADING_ATTEMPTED comment)
 				},
 			},

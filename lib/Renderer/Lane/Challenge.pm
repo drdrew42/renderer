@@ -60,7 +60,7 @@ sub apply ($c, $params) {
 	return $c->exception("position $position out of range (have @{[ scalar @$problems ]} problems).", 400)
 		if $position >= scalar @$problems;
 
-	my $entry = $problems->[$position];
+	my $entry   = $problems->[$position];
 	my $pg_hash = $entry->{pg_hash}
 		or return $c->exception('challengeJWT problem entry missing pg_hash.', 400);
 
@@ -70,13 +70,11 @@ sub apply ($c, $params) {
 	# open mode the active pg_hash also lives on the draw record.
 	my $seed = $entry->{seed};
 	if (!defined $seed || $seed eq '*') {
-		my $draws = $params->{state} && ref $params->{state} eq 'HASH'
-			? ($params->{state}{draws} // [])
-			: [];
+		my $draws = $params->{state} && ref $params->{state} eq 'HASH' ? ($params->{state}{draws} // []) : [];
 		my ($draw) = grep { defined $_->{draw_position} && $_->{draw_position} == $position } @$draws;
 		return $c->exception("Open challenge: no draw recorded for position $position.", 400)
 			unless $draw && defined $draw->{seed};
-		$seed = $draw->{seed};
+		$seed    = $draw->{seed};
 		$pg_hash = $draw->{pg_hash} if defined $draw->{pg_hash};
 	}
 
@@ -132,7 +130,7 @@ sub apply ($c, $params) {
 	$params->{outputFormat} = 'default';
 
 	$c->stash(_can_emit_answer_jwt => 1);
-	$c->stash(_trust_lane         => 'challenge');
+	$c->stash(_trust_lane          => 'challenge');
 	return 1;
 }
 

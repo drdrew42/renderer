@@ -11,7 +11,7 @@ BEGIN {
 }
 
 use Test::Mojo;
-use Crypt::JWT   qw(encode_jwt);
+use Crypt::JWT qw(encode_jwt);
 use Crypt::Ed25519;
 use MIME::Base64 qw(encode_base64);
 use Mojo::JSON   qw(encode_json);
@@ -24,14 +24,12 @@ $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 $ENV{SITE_HOST}        //= 'https://test.example.com';
 
-$ENV{RENDERER_PEERS} = encode_json([
-	{ name => 'test-editor', public_key => encode_base64($peer_pub, '') },
-]);
+$ENV{RENDERER_PEERS} = encode_json([ { name => 'test-editor', public_key => encode_base64($peer_pub, '') }, ]);
 
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -44,8 +42,8 @@ unless (-f "$render_root/logs/resource_usage.log") {
 
 sub peer_headers {
 	my ($method, $path, $body, %opts) = @_;
-	my $ts   = $opts{timestamp} // time;
-	my $name = $opts{peer_name} // 'test-editor';
+	my $ts        = $opts{timestamp} // time;
+	my $name      = $opts{peer_name} // 'test-editor';
 	my $canonical = "$method\n$path\n$ts\n$body";
 	utf8::encode($canonical);
 	my $sig = Crypt::Ed25519::sign($canonical, $peer_pub, $peer_sec);
@@ -92,12 +90,12 @@ subtest 'problemJWT lane → data-trust-lane="problem"' => sub {
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_like(qr{<html[^>]*\bdata-trust-lane="problem"},
-		'problem lane sets data-trust-lane');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_like(qr{<html[^>]*\bdata-trust-lane="problem"}, 'problem lane sets data-trust-lane');
 };
 
 subtest 'peer-signed lane → data-trust-lane="peer"' => sub {
@@ -108,20 +106,19 @@ subtest 'peer-signed lane → data-trust-lane="peer"' => sub {
 	);
 	my $headers = peer_headers('POST', '/render-api', $body);
 
-	$t->post_ok('/render-api', $headers, $body)
-		->status_is(200)
-		->content_like(qr{<html[^>]*\bdata-trust-lane="peer"},
-			'peer lane sets data-trust-lane');
+	$t->post_ok('/render-api', $headers, $body)->status_is(200)
+		->content_like(qr{<html[^>]*\bdata-trust-lane="peer"}, 'peer lane sets data-trust-lane');
 };
 
 subtest 'ungrounded (self-mint) → data-trust-lane="ungrounded"' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		outputFormat  => 'default',
-		problemSeed   => 1234,
-	})->status_is(200)
-	  ->content_like(qr{<html[^>]*\bdata-trust-lane="ungrounded"},
-		'ungrounded lane sets data-trust-lane');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'default',
+			problemSeed   => 1234,
+		}
+	)->status_is(200)
+		->content_like(qr{<html[^>]*\bdata-trust-lane="ungrounded"}, 'ungrounded lane sets data-trust-lane');
 };
 
 # ─── Body onLoad regression ────────────────────────────────────────────────
@@ -132,12 +129,15 @@ subtest 'body has no onLoad postMessage broadcast' => sub {
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(qr{onLoad="window\.parent\.postMessage},
-		'body element no longer carries onLoad bare-string broadcast (replaced by webwork.lifecycle.loaded in problem.js)');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_unlike(
+		qr{onLoad="window\.parent\.postMessage},
+		'body element no longer carries onLoad bare-string broadcast (replaced by webwork.lifecycle.loaded in problem.js)'
+	);
 };
 
 # ─── parent_origin coexists with trust_lane ────────────────────────────────
@@ -149,12 +149,13 @@ subtest 'iframe-resizer asset is no longer included' => sub {
 		problemSeed   => 1234,
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(qr/iframeResizer\.contentWindow/,
-		'iframe-resizer asset removed from third_party_js (replaced by webwork.lifecycle.resize)');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_unlike(qr/iframeResizer\.contentWindow/,
+			'iframe-resizer asset removed from third_party_js (replaced by webwork.lifecycle.resize)');
 };
 
 subtest 'parent_origin + trust_lane both render on grounded lane' => sub {
@@ -164,12 +165,15 @@ subtest 'parent_origin + trust_lane both render on grounded lane' => sub {
 		parent_origin => 'https://portal.example.com',
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_like(qr{<html[^>]*\bdata-parent-origin="https://portal\.example\.com"[^>]*\bdata-trust-lane="problem"},
-		'both attributes present together when parent_origin claim set on grounded lane');
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_like(
+		qr{<html[^>]*\bdata-parent-origin="https://portal\.example\.com"[^>]*\bdata-trust-lane="problem"},
+		'both attributes present together when parent_origin claim set on grounded lane'
+	);
 };
 
 done_testing();

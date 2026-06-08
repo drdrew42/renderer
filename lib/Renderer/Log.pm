@@ -21,8 +21,7 @@ our @EXPORT_OK = qw(structured apply_json_format iso8601_now);
 # sites previously hand-rolled the same gmtime+sprintf clone.
 sub iso8601_now {
 	my @t = gmtime;
-	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ',
-		$t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
+	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
 }
 
 # Build a Mojo::Log with the structured-JSON formatter attached when
@@ -53,7 +52,7 @@ sub apply_json_format ($log, $component = undef) {
 			pid       => $$,
 			service   => 'renderer',
 		);
-		$entry{component} = $component if defined $component;
+		$entry{component} = $component        if defined $component;
 		$entry{message}   = join(' ', @lines) if @lines;
 		return encode_json(\%entry) . "\n";
 	});

@@ -25,7 +25,7 @@ $ENV{webworkJWTsecret} //= 'test-session-secret';
 $ENV{SITE_HOST}        //= 'https://test.example.com';
 delete $ENV{STRICT_JWT};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -76,23 +76,25 @@ sub upstream_problem_jwt {
 # the JWT claim is silent.
 sub submit_and_decode {
 	my (%form) = @_;
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => upstream_problem_jwt(),
-		problemSource => $pg_source,
-		outputFormat  => 'debug',
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		%form,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => upstream_problem_jwt(),
+			problemSource => $pg_source,
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			submitAnswers => 1,
+			%form,
+		}
+	)->status_is(200);
 	my $resp = $t->tx->res->json;
 	return {
 		session => $resp->{tokens}{sessionJWT}
-			? decode_jwt(token => $resp->{tokens}{sessionJWT}, key => $ENV{webworkJWTsecret})
-			: undef,
-		answer  => $resp->{tokens}{answerJWT}
-			? decode_jwt(token => $resp->{tokens}{answerJWT}, key => $ENV{problemJWTsecret})
-			: undef,
-		raw     => $resp,
+		? decode_jwt(token => $resp->{tokens}{sessionJWT}, key => $ENV{webworkJWTsecret})
+		: undef,
+		answer => $resp->{tokens}{answerJWT}
+		? decode_jwt(token => $resp->{tokens}{answerJWT}, key => $ENV{problemJWTsecret})
+		: undef,
+		raw => $resp,
 	};
 }
 
@@ -126,7 +128,7 @@ subtest 'solutions: showSolutions hardwired off in student render → no ratchet
 	my $r = submit_and_decode(
 		AnSwEr0001         => 'wrong',
 		showCorrectAnswers => 1,
-		showSolutions      => 1,    # ignored — students cannot trigger in-render solutions
+		showSolutions      => 1,         # ignored — students cannot trigger in-render solutions
 	);
 
 	is($r->{answer}{solutionsRequested}, 0, 'answerJWT.solutionsRequested = 0 (hardwired off for students)');
@@ -152,8 +154,7 @@ subtest 'peek-on-earn: correct submit + showCorrectAnswers (same render)' => sub
 
 	is($r->{answer}{answersRequested}, 1, 'answerJWT.answersRequested = 1');
 	is($r->{answer}{answersRevealed},  0, 'answerJWT.answersRevealed = 0 (was 0 inbound)');
-	ok(!$r->{session}{answersRevealed},
-		'sessionJWT.answersRevealed unset (no ratchet — earned the score)');
+	ok(!$r->{session}{answersRevealed}, 'sessionJWT.answersRevealed unset (no ratchet — earned the score)');
 };
 
 # ─── Scenario 3: post-completion peek ─────────────────────────────────────
@@ -177,27 +178,32 @@ subtest 'post-completion peek: prior earned, then showCorrectAnswers-only render
 
 	# Step 2: re-render with the earned sessionJWT, request answers
 	# without resubmitting.
-	$t->post_ok('/render-api' => form => {
-		problemJWT         => upstream_problem_jwt(),
-		problemSource      => $pg_source,
-		sessionJWT         => $earn->{raw}{tokens}{sessionJWT},
-		outputFormat       => 'debug',
-		problemSeed        => 1234,
-		submitAnswers      => 1,
-		showCorrectAnswers => 1,
-		AnSwEr0001         => '42',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT         => upstream_problem_jwt(),
+			problemSource      => $pg_source,
+			sessionJWT         => $earn->{raw}{tokens}{sessionJWT},
+			outputFormat       => 'debug',
+			problemSeed        => 1234,
+			submitAnswers      => 1,
+			showCorrectAnswers => 1,
+			AnSwEr0001         => '42',
+		}
+	)->status_is(200);
 
-	my $peek = $t->tx->res->json;
+	my $peek         = $t->tx->res->json;
 	my $peek_session = decode_jwt(
-		token => $peek->{tokens}{sessionJWT}, key => $ENV{webworkJWTsecret});
+		token => $peek->{tokens}{sessionJWT},
+		key   => $ENV{webworkJWTsecret}
+	);
 	my $peek_answer = decode_jwt(
-		token => $peek->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
+		token => $peek->{tokens}{answerJWT},
+		key   => $ENV{problemJWTsecret}
+	);
 
 	is($peek_answer->{answersRequested}, 1, 'peek render: answersRequested=1');
 	is($peek_answer->{answersRevealed},  0, 'peek render: answersRevealed=0 inbound');
-	ok(!$peek_session->{answersRevealed},
-		'post-completion peek does NOT ratchet (student already earned)');
+	ok(!$peek_session->{answersRevealed}, 'post-completion peek does NOT ratchet (student already earned)');
 };
 
 # ─── Scenario 4: sticky once set ──────────────────────────────────────────
@@ -220,28 +226,32 @@ subtest 'sticky once set: peek-before-earn → next render carries it' => sub {
 
 	# Step 2 — re-render with the post-peek sessionJWT, this time without
 	# requesting answers again. Inbound cumulative is 1.
-	$t->post_ok('/render-api' => form => {
-		problemJWT    => upstream_problem_jwt(),
-		problemSource => $pg_source,
-		sessionJWT    => $first->{raw}{tokens}{sessionJWT},
-		outputFormat  => 'debug',
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		AnSwEr0001    => 'still-wrong',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT    => upstream_problem_jwt(),
+			problemSource => $pg_source,
+			sessionJWT    => $first->{raw}{tokens}{sessionJWT},
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			submitAnswers => 1,
+			AnSwEr0001    => 'still-wrong',
+		}
+	)->status_is(200);
 
-	my $second = $t->tx->res->json;
+	my $second         = $t->tx->res->json;
 	my $second_session = decode_jwt(
-		token => $second->{tokens}{sessionJWT}, key => $ENV{webworkJWTsecret});
+		token => $second->{tokens}{sessionJWT},
+		key   => $ENV{webworkJWTsecret}
+	);
 	my $second_answer = decode_jwt(
-		token => $second->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
+		token => $second->{tokens}{answerJWT},
+		key   => $ENV{problemJWTsecret}
+	);
 
-	is($second_answer->{answersRequested}, 0,
-		'step 2: answersRequested=0 (no peek this render)');
+	is($second_answer->{answersRequested}, 0, 'step 2: answersRequested=0 (no peek this render)');
 	is($second_answer->{answersRevealed}, 1,
 		'step 2: answersRevealed=1 (state-at-submission carries prior reveal)');
-	is($second_session->{answersRevealed}, 1,
-		'step 2: sessionJWT carries sticky=1 forward');
+	is($second_session->{answersRevealed}, 1, 'step 2: sessionJWT carries sticky=1 forward');
 };
 
 # ─── Inbound strip ────────────────────────────────────────────────────────
@@ -252,14 +262,14 @@ subtest 'raw param injection blocked: answersRevealed cannot be smuggled in' => 
 	# dispatch; the only inbound path is via Lane::Session (which trusts
 	# its own minted sessionJWT).
 	my $r = submit_and_decode(
-		AnSwEr0001       => 'wrong',
-		answersRevealed  => 1,    # injection attempt
+		AnSwEr0001        => 'wrong',
+		answersRevealed   => 1,         # injection attempt
 		solutionsRevealed => 1,
 	);
 
-	is($r->{answer}{answersRevealed},  0, 'raw answersRevealed param did not leak through');
+	is($r->{answer}{answersRevealed},   0, 'raw answersRevealed param did not leak through');
 	is($r->{answer}{solutionsRevealed}, 0, 'raw solutionsRevealed param did not leak through');
-	ok(!$r->{session}{answersRevealed},  'session has no leaked answersRevealed');
+	ok(!$r->{session}{answersRevealed},   'session has no leaked answersRevealed');
 	ok(!$r->{session}{solutionsRevealed}, 'session has no leaked solutionsRevealed');
 };
 
@@ -278,38 +288,41 @@ subtest 'challenge lane: submissionJWT carries *_requested per render' => sub {
 			assignment_id    => '22222222-2222-2222-2222-222222222222',
 			chain_student_id => 'cafebabe',
 			shape            => 'closed',
-			problems         => [
-				{ position => 0, pg_hash => 'sha256:p0', seed => 11111 },
-			],
-			mode               => {
-				next_available => [{ name => 'position_in_pool' }],
-				is_done        => [{ name => 'student_finalized' }],
+			problems         => [ { position => 0, pg_hash => 'sha256:p0', seed => 11111 }, ],
+			mode             => {
+				next_available => [ { name => 'position_in_pool' } ],
+				is_done        => [ { name => 'student_finalized' } ],
 				selection      => 'student_picks',
 			},
-			constraints       => { duration_seconds => 3600 },
-			render_permissions => { isInstructor => 0, showCorrectAnswers => 1, showHints => 1 },
-			answer_url        => 'http://127.0.0.1:9999/fake-answer-callback',
+			constraints        => { duration_seconds => 3600 },
+			render_permissions => { isInstructor     => 0, showCorrectAnswers => 1, showHints => 1 },
+			answer_url         => 'http://127.0.0.1:9999/fake-answer-callback',
 		},
 		key => $ENV{problemJWTsecret},
 		alg => 'HS256',
 	);
 
-	$t->post_ok('/render-api' => { Accept => 'application/json' }, form => {
-		challengeJWT  => $challenge_jwt,
-		position      => 0,
-		problemSource => $pg_source,
-		problemSeed   => 1234,
-		submitAnswers => 1,
-		AnSwEr0001    => 'wrong',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => { Accept => 'application/json' },
+		form          => {
+			challengeJWT  => $challenge_jwt,
+			position      => 0,
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			submitAnswers => 1,
+			AnSwEr0001    => 'wrong',
+		}
+	)->status_is(200);
 
-	my $resp = $t->tx->res->json;
+	my $resp           = $t->tx->res->json;
 	my $submission_jwt = $resp->{JWT}{submission};
 	ok($submission_jwt, 'submissionJWT minted');
 
 	my $sub_claims = decode_jwt(token => $submission_jwt, key => $ENV{problemJWTsecret});
-	is($sub_claims->{answers_requested},   1, 'submissionJWT.answers_requested=1 (showCorrectAnswers fired via render_permissions)');
-	is($sub_claims->{solutions_requested}, 0, 'submissionJWT.solutions_requested=0 (solutions hardwired off; fetch via /render-api/solution)');
+	is($sub_claims->{answers_requested},
+		1, 'submissionJWT.answers_requested=1 (showCorrectAnswers fired via render_permissions)');
+	is($sub_claims->{solutions_requested},
+		0, 'submissionJWT.solutions_requested=0 (solutions hardwired off; fetch via /render-api/solution)');
 
 	# play_sessionJWT carries no reveal claims (orchestrator handles cumulative).
 	my $session_jwt = $resp->{JWT}{session};
@@ -317,8 +330,7 @@ subtest 'challenge lane: submissionJWT carries *_requested per render' => sub {
 	my $sess_claims = decode_jwt(token => $session_jwt, key => $ENV{webworkJWTsecret});
 	ok(!exists $sess_claims->{answersRevealed},
 		'play_sessionJWT carries no answersRevealed (orchestrator-owned history)');
-	ok(!exists $sess_claims->{solutionsRevealed},
-		'play_sessionJWT carries no solutionsRevealed');
+	ok(!exists $sess_claims->{solutionsRevealed}, 'play_sessionJWT carries no solutionsRevealed');
 	ok(!exists $sess_claims->{answers_requested},
 		'play_sessionJWT carries no answers_requested (per-render, not session-state)');
 };

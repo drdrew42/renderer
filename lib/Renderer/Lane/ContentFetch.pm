@@ -34,13 +34,7 @@ sub apply ($c, $params, $expected_typ) {
 		return;
 	}
 
-	my $claims = eval {
-		decode_jwt(
-			token      => $jwt,
-			key        => $ENV{problemJWTsecret},
-			verify_aud => $ENV{SITE_HOST},
-		);
-	};
+	my $claims = eval { decode_jwt(token => $jwt, key => $ENV{problemJWTsecret}, verify_aud => $ENV{SITE_HOST},); };
 	if (my $err = $@) {
 		$c->log->info("Content-fetch JWT verify failed: $err");
 		$c->exception('Invalid or expired problemJWT', 401);

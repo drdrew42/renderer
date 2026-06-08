@@ -159,7 +159,7 @@ sub process_problem {
 		# and the per-submission submissionJWT (only on submit). These minters
 		# live side-by-side with generateJWTs; they share no state and emit
 		# different shapes (Artifact Shape doc, sibling envelopes).
-		$return_object->{sessionJWT} = generatePlaySessionJWT($return_object, $inputs_ref);
+		$return_object->{sessionJWT}    = generatePlaySessionJWT($return_object, $inputs_ref);
 		$return_object->{submissionJWT} = generateSubmissionJWT($return_object, $inputs_ref)
 			if $inputs_ref->{submitAnswers};
 	} elsif ($inputs_ref->{problemJWT} && $inputs_ref->{JWTanswerURL}) {
@@ -209,7 +209,7 @@ sub standaloneRenderer {
 
 	my $processAnswers = $inputs_ref->{processAnswers} // 1;
 
-	my $isSubmit     = defined($inputs_ref->{submitAnswers})  ? 1 : 0;
+	my $isSubmit = defined($inputs_ref->{submitAnswers}) ? 1 : 0;
 
 	# answersSubmitted is the cumulative "the student has submitted at some
 	# point in this play/session" flag — distinct from submitAnswers (this
@@ -233,7 +233,7 @@ sub standaloneRenderer {
 	# - Session locks when: student scores 100% OR showCorrectAnswers
 	#   (config-gated, see WW3-R02 / generateJWTs in Render.pm).
 	# - After lock: no answerJWT, no session updates.
-	my $perms = resolve_permissions($inputs_ref);
+	my $perms              = resolve_permissions($inputs_ref);
 	my $isInstructor       = $perms->{isInstructor};
 	my $showCorrectAnswers = $perms->{showCorrectAnswers};
 	my $showSolutions      = $perms->{showSolutions};
@@ -251,19 +251,19 @@ sub standaloneRenderer {
 	my $forceResults   = !$hideFeedback && $displayResults && $inputs_ref->{showPartialCorrectAnswers};
 
 	my $pg = WeBWorK::PG->new(
-		inputs_ref              => {%$inputs_ref},                        # preserve original values
-		sourceFilePath          => $inputs_ref->{sourceFilePath} // '',
-		r_source                => $problemFile,
-		problemSeed             => $inputs_ref->{problemSeed},
+		inputs_ref     => {%$inputs_ref},                        # preserve original values
+		sourceFilePath => $inputs_ref->{sourceFilePath} // '',
+		r_source       => $problemFile,
+		problemSeed    => $inputs_ref->{problemSeed},
 		# Content-addressed custom macros: inject source via envir so PG's
 		# loadMacros() finds them without filesystem search (PGloadfiles.pm).
 		($inputs_ref->{injectedMacros} ? (injectedMacros => $inputs_ref->{injectedMacros}) : ()),
 		processAnswers          => $processAnswers,
-		showFeedback            => $hideFeedback ? 0 : 1,                 # exam-mode kill-switch (outer gate)
-		showAttemptResults      => $displayResults,                       # respects showPartialCorrectAnswers
-		forceShowAttemptResults => $forceResults,                         # overrides showPartialCorrectAnswers
-		showAttemptAnswers      => 0,                                     # MathQuill renders inline as student types; no separate echo path
-		showAttemptPreviews     => 1,                                     # display LaTeX version of submitted answer
+		showFeedback            => $hideFeedback ? 0 : 1,    # exam-mode kill-switch (outer gate)
+		showAttemptResults      => $displayResults,          # respects showPartialCorrectAnswers
+		forceShowAttemptResults => $forceResults,            # overrides showPartialCorrectAnswers
+		showAttemptAnswers      => 0,                # MathQuill renders inline as student types; no separate echo path
+		showAttemptPreviews     => 1,                # display LaTeX version of submitted answer
 		showHints               => $showHints,
 		showSolutions           => $showSolutions,
 		showCorrectAnswers      => $showCorrectAnswers ? 2 : 0,
@@ -282,11 +282,10 @@ sub standaloneRenderer {
 		tempURL                 => 'pg_files/tmp/',
 		debuggingOptions        => {
 			show_resource_info          => $inputs_ref->{show_resource_info},
-			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info}
-				// $isInstructor,
-			show_pg_info           => $inputs_ref->{show_pg_info},
-			show_answer_hash_info  => $inputs_ref->{show_answer_hash_info},
-			show_answer_group_info => $inputs_ref->{show_answer_group_info}
+			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $isInstructor,
+			show_pg_info                => $inputs_ref->{show_pg_info},
+			show_answer_hash_info       => $inputs_ref->{show_answer_hash_info},
+			show_answer_group_info      => $inputs_ref->{show_answer_group_info}
 		}
 	);
 
@@ -477,9 +476,9 @@ sub generatePlaySessionJWT {
 	# Extract prior state + sequence from the inbound sessionJWT (already
 	# decoded by parseRequest into $inputs_ref via the generic claim merge).
 	# First render of a play has no inbound state — sequence starts at 0.
-	my $prev_seq      = $inputs_ref->{mint_sequence};
-	my $next_seq      = defined $prev_seq ? $prev_seq + 1 : 0;
-	my $prior_state   = (ref $inputs_ref->{state} eq 'HASH') ? $inputs_ref->{state} : {};
+	my $prev_seq    = $inputs_ref->{mint_sequence};
+	my $next_seq    = defined $prev_seq                    ? $prev_seq + 1        : 0;
+	my $prior_state = (ref $inputs_ref->{state} eq 'HASH') ? $inputs_ref->{state} : {};
 
 	# answersSubmitted: cumulative-once-submitted flag. Carry forward via the
 	# minted sessionJWT so subsequent renders' displayResults gate fires.
@@ -558,9 +557,8 @@ sub generateSubmissionJWT {
 
 	# ISO8601 UTC timestamp — matches the chain entry format the orchestrator
 	# expects (per Artifact Shape §submissionJWT).
-	my @t = gmtime();
-	my $submitted_at = sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ',
-		$t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
+	my @t            = gmtime();
+	my $submitted_at = sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
 
 	# WW3-R29: per-render reveal facts in the modern lane. Only *_requested
 	# (per-render); cumulative *_revealed lives in the orchestrator's chain
@@ -575,7 +573,7 @@ sub generateSubmissionJWT {
 		play_id          => $inputs_ref->{play_id},
 		challenge_id     => $inputs_ref->{challenge_id},
 		chain_student_id => $inputs_ref->{chain_student_id},
-		position         => $inputs_ref->{position} + 0,    # numeric
+		position         => $inputs_ref->{position} + 0,       # numeric
 
 		pg_hash => $inputs_ref->{pg_hash},
 		seed    => $inputs_ref->{problemSeed},

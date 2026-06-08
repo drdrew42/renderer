@@ -4,9 +4,9 @@ use strict;
 use warnings;
 
 use Mojo::IOLoop;
-use Mojo::JSON qw(encode_json decode_json);
+use Mojo::JSON   qw(encode_json decode_json);
 use MIME::Base64 qw(encode_base64 decode_base64);
-use Digest::SHA qw(sha256_hex);
+use Digest::SHA  qw(sha256_hex);
 use Renderer::Identity;
 use Renderer::Version qw(pg_version renderer_version);
 
@@ -20,7 +20,7 @@ my %PEERS;
 # Populated during OPL registration; may be extended with static peer origins later.
 my %PEER_ORIGINS;
 
-my $RETRY_INTERVAL = 30;  # seconds between registration retries
+my $RETRY_INTERVAL = 30;    # seconds between registration retries
 
 # Register this renderer with the OPL.
 # Fires a POST to $OPL_API_URL/api/renderers/register with a signed payload
@@ -90,8 +90,7 @@ sub _load_static_peers {
 		}
 		$PEERS{$name} = $raw_key;
 		$count++;
-		$app->log->info("Registration: pinned peer '$name' ("
-			. substr(sha256_hex($raw_key), 0, 16) . "...)");
+		$app->log->info("Registration: pinned peer '$name' (" . substr(sha256_hex($raw_key), 0, 16) . "...)");
 	}
 
 	$app->log->info("Registration: loaded $count static peer(s)") if $count;
@@ -108,9 +107,9 @@ sub _attempt_register {
 		renderer_version => renderer_version(),
 	});
 
-	my $sig = Renderer::Identity::sign($payload);
+	my $sig     = Renderer::Identity::sign($payload);
 	my %headers = (
-		'Content-Type'         => 'application/json',
+		'Content-Type'          => 'application/json',
 		'X-Telemetry-PublicKey' => Renderer::Identity::public_key_b64(),
 		'X-Telemetry-Signature' => encode_base64($sig, ''),
 	);
@@ -127,12 +126,13 @@ sub _attempt_register {
 				if (length($opl_key) == 32) {
 					$PEERS{opl} = $opl_key;
 					$app->log->info("Registration: success — OPL pubkey stored as peer 'opl' ("
-						. substr(sha256_hex($opl_key), 0, 16) . "...)");
+							. substr(sha256_hex($opl_key), 0, 16)
+							. "...)");
 				} else {
 					$app->log->warn("Registration: OPL public_key not a 32-byte Ed25519 key");
 				}
 				if (my $origin = $body->{origin}) {
-					$origin =~ s{/+$}{};  # strip trailing slash
+					$origin =~ s{/+$}{};    # strip trailing slash
 					$PEER_ORIGINS{$origin} = 1;
 					$app->log->info("Registration: CORS origin learned — $origin");
 				}
@@ -153,9 +153,11 @@ sub _attempt_register {
 
 sub _schedule_retry {
 	my ($app, $callback_url) = @_;
-	Mojo::IOLoop->timer($RETRY_INTERVAL => sub {
-		_attempt_register($app, $callback_url) unless $PEERS{opl};
-	});
+	Mojo::IOLoop->timer(
+		$RETRY_INTERVAL => sub {
+			_attempt_register($app, $callback_url) unless $PEERS{opl};
+		}
+	);
 }
 
 sub _build_callback_url {
@@ -189,9 +191,7 @@ sub _build_callback_url {
 
 sub _fetch_task_ipv4 {
 	my ($app, $meta_uri) = @_;
-	my $tx = eval {
-		$app->ua->connect_timeout(2)->request_timeout(2)->get("$meta_uri/task")
-	};
+	my $tx = eval { $app->ua->connect_timeout(2)->request_timeout(2)->get("$meta_uri/task") };
 	return undef if $@ || !$tx;
 	my $res = $tx->result or return undef;
 	return undef unless $res->is_success;
@@ -214,10 +214,10 @@ sub _fetch_task_ipv4 {
 #
 # Returns (ok => 0|1, reason => string). Reason is short, log-safe, and describes
 # the *failure* on ok=0; on ok=1 it is "ok".
-my $PEER_TIMESTAMP_SKEW = 300;  # seconds
+my $PEER_TIMESTAMP_SKEW = 300;    # seconds
 
 sub verify_peer_signature {
-	my (%args) = @_;
+	my (%args)    = @_;
 	my $method    = $args{method}    // '';
 	my $path      = $args{path}      // '';
 	my $timestamp = $args{timestamp} // '';
@@ -225,10 +225,10 @@ sub verify_peer_signature {
 	my $peer_name = $args{peer_name} // '';
 	my $sig_b64   = $args{signature} // '';
 
-	return (ok => 0, reason => 'missing peer name')      unless length $peer_name;
-	return (ok => 0, reason => 'missing signature')      unless length $sig_b64;
-	return (ok => 0, reason => 'missing timestamp')      unless length $timestamp;
-	return (ok => 0, reason => 'malformed timestamp')    unless $timestamp =~ /^\d+$/;
+	return (ok => 0, reason => 'missing peer name')   unless length $peer_name;
+	return (ok => 0, reason => 'missing signature')   unless length $sig_b64;
+	return (ok => 0, reason => 'missing timestamp')   unless length $timestamp;
+	return (ok => 0, reason => 'malformed timestamp') unless $timestamp =~ /^\d+$/;
 
 	my $pubkey = $PEERS{$peer_name};
 	return (ok => 0, reason => "unknown peer '$peer_name'") unless $pubkey;
@@ -253,10 +253,14 @@ sub verify_peer_signature {
 }
 
 # Generalized peer accessors.
-sub peer_public_key     { my ($name) = @_; return $PEERS{ $name // '' } }
-sub has_peer_public_key { my ($name) = @_; my $k = $PEERS{ $name // '' };
-	return defined $k && length($k) == 32 }
-sub peer_names          { return keys %PEERS }
+sub peer_public_key { my ($name) = @_; return $PEERS{ $name // '' } }
+
+sub has_peer_public_key {
+	my ($name) = @_;
+	my $k = $PEERS{ $name // '' };
+	return defined $k && length($k) == 32;
+}
+sub peer_names { return keys %PEERS }
 
 # Backward-compat shims for callers that expect the OPL-singleton interface.
 sub opl_public_key     { return $PEERS{opl} }

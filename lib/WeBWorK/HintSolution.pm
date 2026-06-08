@@ -53,16 +53,16 @@ sub _render_and_filter ($p, %opts) {
 			# one type of content. Setting only the one that matches the mode
 			# keeps PG from emitting the other type's divs (smaller DOM to
 			# parse, less work to do).
-			showSolutions  => $mode eq 'solution' ? 1 : 0,
-			showHints      => $mode eq 'hint'     ? 1 : 0,
+			showSolutions => $mode eq 'solution' ? 1 : 0,
+			showHints     => $mode eq 'hint'     ? 1 : 0,
 			# No answer scoring — these endpoints don't grade anything.
 			processAnswers => 0,
 			# Force HTML output. PG's SOLUTION/HINT macros emit different
 			# wrappers for TeX/PTX modes; we always want the .hint/.solution
 			# accordion divs that DOM filtering targets.
-			displayMode    => 'MathJax',
-			problemSeed    => $p->{problemSeed} // 1234,
-			r_source       => \$source,
+			displayMode => 'MathJax',
+			problemSeed => $p->{problemSeed} // 1234,
+			r_source    => \$source,
 			# Content-addressed custom macros: source bytes for custom/override
 			# macros live only in the content cache, not on disk. Without this
 			# wiring, loadMacros() for chemQuillMath / contextInexactValue /
@@ -73,7 +73,7 @@ sub _render_and_filter ($p, %opts) {
 			# State-conditional content (a hint reading $inputs{...}) flows
 			# through PG's normal inputs_ref plumbing. Empty hashref for the
 			# stateless case (the typical case).
-			inputs_ref     => $p->{inputs_ref} // {},
+			inputs_ref => $p->{inputs_ref} // {},
 		);
 
 		# Render failure: PG sets error_flag and accumulates messages in
@@ -90,15 +90,11 @@ sub _render_and_filter ($p, %opts) {
 		# one HINT/SOLUTION macro fired during document evaluation. If a
 		# problem has no hint/solution blocks at all, skip the DOM walk and
 		# return the empty shape immediately.
-		my $exists_flag = $mode eq 'solution'
-			? $pg->{flags}{solutionExists}
-			: $pg->{flags}{hintExists};
+		my $exists_flag = $mode eq 'solution' ? $pg->{flags}{solutionExists} : $pg->{flags}{hintExists};
 
 		unless ($exists_flag) {
 			$pg->free;
-			return $mode eq 'hint'
-				? { hints    => [] }
-				: { solution => undef };
+			return $mode eq 'hint' ? { hints => [] } : { solution => undef };
 		}
 
 		# DOM filter — extract the .accordion-body content from each
@@ -110,9 +106,7 @@ sub _render_and_filter ($p, %opts) {
 
 		$pg->free;
 
-		return $mode eq 'hint'
-			? { hints    => \@bodies }
-			: { solution => $bodies[0] };
+		return $mode eq 'hint' ? { hints => \@bodies } : { solution => $bodies[0] };
 	})->catch(sub {
 		my $err = shift;
 		return { error => "$err", status => 500 };

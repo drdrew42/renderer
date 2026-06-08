@@ -28,11 +28,13 @@ get '/api/problems/hash/:pg_hash' => sub ($c) {
 	my $pg_hash = $c->stash('pg_hash');
 	my $etag    = $c->req->headers->header('If-None-Match') // '';
 	return $c->rendered(304) if $etag && $etag eq $pg_hash;
-	return $c->render(json => {
-		raw_source => "DOCUMENT(); # source for $pg_hash\nENDDOCUMENT();",
-		pg_hash    => $pg_hash,
-		macros     => [],
-	});
+	return $c->render(
+		json => {
+			raw_source => "DOCUMENT(); # source for $pg_hash\nENDDOCUMENT();",
+			pg_hash    => $pg_hash,
+			macros     => [],
+		}
+	);
 };
 
 # Macro fetch: name-form 302→hash-form. Hash-form returns the macro source.
@@ -91,8 +93,7 @@ subtest 'fetch_problem_p with non-matching etag → 200 (cache miss)' => sub {
 	my $url  = "/api/problems/hash/$hash";
 
 	my $captured;
-	$client->fetch_problem_p($url, etag => 'sha256:stale-hash')
-		->then(sub { $captured = shift })->wait;
+	$client->fetch_problem_p($url, etag => 'sha256:stale-hash')->then(sub { $captured = shift })->wait;
 
 	is($captured->{pg_hash}, $hash, 'fresh hash returned (mock honors If-None-Match)');
 	ok(!$captured->{not_modified}, 'no not_modified when etag differs');
@@ -103,10 +104,8 @@ subtest 'fetch_problem_p with non-matching etag → 200 (cache miss)' => sub {
 subtest 'fetch_macro: name-form URL redirects to hash-form, canonical hash returned' => sub {
 	my ($body, $canonical_hash) = $client->fetch_macro('/api/macros/contextSomething.pl');
 
-	like($body, qr/macro source for $canonical_for_name/,
-		'body comes from final (hash-form) URL');
-	is($canonical_hash, $canonical_for_name,
-		'canonical hash extracted from final URL after redirect');
+	like($body, qr/macro source for $canonical_for_name/, 'body comes from final (hash-form) URL');
+	is($canonical_hash, $canonical_for_name, 'canonical hash extracted from final URL after redirect');
 };
 
 subtest 'fetch_macro: hash-form URL stays as-is' => sub {
@@ -114,8 +113,7 @@ subtest 'fetch_macro: hash-form URL stays as-is' => sub {
 	my ($body, $canonical_hash) = $client->fetch_macro("/api/macros/$direct_hash");
 
 	like($body, qr/macro source for $direct_hash/, 'body delivered');
-	is($canonical_hash, $direct_hash,
-		'hash extracted directly when no redirect needed');
+	is($canonical_hash, $direct_hash, 'hash extracted directly when no redirect needed');
 };
 
 done_testing();

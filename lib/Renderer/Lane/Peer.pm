@@ -47,7 +47,7 @@ sub verify ($c) {
 		timestamp => $peer_ts // '',
 		body      => $c->req->body,
 		peer_name => $peer_name // '',
-		signature => $peer_sig // '',
+		signature => $peer_sig  // '',
 	);
 	unless ($result{ok}) {
 		$c->log->error("Peer signature verification failed: $result{reason}");
@@ -65,9 +65,9 @@ sub verify ($c) {
 # arrive as Lane::Problem requests and emit answerJWTs normally via the
 # claim-merge / emission-gate path.
 sub apply_body ($c, $params) {
-	$params->{aud}            = $ENV{SITE_HOST};
+	$params->{aud} = $ENV{SITE_HOST};
 	$params->{isInstructor} //= 0;
-	$params->{sessionID}    ||= time;
+	$params->{sessionID} ||= time;
 	$params->{problemJWT} = mint_jwt(
 		$ENV{problemJWTsecret}, $params,
 		alg => 'PBES2-HS512+A256KW',

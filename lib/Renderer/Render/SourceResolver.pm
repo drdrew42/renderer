@@ -45,13 +45,14 @@ sub _trace ($c, $event, %fields) {
 async sub resolve_source ($c, $inputs_ref) {
 
 	if ($inputs_ref->{problemSourceURL}) {
-		_trace($c, 'input',
+		_trace(
+			$c, 'input',
 			kind => 'url',
 			url  => $inputs_ref->{problemSourceURL},
 			(defined $inputs_ref->{pg_hash} ? (hash_hint => $inputs_ref->{pg_hash}) : ()),
 		);
-		my ($source, $pg_hash)
-			= await fetch_remote_source_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash});
+		my ($source, $pg_hash) =
+			await fetch_remote_source_p($c, $inputs_ref->{problemSourceURL}, $inputs_ref->{pg_hash});
 		return $c->exception('Failed to retrieve problem source.', 500) unless $source;
 
 		$inputs_ref->{problemSource} = $source;
@@ -65,17 +66,18 @@ async sub resolve_source ($c, $inputs_ref) {
 	}
 
 	if ($ENV{CONTENT_ADDRESSED} && $inputs_ref->{sourceFilePath}) {
-		_trace($c, 'input',
+		_trace(
+			$c, 'input',
 			kind => 'path',
 			path => $inputs_ref->{sourceFilePath},
-			(defined $inputs_ref->{pg_hash}    ? (hash_hint     => $inputs_ref->{pg_hash}) : ()),
-			(defined $inputs_ref->{problemSource} ? (editor_preview => 1)                  : ()),
+			(defined $inputs_ref->{pg_hash}       ? (hash_hint      => $inputs_ref->{pg_hash}) : ()),
+			(defined $inputs_ref->{problemSource} ? (editor_preview => 1)                      : ()),
 		);
 		if ($inputs_ref->{problemSource}) {
 			# Editor preview: use the editor's source but resolve the path
 			# for macro dependencies (pg_hash → injectedMacros at render time).
-			my (undef, $pg_hash)
-				= await resolve_source_file_path_p($c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash});
+			my (undef, $pg_hash) =
+				await resolve_source_file_path_p($c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash});
 			if ($pg_hash) {
 				$inputs_ref->{pg_hash}        = $pg_hash;
 				$inputs_ref->{sourceFilePath} = Renderer::ContentCache::problem_path($pg_hash);
@@ -83,8 +85,8 @@ async sub resolve_source ($c, $inputs_ref) {
 			return 1;
 		}
 
-		my ($source, $pg_hash)
-			= await resolve_source_file_path_p($c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash});
+		my ($source, $pg_hash) =
+			await resolve_source_file_path_p($c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash});
 		return $c->exception("Cannot resolve sourceFilePath: $inputs_ref->{sourceFilePath}", 404)
 			unless $source && $pg_hash;
 
@@ -128,7 +130,8 @@ sub fetch_remote_source_p ($c, $url, $pg_hash_hint = undef) {
 					$c->stash(_cache_status => 'hit');
 					return Mojo::Promise->resolve($cached_source, $pg_hash);
 				}
-				_trace($c, 'verify_failed',
+				_trace(
+					$c, 'verify_failed',
 					hash                        => $pg_hash,
 					macros_missing_from_disk    => $report->{macros_missing_from_disk},
 					load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},
@@ -230,7 +233,9 @@ sub _stage_problem_response ($c, $result, $url) {
 	my @macros_to_link;
 	my @fetch_failures;
 	for my $macro (@{ $result->{macros} // [] }) {
-		next unless $macro->{hash} && $macro->{source_type}
+		next
+			unless $macro->{hash}
+			&& $macro->{source_type}
 			&& ($macro->{source_type} eq 'custom' || $macro->{source_type} eq 'override');
 
 		my $cache_hash = $macro->{hash};
@@ -256,19 +261,20 @@ sub _stage_problem_response ($c, $result, $url) {
 			}
 		}
 
-		push @macros_to_link, {
-			name        => $macro->{name},
-			hash        => $cache_hash,
-			source_type => $macro->{source_type},
-		};
+		push @macros_to_link,
+			{
+				name        => $macro->{name},
+				hash        => $cache_hash,
+				source_type => $macro->{source_type},
+			};
 	}
 
 	if (@fetch_failures) {
 		$c->log->error(
 			"ContentCache stage aborted — macro fetch failures",
-			pg_hash         => $fetched_hash,
-			url             => $url,
-			failed_macros   => \@fetch_failures,
+			pg_hash       => $fetched_hash,
+			url           => $url,
+			failed_macros => \@fetch_failures,
 		);
 		$c->stash(_cache_status => 'stage_failed');
 		return (undef, undef);
@@ -305,7 +311,7 @@ sub resolve_source_file_path_p ($c, $file_path, $pg_hash_hint = undef) {
 
 	# 1. Path index + cache — zero network (unless noCache)
 	my $no_cache = $c->stash('_no_cache');
-	my $pg_hash = $no_cache ? undef : ($pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized));
+	my $pg_hash  = $no_cache ? undef : ($pg_hash_hint || Renderer::ContentCache::pg_hash_for_path($normalized));
 	if ($no_cache) {
 		_trace($c, 'no_cache');
 	} elsif ($pg_hash_hint) {
@@ -332,7 +338,8 @@ sub resolve_source_file_path_p ($c, $file_path, $pg_hash_hint = undef) {
 				return Mojo::Promise->resolve($cached_source, $pg_hash, undef);
 			}
 
-			_trace($c, 'verify_failed',
+			_trace(
+				$c, 'verify_failed',
 				hash                        => $pg_hash,
 				macros_missing_from_disk    => $report->{macros_missing_from_disk},
 				load_macros_not_in_manifest => $report->{load_macros_not_in_manifest},

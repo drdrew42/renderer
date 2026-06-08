@@ -14,8 +14,8 @@ use lib File::Spec->catdir(dirname(__FILE__), '..', '..', 'PG', 'lib');
 use WWSafe;
 
 use Renderer::OPLAuthed qw(verify_request);
-use Renderer::Log qw(iso8601_now);
-use Renderer::Version qw(pg_version renderer_version);
+use Renderer::Log       qw(iso8601_now);
+use Renderer::Version   qw(pg_version renderer_version);
 
 # POST /render-api/audit
 # Ed25519-signed by OPL. Safe-compiles a single macro and returns
@@ -36,7 +36,7 @@ use Renderer::Version qw(pg_version renderer_version);
 
 # Concurrency guard independent of the render callback pool so a burst
 # of audits doesn't starve live renders (and vice versa).
-my $AUDIT_SEMAPHORE = 0;
+my $AUDIT_SEMAPHORE      = 0;
 my $AUDIT_MAX_CONCURRENT = $ENV{AUDIT_MAX_CONCURRENT} // 4;
 
 sub audit ($c) {
@@ -46,9 +46,12 @@ sub audit ($c) {
 	my $macro_hash   = $req->{macro_hash};
 	my $macro_source = $req->{macro_source};
 	unless ($macro_name && $macro_hash && defined $macro_source) {
-		return $c->render(json => {
-			error => 'missing macro_name, macro_hash, or macro_source',
-		}, status => 400);
+		return $c->render(
+			json => {
+				error => 'missing macro_name, macro_hash, or macro_source',
+			},
+			status => 400
+		);
 	}
 
 	if ($AUDIT_SEMAPHORE >= $AUDIT_MAX_CONCURRENT) {
@@ -57,30 +60,33 @@ sub audit ($c) {
 	$AUDIT_SEMAPHORE++;
 
 	my $result;
-	eval {
-		$result = _perform_audit($macro_source);
-	};
+	eval { $result = _perform_audit($macro_source); };
 	my $err = $@;
 	$AUDIT_SEMAPHORE--;
 
 	if ($err || !$result) {
 		$c->log->warn("Audit failed for $macro_name ($macro_hash): " . ($err // 'unknown'));
-		return $c->render(json => {
-			error      => 'audit internal error',
-			macro_hash => $macro_hash,
-		}, status => 500);
+		return $c->render(
+			json => {
+				error      => 'audit internal error',
+				macro_hash => $macro_hash,
+			},
+			status => 500
+		);
 	}
 
-	$c->render(json => {
-		macro_hash        => $macro_hash,
-		warnings_frontend => $result->{warnings_frontend},
-		warnings_backend  => $result->{warnings_backend},
-		errors            => $result->{errors},
-		compiled          => $result->{compiled} ? \1 : \0,
-		renderer_version  => renderer_version(),
-		pg_version        => pg_version(),
-		audited_at        => iso8601_now(),
-	});
+	$c->render(
+		json => {
+			macro_hash        => $macro_hash,
+			warnings_frontend => $result->{warnings_frontend},
+			warnings_backend  => $result->{warnings_backend},
+			errors            => $result->{errors},
+			compiled          => $result->{compiled} ? \1 : \0,
+			renderer_version  => renderer_version(),
+			pg_version        => pg_version(),
+			audited_at        => iso8601_now(),
+		}
+	);
 }
 
 # Safe-compile the macro source and collect warnings.  No exceptions leak
@@ -129,8 +135,8 @@ sub _perform_audit ($source) {
 		local $^W = 1;
 		local $SIG{__WARN__} = sub {
 			my ($msg, $backend_flag) = @_;
-			if ($backend_flag) { push @backend_raw,  $msg }
-			else               { push @frontend_raw, $msg }
+			if   ($backend_flag) { push @backend_raw,  $msg }
+			else                 { push @frontend_raw, $msg }
 		};
 		# Reset $SIG{__DIE__} to default so Mojolicious's global die
 		# handler (which tries to construct a Mojo::Exception) doesn't
@@ -179,7 +185,7 @@ sub _structure_warning ($raw) {
 	if ($msg =~ /\bat\s+\(eval\s+\d+\)\s+line\s+(\d+)/) {
 		$line = $1 + 0;
 	}
-	$msg =~ s/\s+$//;  # trailing newline
+	$msg =~ s/\s+$//;    # trailing newline
 	return {
 		message  => $msg,
 		line     => $line,

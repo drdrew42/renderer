@@ -17,7 +17,7 @@ use Mojo::JSON qw(decode_json encode_json);
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -32,16 +32,16 @@ unless (-f "$render_root/logs/resource_usage.log") {
 sub make_submission_jwt {
 	my (%overrides) = @_;
 	my $payload = {
-		iss              => $ENV{SITE_HOST},
-		aud              => $ENV{SITE_HOST},
-		play_id          => '11111111-1111-1111-1111-111111111111',
-		challenge_id     => 'sha256:abcdef',
-		chain_student_id => 'cafebabe',
-		position         => 0,
-		pg_hash          => 'sha256:p0',
-		seed             => 11111,
+		iss               => $ENV{SITE_HOST},
+		aud               => $ENV{SITE_HOST},
+		play_id           => '11111111-1111-1111-1111-111111111111',
+		challenge_id      => 'sha256:abcdef',
+		chain_student_id  => 'cafebabe',
+		position          => 0,
+		pg_hash           => 'sha256:p0',
+		seed              => 11111,
 		submitted_answers => {
-			'AnSwEr0001'         => '42',
+			'AnSwEr0001'           => '42',
 			'MaThQuIlL_AnSwEr0001' => '42',
 		},
 		part_scores  => [1],
@@ -136,24 +136,28 @@ subtest 'submissionJWT + challengeJWT → 400 ambiguous' => sub {
 		key => $ENV{problemJWTsecret},
 		alg => 'HS256',
 	);
-	$t->post_ok('/render-api' => form => {
-		submissionJWT => $sub_jwt,
-		challengeJWT  => $ch_jwt,
-	})->status_is(400);
+	$t->post_ok(
+		'/render-api' => form => {
+			submissionJWT => $sub_jwt,
+			challengeJWT  => $ch_jwt,
+		}
+	)->status_is(400);
 	like($t->tx->res->body, qr/Ambiguous/i, 'response mentions ambiguous envelope');
 };
 
 subtest 'submissionJWT + problemJWT → 400 ambiguous' => sub {
-	my $sub_jwt = make_submission_jwt();
+	my $sub_jwt  = make_submission_jwt();
 	my $prob_jwt = encode_jwt(
 		payload => { aud => $ENV{SITE_HOST}, iss => $ENV{SITE_HOST} },
 		key     => $ENV{problemJWTsecret},
 		alg     => 'HS256',
 	);
-	$t->post_ok('/render-api' => form => {
-		submissionJWT => $sub_jwt,
-		problemJWT    => $prob_jwt,
-	})->status_is(400);
+	$t->post_ok(
+		'/render-api' => form => {
+			submissionJWT => $sub_jwt,
+			problemJWT    => $prob_jwt,
+		}
+	)->status_is(400);
 	like($t->tx->res->body, qr/Ambiguous/i);
 };
 
@@ -161,28 +165,34 @@ subtest 'submissionJWT + problemJWT → 400 ambiguous' => sub {
 
 subtest 'submissionJWT missing pg_hash → 400' => sub {
 	my $jwt = make_submission_jwt(pg_hash => undef);
-	$t->post_ok('/render-api' => form => {
-		submissionJWT => $jwt,
-		problemSource => $pg_source,
-	})->status_is(400);
+	$t->post_ok(
+		'/render-api' => form => {
+			submissionJWT => $jwt,
+			problemSource => $pg_source,
+		}
+	)->status_is(400);
 	like($t->tx->res->body, qr/pg_hash/i, 'error names the missing claim');
 };
 
 subtest 'submissionJWT missing seed → 400' => sub {
 	my $jwt = make_submission_jwt(seed => undef);
-	$t->post_ok('/render-api' => form => {
-		submissionJWT => $jwt,
-		problemSource => $pg_source,
-	})->status_is(400);
+	$t->post_ok(
+		'/render-api' => form => {
+			submissionJWT => $jwt,
+			problemSource => $pg_source,
+		}
+	)->status_is(400);
 	like($t->tx->res->body, qr/seed/i, 'error names the missing claim');
 };
 
 subtest 'submissionJWT missing position → 400' => sub {
 	my $jwt = make_submission_jwt(position => undef);
-	$t->post_ok('/render-api' => form => {
-		submissionJWT => $jwt,
-		problemSource => $pg_source,
-	})->status_is(400);
+	$t->post_ok(
+		'/render-api' => form => {
+			submissionJWT => $jwt,
+			problemSource => $pg_source,
+		}
+	)->status_is(400);
 	like($t->tx->res->body, qr/position/i, 'error names the missing claim');
 };
 
@@ -218,20 +228,22 @@ subtest 'empty-string submissionJWT treated as not-present' => sub {
 
 subtest 'submissionJWT with bad signature → croak' => sub {
 	my $payload = {
-		iss              => $ENV{SITE_HOST},
-		aud              => $ENV{SITE_HOST},
-		play_id          => '11111111-1111-1111-1111-111111111111',
-		position         => 0,
-		pg_hash          => 'sha256:p0',
-		seed             => 11111,
+		iss               => $ENV{SITE_HOST},
+		aud               => $ENV{SITE_HOST},
+		play_id           => '11111111-1111-1111-1111-111111111111',
+		position          => 0,
+		pg_hash           => 'sha256:p0',
+		seed              => 11111,
 		submitted_answers => { 'AnSwEr0001' => '42' },
 	};
 	my $bogus = encode_jwt(payload => $payload, alg => 'HS256', key => 'totally-different-secret___');
 
-	$t->post_ok('/render-api' => form => {
-		submissionJWT => $bogus,
-		problemSource => $pg_source,
-	});
+	$t->post_ok(
+		'/render-api' => form => {
+			submissionJWT => $bogus,
+			problemSource => $pg_source,
+		}
+	);
 	# croak() returns the standard renderer error envelope; status is the
 	# renderer's croak-code (3) → 500-class. Just verify it didn't render
 	# successfully against the forged token.
