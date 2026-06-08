@@ -163,17 +163,6 @@
 					</ul>
 				</div>
 			% }
-			% # Internal debug messages generated within PGcore.
-			% if (ref $rh_result->{internal_debug_messages} eq 'ARRAY' && @{ $rh_result->{internal_debug_messages} }) {
-				<div class="Warnings alert alert-danger p-1">
-					<h3>Internal errors</h3>
-					<ul>
-						% for (@{ $rh_result->{internal_debug_messages} }) {
-							<li><code><%== $_ %></code></li>
-						% }
-					</ul>
-				</div>
-			% }
 			% if ($rh_result->{inputs_ref}{clientDebug}) {
 				<h3>Webwork client data</h3>
 				%== $pretty_print->($rh_result)

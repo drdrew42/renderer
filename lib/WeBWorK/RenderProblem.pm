@@ -303,9 +303,8 @@ sub standaloneRenderer {
 		flags            => $pg->{flags},
 	};
 	if (ref($pg->{pgcore}) eq 'PGcore') {
-		$ret->{internal_debug_messages} = $pg->{pgcore}->get_internal_debug_messages();
-		$ret->{warning_messages}        = $pg->{pgcore}->get_warning_messages();
-		$ret->{debug_messages}          = $pg->{pgcore}->get_debug_messages();
+		$ret->{warning_messages} = $pg->{pgcore}->get_warning_messages();
+		$ret->{debug_messages}   = $pg->{pgcore}->get_debug_messages();
 		# $ret->{resources}                = [ keys %{ $pg->{pgcore}{PG_alias}{resource_list} } ];
 		$ret->{PERSISTENCE_HASH_UPDATED} = $pg->{pgcore}{PERSISTENCE_HASH_UPDATED};
 		$ret->{PERSISTENCE_HASH}         = $pg->{pgcore}{PERSISTENCE_HASH};
@@ -324,7 +323,7 @@ sub standaloneRenderer {
 				keys %{ $pg->{pgcore}{PG_alias}{resource_list} }
 		};
 	} else {
-		$ret->{internal_debug_messages} = ['Problem failed during render - no PGcore received.'];
+		$ret->{warning_messages} = ['Problem failed during render - no PGcore received.'];
 	}
 	$pg->free;
 	return $ret;

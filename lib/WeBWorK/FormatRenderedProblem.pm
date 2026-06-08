@@ -329,8 +329,7 @@ sub jsonResponse {
 		debug        => {
 			perl_warn => $rh_result->{WARNINGS},
 			pg_warn   => $rh_result->{warning_messages},
-			debug     => $rh_result->{debug_messages},
-			internal  => $rh_result->{internal_debug_messages}
+			debug     => $rh_result->{debug_messages}
 		},
 		problem_result => $rh_result->{problem_result},
 		problem_state  => $rh_result->{problem_state},
