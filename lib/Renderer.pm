@@ -359,12 +359,20 @@ sub _register_routes ($self) {
 	$r->any(
 		'/health' => sub ($c) {
 			my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };
+			# LTC-078: report both facts. `commit` is baked at build (rides the
+			# image digest through ecrpromote); `release` is injected at promote
+			# (RELEASE_VERSION, null until set). `renderer_version` = release when
+			# set, else commit — the "what shipped" field, backward compatible.
+			my $commit  = Renderer::Version::renderer_version();
+			my $release = Renderer::Version::renderer_release();
 			$c->render(
 				json => {
 					status           => $ok ? 'ok' : 'error',
 					service          => 'Renderer',
 					pg_version       => Renderer::Version::pg_version(),
-					renderer_version => Renderer::Version::renderer_version(),
+					renderer_version => $release // $commit,
+					commit           => $commit,
+					release          => $release,
 				},
 				status => $ok ? 200 : 503
 			);
