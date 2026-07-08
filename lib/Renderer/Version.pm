@@ -21,6 +21,11 @@ sub renderer_version { return $ENV{VERSION} // 'unknown' }
 # the release is NOT known at build and cannot be baked — hence a runtime env,
 # not $VERSION. undef until the promote step sets it. Reported on /health only;
 # NOT used for audit/telemetry/federation, which want the exact commit.
-sub renderer_release { return $ENV{RELEASE_VERSION} }
+# Treat empty-string as unset: compose/CFN pass RELEASE_VERSION="" (present but
+# empty) when no release is named, and a bare `//` would take "" over the commit.
+sub renderer_release {
+	my $r = $ENV{RELEASE_VERSION};
+	return (defined $r && length $r) ? $r : undef;
+}
 
 1;
