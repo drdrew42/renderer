@@ -38,6 +38,7 @@ use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
 use Renderer::Constants qw(SENSITIVE_PARAMS);
+use Renderer::RenderMode qw(resolve_render_mode);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(dispatch);
@@ -48,6 +49,18 @@ sub dispatch ($c) {
 
 	_parse_envelope($c, \%params, \%ctx) or return;
 	_apply_lanes($c, \%params, \%ctx)    or return;
+
+	# Mode resolution runs HERE — parent process, post-claim-merge, pre-fork.
+	# Flattens the renderMode intent claim into the primitive flag bundle so
+	# the resolved primitives are visible to both the rendering subprocess
+	# (where PG and standaloneRenderer run) AND the format layer (which
+	# runs back in the parent after the subprocess returns). Putting it
+	# inside the subprocess would lose the format-layer flags across the
+	# fork boundary — Storable serialization only carries return values back,
+	# not mutated inputs_ref.
+	if (my $overrides = resolve_render_mode(\%params)) {
+		$c->stash(_mode_overrides => $overrides) if @$overrides;
+	}
 
 	return \%params;
 }

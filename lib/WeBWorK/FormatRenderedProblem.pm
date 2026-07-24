@@ -202,9 +202,11 @@ sub formatRenderedProblem {
 		# the actual render resolved to 1.
 		my $perms = Renderer::Permissions::resolve_permissions($inputs_ref);
 		my $debug = {
-			lane        => $trust_lane,
-			permissions => $perms,
-			problem     => {
+			lane           => $trust_lane,
+			permissions    => $perms,
+			renderMode     => $inputs_ref->{renderMode},
+			mode_overrides => $c->stash('_mode_overrides') // [],
+			problem        => {
 				pg_hash        => $inputs_ref->{pg_hash}        // '',
 				sourceFilePath => $inputs_ref->{sourceFilePath} // '',
 				problemSeed    => $inputs_ref->{problemSeed},

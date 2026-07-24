@@ -223,6 +223,21 @@ sub standaloneRenderer {
 	# OR them together so any signal triggers it.
 	$inputs_ref->{answersSubmitted} ||= $isSubmit;
 
+	# Collapse the hideAttemptsTable alias into canonical hideFeedback before
+	# mode resolution. Lets the mode's override posture work correctly — a
+	# mode setting hideFeedback=0 (e.g. "default") wins over a stale legacy
+	# alias claim. DEPRECATED: remove this collapse after Summer 2026 along
+	# with the alias itself.
+	$inputs_ref->{hideFeedback} ||= $inputs_ref->{hideAttemptsTable}
+		if $inputs_ref->{hideAttemptsTable};
+
+	# Render-mode resolution happened upstream in
+	# Renderer::Render::ParseRequest::dispatch — pre-fork, parent process.
+	# By the time we get here, $inputs_ref already carries the resolved
+	# primitive flags (hideFeedback, hideCheckAnswersButton,
+	# showCorrectAnswersButton, isInstructor, etc.). Mode-aware logic ends
+	# at the dispatch layer; everything from this point on reads primitives.
+
 	# Permission model — see Renderer::Permissions for the full rule set.
 	# Single decision point; no defaulting logic in this function. PG's 0/2
 	# magic value for showCorrectAnswers is the only translation that stays
@@ -239,14 +254,12 @@ sub standaloneRenderer {
 	my $showSolutions      = $perms->{showSolutions};
 	my $showHints          = $perms->{showHints};
 
-	# Exam-mode suppression: when the caller (via JWT claim) asserts
-	# hideFeedback, kill the PG content post-processor entirely. No
-	# verdict CSS, no popovers, no button, no summary text built. Layer 1
-	# (answer eval) and Layer 4 (answerJWT to JWTanswerURL) are untouched —
-	# the orchestrator still gets full grading data. See
+	# Feedback suppression: hideFeedback (set via mode bundle or claim) kills
+	# the PG content post-processor entirely — no verdict CSS, no popovers,
+	# no button, no summary text built. Layer 1 (answer eval) and Layer 4
+	# (answerJWT to JWTanswerURL) are untouched. See
 	# vault://WeBWorK/PG/Render Flag Inventory.
-	# `hideAttemptsTable` is an accepted alias — same cascade, same effect.
-	my $hideFeedback   = ($inputs_ref->{hideFeedback} || $inputs_ref->{hideAttemptsTable}) ? 1 : 0;
+	my $hideFeedback   = $inputs_ref->{hideFeedback} ? 1 : 0;
 	my $displayResults = !$hideFeedback && $inputs_ref->{answersSubmitted} ? 1 : 0;
 	my $forceResults   = !$hideFeedback && $displayResults && $inputs_ref->{showPartialCorrectAnswers};
 
