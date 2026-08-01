@@ -96,6 +96,41 @@ async sub resolve_source ($c, $inputs_ref) {
 		return 1;
 	}
 
+	# pg_hash alone — the caller names the CONTENT and lets us decide where it
+	# lives (WW3-089). Last among the resolvers because pg_hash is also a
+	# cache HINT alongside a URL or a path; this branch is only the case where
+	# it is the sole thing we were given.
+	#
+	# This is the shape the play and reView lanes already use: Lane::Review
+	# synthesizes problemSourceURL from its JWT's pg_hash rather than letting
+	# a caller point us anywhere. Preview was the odd one out, asking the
+	# browser to know how OPL addresses content — a fourth copy of
+	# `/api/problems/hash/`, in a third language.
+	#
+	# The difference that matters is not tidiness: a caller-supplied
+	# problemSourceURL is a URL we fetch server-side, so it is the caller who
+	# chooses the host. Resolving from a hash against our OWN configured OPL
+	# removes that choice. The URL branch above stays for Tier-0 consumers
+	# (LibreTexts/ADAPT) that legitimately point us at content, so this does
+	# not by itself close that surface — it removes WW3's reason to need it.
+	if ($inputs_ref->{pg_hash}) {
+		my $pg_hash = $inputs_ref->{pg_hash};
+		my $opl_url = $c->opl_client->problem_url_by_hash($pg_hash);
+
+		_trace($c, 'input', kind => 'hash', hash => $pg_hash, url => $opl_url);
+
+		# The hash IS the cache key, so a hit here is zero-network — the
+		# hint argument is the hash itself rather than a guess about it.
+		my ($source, $fetched_hash) = await fetch_remote_source_p($c, $opl_url, $pg_hash);
+		return $c->exception("Cannot resolve pg_hash: $pg_hash", 404) unless $source;
+
+		$inputs_ref->{problemSource} = $source;
+		$inputs_ref->{pg_hash}       = $fetched_hash || $pg_hash;
+		$inputs_ref->{sourceFilePath} =
+			Renderer::ContentCache::problem_path($inputs_ref->{pg_hash});
+		return 1;
+	}
+
 	# problemSource bytes already in hand (peer-signed body, JWT claim, etc.).
 	_trace($c, 'input', kind => 'inline');
 	return 1;
