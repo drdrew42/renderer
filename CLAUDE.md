@@ -160,6 +160,21 @@ Perl test suite (`t/*.t`) is exercised via `pgperl prove -lr t/` (the
 `pgperl` wrapper uses the perlbrew `pg-perl` install with the renderer's
 CPAN deps). Suite is currently 166/166 with zero warnings.
 
+**Never reach for system perl** — it's missing the renderer's dependencies and the
+failures are confusing. Useful beyond `prove`: `pgperl perl -Ilib -c lib/Renderer/Foo.pm`
+for a syntax check, `pgperl perl -Ilib -e '…'` for a one-off.
+
+Unit tests with no Mojo HTTP or async-await dispatch run fine under a local perl
+environment. Anything needing the full stack — OPL-resolved macros, `STRICT_JWT`,
+container-only deps — needs a deployed renderer container.
+
+When smoke-testing against a deployed container, note that **secrets are read from the
+container ENV, not from `renderer.conf`**: `problemJWTsecret`, `webworkJWTsecret`, and
+`RENDERER_URL` all come from `$ENV` inside the container. That one costs an iteration
+every time it's forgotten.
+
+*(Local environment paths and the deployment host recipe are in `CLAUDE.local.md`.)*
+
 JS companion code (`public/js/apps/Problem/problem.js`,
 `public/js/apps/CSSMessage/css-message.js`,
 `public/js/apps/DraftTracker/draft-tracker.js` — ~600 lines total) has
@@ -177,6 +192,51 @@ When changing JS, run the browser smoke for: problem load, focus/blur
 events, hint/solution buttons, draft tracker keystroke debouncing,
 parent→iframe CSS injection. If the JS surface grows beyond ~1k lines
 or starts carrying business logic, revisit and add a Vitest/Jest harness.
+
+## The fork boundary — two things it breaks
+
+Per-request rendering runs in a forked subprocess:
+`Renderer::Render::Subprocess::render_in_subprocess` (`Mojo::IOLoop->subprocess->run_p`).
+The fork sits at the **controller → PG-render boundary**, not deep inside PG — it isolates
+PG's `Safe.pm` sandbox and keeps per-render leaks out of the long-lived Hypnotoad worker.
+
+**1. Only the return value crosses back.** The child runs
+`WeBWorK::RenderProblem::process_pg_file` and `exit`s; the parent receives *only* the
+Storable-serialized `$ret` hashref. So `$inputs_ref` mutations, `$c->stash` assignments, and
+package globals set inside `standaloneRenderer` (or anything it calls) are **invisible to
+the parent** — and the parent re-reads `$inputs_ref` afterward in
+`WeBWorK::FormatRenderedProblem::formatRenderedProblem` for the format-layer primitives
+(`showCorrectAnswersButton`, `hideCheckAnswersButton`, `outputFormat`, `_*` stash fields, …).
+
+> **Rule:** anything that mutates request state and must be visible *both* inside the
+> subprocess *and* in the parent afterward has to run in the controller layer,
+> **before the fork** — in practice, in `ParseRequest::dispatch`.
+
+**2. Hypnotoad's parent-only timer.** `Renderer::Telemetry::init()` is called from
+`Renderer::_init_services` inside `startup()` — once, in the parent, *before* fork. Its
+recurring 60s flush timer registers on the parent's `Mojo::IOLoop` and workers do **not**
+reliably inherit it (only `pid 1` ever logs "Telemetry reporter: flushing…"). Compare
+`Renderer::Registration::init`, which uses `Mojo::IOLoop->next_tick(...)` and *does* fire in
+every worker.
+
+Consequences: don't assume the timed flush is running when validating telemetry with
+hand-rolled curl traffic — force it with a threshold burst (>100 events into one worker) or
+wait. The threshold path is proven under real load. For any future Hypnotoad-resident
+background work that must run in *workers*, prefer `next_tick` + a per-worker hook
+(`app->hook(before_server_start => …)`) over registering timers in `startup()`.
+Full hypotheses: `WeBWorK/Tasks/backlog/LTW-060 …` in the vault.
+
+## Validate at the boundary, gate at the emission site
+
+The renderer's job is to **validate** (signatures, JWT verification, peer-signed admission)
+and then render what the caller asked for. Policy about what to *do with the output* —
+emitting answerJWTs, writing to chains, persisting state — belongs at the **emission site**,
+not the parse/dispatch layer.
+
+Concrete instance (fixed 2026-05-04, `9da9b1cb`): an early fail-fast gate in `ParseRequest`
+rejected `submitAnswers` requests lacking upstream grounding (no problemJWT/challengeJWT/
+sessionJWT) even when the caller wanted a plain render. Wrong layer — the request was
+renderable; only the *answerJWT emission* needed grounding.
 
 ## Known Quirks
 
