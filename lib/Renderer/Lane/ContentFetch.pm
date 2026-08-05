@@ -1,6 +1,7 @@
 package Renderer::Lane::ContentFetch;
 
-# Typed-problemJWT lane for content-fetch endpoints (/hint, /solution).
+# Typed-problemJWT lane for content-fetch endpoints (/hint, /solution,
+# /answer).
 #
 # Parallels Lane::Problem (same secret, same aud, same claim-unwrap, same
 # claims-always-win merge), but enforces a `typ` claim and does NOT set
@@ -13,7 +14,8 @@ package Renderer::Lane::ContentFetch;
 # The outer placement matches the natural JWT spot (sibling of iss/aud); the
 # inner mirrors LibreTexts' provider-namespace convention. Both are accepted.
 #
-# Used by hint/solution controllers ahead of SourceResolver::resolve_source,
+# Used by the hint/solution/answer controllers ahead of
+# SourceResolver::resolve_source,
 # which then turns problemSourceURL / sourceFilePath / problemSource into a
 # concrete (problemSource, sourceFilePath, pg_hash) tuple.
 

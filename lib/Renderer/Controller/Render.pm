@@ -253,6 +253,16 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	# the body HTML (or "" when the problem has no SOLUTION block). For hint,
 	# message is the concatenation of all hint bodies in source order (or ""
 	# when there are no HINT blocks).
+	#
+	# `answer` (WW3-R47) is the one shape that cannot use `message`: it is
+	# per-blank structured data, not a body of HTML. It keeps `status` so
+	# the error contract is still uniform — check `status`, then read
+	# whichever payload key this endpoint documents.
+	if ($expected_typ eq 'answer') {
+		return unless $c->tx;
+		return $c->render(json => { status => 200, answers => $res->{answers} // {} });
+	}
+
 	my $message = $expected_typ eq 'solution' ? ($res->{solution} // '') : join('', @{ $res->{hints} // [] });
 	# Client disconnect during the renderer await tears down the tx; drop.
 	return unless $c->tx;
@@ -265,6 +275,18 @@ async sub hint ($c) {
 
 async sub solution ($c) {
 	return await _content_fetch($c, 'solution', \&WeBWorK::HintSolution::render_solution);
+}
+
+# POST /render-api/answer (WW3-R47). Same gate, same source binding, same
+# error contract as its two siblings — only the payload differs.
+#
+# This is the route that lets an orchestrator stop asking the RENDER to
+# reveal anything. `showCorrectAnswers` as a render flag has to be trusted
+# from the request, which is how WW3-R46 happened; a typed token minted by
+# whoever holds the policy cannot be self-declared, and the mint is a
+# chokepoint the orchestrator can record against. See WW3-117.
+async sub answer ($c) {
+	return await _content_fetch($c, 'answer', \&WeBWorK::HintSolution::render_answer);
 }
 
 sub exception ($c, $message, $status, @extra) {

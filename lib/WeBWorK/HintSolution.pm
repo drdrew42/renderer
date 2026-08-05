@@ -1,10 +1,14 @@
 package WeBWorK::HintSolution;
 
-# Pure dumb content fetches: render a problem with showHints=1 (or showSolutions=1)
-# and return only the hint/solution body content extracted from the rendered HTML.
+# Pure dumb content fetches. Two shapes:
+#   * hint / solution — render with showHints=1 (or showSolutions=1) and
+#     return only the body content extracted from the rendered HTML.
+#   * answer (WW3-R47) — read the canonical answer off PG's AnswerHash.
+#     No HTML involved at any point.
 #
-# These are the implementation behind POST /render-api/hint and
-# POST /render-api/solution (WW3-R28). Bypasses parseRequest entirely
+# These are the implementation behind POST /render-api/hint,
+# POST /render-api/solution (WW3-R28) and POST /render-api/answer
+# (WW3-R47). Bypasses parseRequest entirely
 # (PTX precedent — see WeBWorK::PreTeXt::render_ptx). Mints nothing,
 # POSTs nothing, emits no events. The LMS/orchestrator gates user
 # access at its own UI layer; the renderer is dumb about who's allowed
@@ -26,7 +30,7 @@ use lib "$ENV{PG_ROOT}/lib";
 use WeBWorK::PG;
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(render_hint render_solution);
+our @EXPORT_OK = qw(render_hint render_solution render_answer);
 
 # render_hint($p) → Mojo::Promise resolving to:
 #   { hints => [ "<html>", ... ] }            # zero or more hints found
@@ -41,6 +45,73 @@ sub render_hint ($p) {
 #   { error => "...", status => 5xx }         # render failure
 sub render_solution ($p) {
 	return _render_and_filter($p, mode => 'solution');
+}
+
+# render_answer($p) → Mojo::Promise resolving to:
+#   { answers => { AnSwEr0001 => { correct_ans => ..., correct_ans_latex_string => ... }, ... } }
+#   { error => "...", status => 5xx }
+#
+# WW3-R47. The canonical answer, taken from PG's AnswerHash directly.
+#
+# Deliberately NOT a DOM extraction. The correct answer is not an accordion
+# like HINT/SOLUTION — it lives in the attempt-results table — so scraping
+# it would mean rendering a whole results page and parsing back out
+# something PG already handed us as data. This endpoint never needs the
+# HTML at all: no body_text, no Mojo::DOM, no display chrome.
+#
+# The projection is NARROW on purpose. `unbless($pg->{answers})` is what
+# the answerJWT carries, and serialising the whole AnswerHash wholesale is
+# the primitive behind three of the four disclosure paths WW3-R44/R45/R46
+# closed. Putting that same blob behind a better-gated door would relocate
+# the problem rather than solve it, so only the two fields a consumer
+# actually renders come back.
+sub render_answer ($p) {
+	my $source = $p->{problemSource} // '';
+
+	return Mojo::IOLoop->subprocess->run_p(sub {
+		my $pg = WeBWorK::PG->new(
+			# No student-facing content of any kind — this endpoint answers
+			# one question and the caller already holds a token saying it
+			# may ask.
+			showSolutions => 0,
+			showHints     => 0,
+
+			# REQUIRED, unlike the hint/solution path. correct_ans is
+			# populated by the answer evaluators, which only run when PG
+			# processes answers. With processAnswers => 0 the AnswerHash
+			# comes back empty and the endpoint silently returns nothing.
+			# Empty inputs_ref means every answer scores 0 — irrelevant, we
+			# never read the score.
+			processAnswers => 1,
+
+			displayMode => 'MathJax',
+			problemSeed => $p->{problemSeed} // 1234,
+			r_source    => \$source,
+			($p->{injectedMacros} ? (injectedMacros => $p->{injectedMacros}) : ()),
+			inputs_ref => {},
+		);
+
+		if ($pg->{flags}{error_flag}) {
+			my $err = $pg->{errors} // 'PG render failed';
+			$pg->free;
+			return { error => $err, status => 500 };
+		}
+
+		my %answers;
+		for my $label (sort keys %{ $pg->{answers} // {} }) {
+			my $ans = $pg->{answers}{$label} or next;
+			$answers{$label} = {
+				correct_ans              => $ans->{correct_ans}              // '',
+				correct_ans_latex_string => $ans->{correct_ans_latex_string} // '',
+			};
+		}
+
+		$pg->free;
+		return { answers => \%answers };
+	})->catch(sub {
+		my $err = shift;
+		return { error => "$err", status => 500 };
+	});
 }
 
 sub _render_and_filter ($p, %opts) {
