@@ -119,7 +119,7 @@ sub _configure_app ($self) {
 sub _configure_urls ($self) {
 	# --- URL configuration ---
 	# RENDERER_URL: the public URL where this renderer is reachable.
-	#   e.g. "https://render.lan.drdrew.us" or "https://cms.example.com/renderer"
+	#   e.g. "https://renderer.example.edu" or "https://cms.example.com/renderer"
 	#   Replaces the old SITE_HOST + baseURL pair.
 	# FORM_ACTION: (optional) only for MITM deployments where a middleware
 	#   intercepts form submissions. If empty, defaults to {RENDERER_URL}/render-api.
