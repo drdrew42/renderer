@@ -71,10 +71,12 @@ sub apply ($c, $params) {
 	my ($claims, $err) = decode_claims($c, $params->{problemJWT});
 	return $c->croak($err, 3) if $err;
 
-	# `isInstructor` claim-only: drop any raw-form value first so the claim
-	# is the only possible source. Prevents form-param elevation when the
-	# LMS mints a JWT without speaking to instructor identity.
-	delete $params->{isInstructor};
+	# `isInstructor` claim-only. The raw-form value is stripped centrally in
+	# ParseRequest now (ELEVATION_PARAMS, WW3-R46), so the hand-rolled
+	# `delete` that used to sit here is gone — two mechanisms for one rule
+	# is how the next lane's author picks the wrong one by proximity, which
+	# is exactly how Lane::Challenge and Lane::Review ended up unprotected
+	# while this lane was hardened in WW3-R41.
 
 	# Bulk merge: claims override raw params (claims-always-win precedence —
 	# the whole point of carrying an upstream JWT is the upstream's view of

@@ -6,6 +6,7 @@ use Exporter 'import';
 
 our @EXPORT_OK = qw(
 	SENSITIVE_PARAMS
+	ELEVATION_PARAMS
 	SOURCE_OVERRIDE_FIELDS
 	ANSWER_RESPONSE_SUBJECT
 	ANSWER_RESPONSE_DEFAULT_MESSAGE
@@ -31,6 +32,47 @@ use constant SENSITIVE_PARAMS => qw(
 	solutionsRequested
 	answersRevealed
 	solutionsRevealed
+);
+
+# Params that ELEVATE what a render reveals. Stripped from raw inputs
+# alongside SENSITIVE_PARAMS, with the same peer-signed exemption, so that
+# a caller cannot self-declare their way into content (WW3-R46).
+#
+# Why a second list rather than more SENSITIVE_PARAMS entries: these are
+# recovered differently. A SENSITIVE_PARAM is restored by a lane's claim
+# merge and is otherwise simply absent. An elevation param has a MEANINGFUL
+# DEFAULT — 0, the student view — and every lane must land on it rather
+# than leave the key undef for resolve_permissions to interpret. Keeping
+# the lists separate keeps that asymmetry visible instead of encoding it in
+# which of nine names you happen to be looking at.
+#
+# WW3-R41 hardened Lane::Problem by hand (`delete $params->{isInstructor}`,
+# then claim-only). Lane::Challenge and Lane::Review never got the same
+# treatment: both carry only `//= 0`, which assigns when the value is
+# UNDEF and therefore does nothing to a form-supplied 1. Measured
+# 2026-08-05 on the homelab — a student's own challengeJWT plus
+# `isInstructor=1` resolved to revealAll (canonical answer AND worked
+# solution) mid-play, 8,451 bytes against a 6,583-byte baseline.
+#
+# Care does not generalize; structure does. Stripping here means a new
+# lane inherits the protection by existing, rather than by its author
+# remembering.
+#
+# showCorrectAnswers is deliberately NOT in this list. It is the "Show
+# Correct Answers" BUTTON's own mechanism — the rendered form posts it back
+# when a student presses the button the mode bundle chose to display. So
+# stripping it does not close a hole, it breaks the affordance; the tests
+# that exercise the reveal ratchet fail for exactly that reason.
+#
+# The real defect there is narrower and lives elsewhere: the mode bundle
+# decides whether to OFFER the reveal (`showCorrectAnswersButton` is 0 in
+# default / no-feedback / review, 1 only in no-stakes / preview), and
+# nothing enforces that a caller who was not offered it cannot send the
+# param anyway. Hiding a button is not refusing an action. See WW3-R46 for
+# the proposal to honour showCorrectAnswers only when the resolved bundle
+# offers it.
+use constant ELEVATION_PARAMS => qw(
+	isInstructor
 );
 
 # Problem-source fields a sidecar problemJWT may override on an in-flight

@@ -99,10 +99,41 @@ subtest 'mode wins over caller-supplied conflicting primitive' => sub {
 };
 
 subtest 'mode passes through caller value when bundle does not lock that primitive' => sub {
-	my $i = { renderMode => 'default', showCorrectAnswers => 1 };
+	# The principle under test is the passthrough contract: a bundle locks
+	# only the primitives it owns and leaves everything else alone.
+	#
+	# This used to demonstrate that with `showCorrectAnswers` on `default`,
+	# which WW3-R46 now locks — so the example moved to a primitive the
+	# bundle genuinely does not own. The contract is unchanged; only which
+	# key illustrates it.
+	my $i = { renderMode => 'default', showFooter => 1 };
 	resolve_render_mode($i);
-	is($i->{showCorrectAnswers}, 1, 'default mode does not lock showCorrectAnswers');
-	is($i->{hideFeedback},       0, 'default bundle still applies hideFeedback');
+	is($i->{showFooter},   1, 'default mode does not lock showFooter');
+	is($i->{hideFeedback}, 0, 'default bundle still applies hideFeedback');
+};
+
+subtest 'default and review lock showCorrectAnswers, not just the button (WW3-R46)' => sub {
+	# Offering is not the same as permitting. Both bundles hide the reveal
+	# button; before R46 neither refused the flag, so a caller who was
+	# never offered the reveal could ask for it directly and be given it.
+	for my $mode (qw(default review)) {
+		my $i = { renderMode => $mode, showCorrectAnswers => 1 };
+		my $overrides = resolve_render_mode($i);
+		is($i->{showCorrectAnswers},       0, "$mode refuses a caller-supplied showCorrectAnswers");
+		is($i->{showCorrectAnswersButton}, 0, "$mode still hides the button");
+		ok((grep { $_ eq 'showCorrectAnswers' } @$overrides), "$mode reports the override it applied");
+	}
+};
+
+subtest 'no-stakes and preview still offer the reveal' => sub {
+	# The bundles where revealing costs nothing must keep working — R46
+	# closed a door, it did not brick the affordance.
+	for my $mode (qw(no-stakes preview)) {
+		my $i = { renderMode => $mode, showCorrectAnswers => 1 };
+		resolve_render_mode($i);
+		is($i->{showCorrectAnswers},       1, "$mode leaves a caller-supplied showCorrectAnswers alone");
+		is($i->{showCorrectAnswersButton}, 1, "$mode offers the button");
+	}
 };
 
 # ─── Override tracking via return value ────────────────────────────────

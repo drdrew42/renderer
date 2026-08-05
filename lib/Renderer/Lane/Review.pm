@@ -21,11 +21,39 @@ package Renderer::Lane::Review;
 #     is read-only; the late emission gate naturally short-circuits because
 #     no JWTanswerURL is ever set.
 #
-# Button-hide flags (hideCheckAnswersButton / showCorrectAnswersButton) and
-# showCorrectAnswers ride as raw form params from the portal — display
-# preferences, not security claims, so no SENSITIVE_PARAMS protection is
-# required. The orchestrator already gated whether to release the
-# submissionJWT to the caller; everything past that is presentation.
+# Button-hide flags (hideCheckAnswersButton / showCorrectAnswersButton) ride
+# as raw form params from the portal — display preferences, not security
+# claims.
+#
+# showCorrectAnswers is NOT a display preference, and the comment that used
+# to say so here was wrong (WW3-R46). Its reasoning was "the orchestrator
+# already gated whether to release the submissionJWT to the caller;
+# everything past that is presentation." That holds only if releasing the
+# submissionJWT is the decision that matters. On reView it is not — the
+# student is SUPPOSED to hold their own submissionJWT; that is the whole
+# feature. showCorrectAnswers is the only thing between them and the
+# answers, and it arrived in their own POST body.
+#
+# It is stripped with the other elevation params now, and restored here
+# from the pre-strip stash. That restore is a deliberate, bounded interim:
+#
+#   * WW3 genuinely needs it today. Instructor reView shows correct answers
+#     via this field (play/service.go sets it from `grade.read.all`), so
+#     stripping it outright regresses a live v1 feature.
+#   * The exposure it leaves is bounded. reView is post-finalization: the
+#     play is over and the score is locked, so a student flipping this
+#     cannot improve their own result. What they gain is early sight of
+#     answers — a fairness/parity problem (sharing with classmates who have
+#     not finished), not a self-scoring exploit. The severe case was the
+#     CHALLENGE lane, mid-play, live scoring, and that one is now closed
+#     outright.
+#   * WW3-117 deletes it. Once the reveal is minted server-side and fetched
+#     out of band, no in-render reveal flag exists on any lane and this
+#     restore goes with it.
+#
+# The alternative considered and rejected for now: a WW3-minted "reView
+# options" token carrying the flag as a claim. Correct, and thrown away by
+# WW3-117 a ticket later.
 
 use strict;
 use warnings;
@@ -94,6 +122,16 @@ sub apply ($c, $params) {
 
 	# outputFormat lock — reView is iframe-only.
 	$params->{outputFormat} = 'default';
+
+	# Elevation params (WW3-R46). isInstructor lands on the student default
+	# and is NOT recoverable here: the submissionJWT carries no role claim,
+	# and nothing in the reView flow has ever legitimately supplied one.
+	$params->{isInstructor} = 0;
+
+	# showCorrectAnswers still rides as a raw form param here — see the
+	# header. Not stripped, because it is the button's own mechanism; the
+	# gap is that reView's bundle never offers the button and nothing
+	# refuses the param anyway. WW3-117 removes the flag entirely.
 
 	$c->stash(_trust_lane => 'review');
 	return 1;

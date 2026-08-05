@@ -188,7 +188,22 @@ sub formatRenderedProblem {
 	# the minted-token payload, and the resolved inputs_ref (post-claim-merge).
 	# This is the format the renderer's test suite uses to inspect rendered
 	# state — see t/permissions.t, t/reveal_reporting.t for example uses.
-	if ($formatName eq 'debug') {
+	# WW3-R45: the debug format is a DEPLOYMENT affordance, not a request
+	# one. It was reachable by any caller who spelled `outputFormat=debug`,
+	# and it returns `tokens.answerJWT` — which carries
+	# unbless($pg->{answers}), i.e. correct_ans + correct_ans_latex_string
+	# for every blank — plus `inputs_ref`, the entire post-claim-merge input
+	# state. Lane::Challenge and Lane::Review pin outputFormat and were
+	# safe; Lane::Problem does not, so a student holding their own
+	# problemJWT could ask for it.
+	#
+	# Gated on the environment rather than on a claim or a param: a
+	# production renderer should not be able to emit this shape at all, no
+	# matter what any caller or any minter says. Same posture pattern as
+	# STRICT_JWT. Falls through to the normal HTML render when unset, so an
+	# unauthorised request gets a page rather than a signal that the format
+	# exists.
+	if ($formatName eq 'debug' && $ENV{RENDERER_DEBUG_FORMAT}) {
 		# Top-level `lane` field exposes which trust lane produced this
 		# render (WW3-R27). The R31 retirement of isLocked left the
 		# permissions block carrying only render-affecting flags;
@@ -293,16 +308,51 @@ sub formatRenderedProblem {
 		pretty_print => \&pretty_print,
 	);
 
+	# outputFormat=json — the WW2-compatibility template. Carries sessionJWT
+	# and JWTanswerURLstatus; notably NOT the answerJWT. Distinct from the
+	# debug shape below, and deliberately kept.
 	return $c->render(%template_params) if $formatName eq 'json';
+
 	$rh_result->{renderedHTML} = $c->render_to_string(%template_params)->to_string;
-	return $c->respond_to(
-		html => { text => $rh_result->{renderedHTML} },
-		json => {
-			json => jsonResponse(
-				$rh_result, $inputs_ref, @extra_css_files, @third_party_css, @extra_js_files, @third_party_js
-			)
-		},
-	);
+
+	# WW3-R45: the response shape is NOT negotiable.
+	#
+	# This used to be an unconditional respond_to(html => ..., json => ...).
+	# Mojolicious resolves that via `accepts()`, which consults the `format`
+	# stash value, the `format` GET/POST param, AND the Accept header —
+	# three inputs, none of which the lane controls. So `Accept:
+	# application/json` or `format=json` on any render flipped the response
+	# to jsonResponse(), whose JWT block includes the answerJWT — and the
+	# answerJWT carries unbless($pg->{answers}), i.e. correct_ans for every
+	# blank. Pinning outputFormat in a lane did nothing, because
+	# negotiation happens downstream of the format branch.
+	#
+	# The negotiated shape is now reachable ONLY when the deployment opts in
+	# via RENDERER_DEBUG_FORMAT — the same gate as outputFormat=debug
+	# above, because it is the same class of thing. Not a JWT claim and not
+	# a request param, deliberately: a claim would make `format` a
+	# protected parameter carrying two unrelated meanings (render format,
+	# and debug envelope) under one name, which is the collision the
+	# Glossary rule exists to prevent.
+	# When enabled, negotiation behaves exactly as it always did — the gate
+	# controls whether the json arm EXISTS, not which arm is chosen. An
+	# HTML client on a debug deployment still gets HTML.
+	if ($ENV{RENDERER_DEBUG_FORMAT}) {
+		return $c->respond_to(
+			html => { text => $rh_result->{renderedHTML} },
+			json => {
+				json => jsonResponse(
+					$rh_result, $inputs_ref, @extra_css_files, @third_party_css, @extra_js_files, @third_party_js
+				)
+			},
+		);
+	}
+
+	# Production: one shape, not negotiable. `format` is pinned so the three
+	# accepts() inputs — stash, `format` param, Accept header — stop
+	# mattering, because nothing consults them.
+	$c->stash(format => 'html');
+	return $c->render(text => $rh_result->{renderedHTML}, format => 'html');
 }
 
 sub jsonResponse {

@@ -19,6 +19,8 @@ use Mojo::Base -signatures;
 # Three knobs govern access (see Lane::Ungrounded for STRICT_JWT and
 # SELF_MINT_DISABLED, this dispatcher's tail for the emission gate):
 #   1. Entry gate    (STRICT_JWT)            — may an ungrounded request render at all?
+#      Applies to EVERY ungrounded request, whatever its output format
+#      (WW3-R44 — ptx used to slip past it).
 #   2. Session UX    (SELF_MINT_DISABLED)    — wrap an admitted ungrounded request in a self-minted JWT?
 #   3. Emission gate (_can_emit_answer_jwt)  — may this request produce an answerJWT?
 # The emission gate is enforced at the emission site (Render.pm), not here:
@@ -37,7 +39,7 @@ use Renderer::Lane::Challenge;
 use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
-use Renderer::Constants qw(SENSITIVE_PARAMS);
+use Renderer::Constants qw(SENSITIVE_PARAMS ELEVATION_PARAMS);
 use Renderer::RenderMode qw(resolve_render_mode);
 
 use Exporter qw(import);
@@ -189,6 +191,38 @@ sub _parse_envelope ($c, $params, $ctx) {
 		for (SENSITIVE_PARAMS) {
 			delete $params->{$_};
 		}
+
+		# Elevation params (WW3-R46). Same exemption, separate list because
+		# they carry a meaningful default rather than simply being absent —
+		# see Renderer::Constants.
+		#
+		# Stripped only from GROUNDED requests. An ungrounded request that
+		# renders at all is one a STRICT_JWT=0 deployment chose to admit on
+		# network position — the VPC-editor posture, where the network IS
+		# the trust boundary and a raw `isInstructor=1` from the editor is
+		# exactly as trustworthy as that deployment decision. Stripping
+		# there would break editor previews to protect a deployment that
+		# has already declared it does not need protecting. Under
+		# STRICT_JWT=1 the entry gate refuses ungrounded requests outright
+		# (WW3-R44), so this exemption opens nothing on a student-facing
+		# instance.
+		#
+		# Stashed before deletion so Lane::Review can restore
+		# showCorrectAnswers, the one legitimate raw-form consumer left in
+		# the tree — an interim closed by WW3-117; see Lane::Review.
+		my $grounded =
+			defined $params->{problemJWT}
+			|| defined $params->{challengeJWT}
+			|| defined $params->{submissionJWT}
+			|| defined $params->{sessionJWT};
+
+		if ($grounded) {
+			my %elevation;
+			for (ELEVATION_PARAMS) {
+				$elevation{$_} = delete $params->{$_} if exists $params->{$_};
+			}
+			$c->stash(_stripped_elevation => \%elevation);
+		}
 	}
 
 	return 1;
@@ -196,8 +230,10 @@ sub _parse_envelope ($c, $params, $ctx) {
 
 # Phase 2: lane application + post-dispatch finalize. Session prefix runs
 # first (combines with any body lane). Body lane runs second (problemJWT /
-# challengeJWT / submissionJWT / peer-signed / ungrounded; PTX skips
-# body-lane entirely). Finalize restores originIP/parent_origin.
+# challengeJWT / submissionJWT / peer-signed). The entry gate then fires
+# for anything that reached no lane, whatever its output format; PTX skips
+# the ungrounded LANE but not that gate (WW3-R44). Finalize restores
+# originIP/parent_origin.
 sub _apply_lanes ($c, $params, $ctx) {
 
 	# Session prefix — sessionJWT decode + claim merge. Combines with any body lane.
@@ -207,11 +243,11 @@ sub _apply_lanes ($c, $params, $ctx) {
 
 	# Body-lane dispatch — envelope shape selects the lane. problemJWT,
 	# challengeJWT, and submissionJWT are mutually exclusive (rejected
-	# pre-dispatch); peer-signed fires when peer-verified AND no JWT body;
-	# ungrounded covers the rest unless outputFormat=ptx (PTX path skips
-	# body-lane entirely — no JWT minted, no defaults). The STRICT_JWT
-	# entry gate fires on the ungrounded branch before Lane::Ungrounded
-	# runs.
+	# pre-dispatch); peer-signed fires when peer-verified AND no JWT body.
+	# A sessionJWT alone reaches a lane via apply_prefix, which hoists the
+	# nested problemJWT / challenge_jwt into the body slot.
+	my $lane_applied = 0;
+
 	if (defined $params->{problemJWT}) {
 		Renderer::Lane::Problem::apply($c, $params) or return;
 		# Sidecar source-override (LTW-088): no-op unless apply_prefix stashed
@@ -219,20 +255,48 @@ sub _apply_lanes ($c, $params, $ctx) {
 		# nested claims so the source bundle is replaced last; pre-finalize so
 		# it lands before the render subprocess forks.
 		Renderer::Lane::Session::apply_source_override($c, $params) or return;
+		$lane_applied = 1;
 	} elsif (defined $params->{challengeJWT}) {
 		Renderer::Lane::Challenge::apply($c, $params) or return;
+		$lane_applied = 1;
 	} elsif (defined $params->{submissionJWT}) {
 		Renderer::Lane::Review::apply($c, $params) or return;
+		$lane_applied = 1;
 	} elsif ($c->stash('_peer_signed')) {
 		Renderer::Lane::Peer::apply_body($c, $params) or return;
-	} elsif (($params->{outputFormat} // '') ne 'ptx') {
-		# Entry gate: reject ungrounded requests outright when STRICT_JWT is set.
-		# Public/student instances should set this; VPC-isolated editor
-		# renderers can leave it unset to opt into the self-mint UX.
+		$lane_applied = 1;
+	}
+
+	# Entry gate (WW3-R44). Fires whenever NO body lane was applied — i.e.
+	# the request is ungrounded — regardless of what it renders to.
+	#
+	# It used to live inside an `elsif (outputFormat ne 'ptx')` arm, which
+	# fused two unrelated concerns: "PTX skips body-lane dispatch" is a
+	# RENDERING fact, and "ungrounded requests are refused" is an
+	# AUTHORIZATION one. Nesting the second inside the first let the
+	# authorization decision inherit the pipeline's exception, so
+	# `outputFormat=ptx` with no credential walked straight past a
+	# STRICT_JWT=1 deployment and `answerhashXML` handed back correct_ans
+	# for any problem in the library, by path, at any seed. R37 moved this
+	# check out of Lane::Ungrounded and into the dispatcher, which made it
+	# pre-LANE but not pre-DISPATCH — one level too shallow.
+	#
+	# Public/student instances should set STRICT_JWT; VPC-isolated editor
+	# renderers can leave it unset to opt into the self-mint UX. PTX
+	# consumers are ungrounded by nature, so post-R44 they need either a
+	# credential or a STRICT_JWT=0 instance — the same trust boundary the
+	# editor posture already uses: the network, not the token.
+	unless ($lane_applied) {
 		if ($ENV{STRICT_JWT}) {
 			return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401,);
 		}
-		Renderer::Lane::Ungrounded::apply($c, $params) or return;
+
+		# PTX still skips the ungrounded lane itself — no JWT minted, no
+		# lane defaults. That carve-out is about lane APPLICATION and is
+		# unchanged; it simply no longer swallows the gate above.
+		unless (($params->{outputFormat} // '') eq 'ptx') {
+			Renderer::Lane::Ungrounded::apply($c, $params) or return;
+		}
 	}
 
 	# Post-dispatch finalize.

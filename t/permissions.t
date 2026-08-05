@@ -13,6 +13,9 @@ use Test::Mojo;
 use Crypt::JWT qw(decode_jwt encode_jwt);
 
 # Renderer startup refuses placeholder secrets; supply test values.
+# outputFormat=debug is a deployment affordance gated on this env var
+# (WW3-R45). The test suite is its intended consumer.
+$ENV{RENDERER_DEBUG_FORMAT} //= 1;
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 

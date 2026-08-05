@@ -18,13 +18,17 @@ package Renderer::RenderMode;
 # layers compose; they don't conflict.
 #
 # Modes:
-#   default      — staked attempts, verdict per attempt, coordinator-mediated
-#                  reveal (Show Correct Answers button hidden by default).
+#   default      — staked attempts, verdict per attempt. Reveal button hidden
+#                  AND the reveal itself refused (WW3-R46) — a coordinator
+#                  that wants one mints it out of band rather than asking
+#                  the render for it.
 #   no-feedback  — score it, ship it, say nothing about correctness.
 #                  hideFeedback kill-switch + reveal button hidden + reveal
 #                  forced off for defense in depth.
-#   review       — past-attempt display; no resubmits. Reveal-button hidden
-#                  by default (coordinator unlocks per-render).
+#   review       — past-attempt display; no resubmits. Reveal button hidden
+#                  and the reveal refused (WW3-R46). An instructor still
+#                  sees answers via isInstructor → revealAll, which the
+#                  permissions resolver applies after this bundle.
 #   no-stakes    — sandbox / drill / public widget. Reveal button shown.
 #   preview      — author / library browse; isInstructor=1 → revealAll
 #                  bundle via the permissions resolver.
@@ -62,10 +66,22 @@ use constant RENDER_MODES => [qw(default no-feedback review no-stakes preview cu
 # not listed flows through from $inputs_ref unchanged. 'custom' has an empty
 # bundle (full passthrough).
 my %BUNDLES = (
+	# WW3-R46: `showCorrectAnswers => 0` alongside the hidden button.
+	#
+	# Hiding a button is not refusing an action. These bundles used to
+	# suppress only `showCorrectAnswersButton`, so a caller who was never
+	# offered the reveal could still POST `showCorrectAnswers=1` and get
+	# the canonical answer — measured on the homelab 2026-08-05 against a
+	# student's own live challengeJWT.
+	#
+	# `no-feedback` already did this ("reveal forced off for defense in
+	# depth"); `default` and `review` did not. Same bundle table, same
+	# author, one function apart — which is the WW3-098 shape again.
 	'default' => {
 		hideFeedback             => 0,
 		hideCheckAnswersButton   => 0,
 		showCorrectAnswersButton => 0,
+		showCorrectAnswers       => 0,
 	},
 	'no-feedback' => {
 		hideFeedback             => 1,
@@ -73,10 +89,15 @@ my %BUNDLES = (
 		showCorrectAnswersButton => 0,
 		showCorrectAnswers       => 0,
 	},
+	# Instructor reView reaches the answers through isInstructor → revealAll
+	# in resolve_permissions, which runs AFTER this bundle and is not
+	# suppressed by it. What this closes is the student-supplied flag.
+	# WW3-117 removes the flag from the portal entirely.
 	'review' => {
 		hideFeedback             => 0,
 		hideCheckAnswersButton   => 1,
 		showCorrectAnswersButton => 0,
+		showCorrectAnswers       => 0,
 	},
 	'no-stakes' => {
 		hideFeedback             => 0,

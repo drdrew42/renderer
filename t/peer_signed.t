@@ -23,6 +23,9 @@ use Mojo::Parameters;
 my ($peer_pub, $peer_sec) = Crypt::Ed25519::generate_keypair();
 
 # Renderer startup refuses placeholder secrets; supply test values.
+# The debug/JSON introspection shapes are deployment-gated (WW3-R45);
+# the test suite is their intended consumer.
+$ENV{RENDERER_DEBUG_FORMAT} //= 1;
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 

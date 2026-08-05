@@ -14,6 +14,9 @@ use Test::Mojo;
 use Crypt::JWT qw(encode_jwt decode_jwt);
 use Mojo::JSON qw(decode_json encode_json);
 
+# outputFormat=debug is a deployment affordance gated on this env var
+# (WW3-R45). The test suite is its intended consumer.
+$ENV{RENDERER_DEBUG_FORMAT} //= 1;
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
 

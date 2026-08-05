@@ -87,13 +87,34 @@ sub apply ($c, $params) {
 		$params->{problemSourceURL} = $c->opl_client->problem_url_by_hash($pg_hash);
 	}
 
+	# No raw-form path to the reveal on this lane (WW3-R46). The mode
+	# bundles hide the button but only bite when a caller opts into a mode,
+	# and WW3 sends `renderMode` only for library preview — never on play —
+	# so the challenge lane resolves to `custom` and the bundle never runs.
+	# Hard-zero first; a claim below may re-enable it deliberately.
+	#
+	# Nothing legitimate is lost: PlayRendererFrame does not send
+	# showCorrectAnswers at all. What this closes is a student adding it to
+	# their own POST, measured mid-play on the homelab 2026-08-05.
+	$params->{showCorrectAnswers} = 0;
+
 	# Render permissions are attempt-wide. Apply renderer-visible fields;
 	# orchestrator-only fields (e.g. duration_anchor) ignored.
+	#
+	# WW3 omits render_permissions entirely (WW3-065), so in practice both
+	# elevation params land on their defaults. The claim path stays for
+	# orchestrators that do send it.
 	if (my $rp = $claims->{render_permissions}) {
 		for my $k (qw(isInstructor showCorrectAnswers showHints showSolutions)) {
 			$params->{$k} = $rp->{$k} if defined $rp->{$k};
 		}
 	}
+
+	# Elevation defaults (WW3-R46). These were `//= 0`, which assigns only
+	# when the key is UNDEF — so a form-supplied `isInstructor=1` sailed
+	# through untouched and resolved to revealAll on a live scored attempt.
+	# The raw values are stripped in ParseRequest now; this lane is
+	# claim-or-default, with no raw-form path at all.
 	$params->{isInstructor} //= 0;
 
 	# Identity claims propagate into the submissionJWT.
