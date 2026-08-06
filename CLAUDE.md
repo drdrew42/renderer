@@ -226,17 +226,15 @@ background work that must run in *workers*, prefer `next_tick` + a per-worker ho
 (`app->hook(before_server_start => …)`) over registering timers in `startup()`.
 Full hypotheses: `WeBWorK/Tasks/backlog/LTW-060 …` in the vault.
 
-## Validate at the boundary, gate at the emission site
+## Conventions live in the vault
 
-The renderer's job is to **validate** (signatures, JWT verification, peer-signed admission)
-and then render what the caller asked for. Policy about what to *do with the output* —
-emitting answerJWTs, writing to chains, persisting state — belongs at the **emission site**,
-not the parse/dispatch layer.
+The operating agreement — the renderer is dumb, validate at the boundary and gate at the
+emission site, two lanes/two gates, content-addressed rendering, explicit `parent_origin` —
+is gathered at `WeBWorK/Renderer/Conventions.md`, with each line linking to the doc that
+elaborates it. `/warmup` loads it.
 
-Concrete instance (fixed 2026-05-04, `9da9b1cb`): an early fail-fast gate in `ParseRequest`
-rejected `submitAnswers` requests lacking upstream grounding (no problemJWT/challengeJWT/
-sessionJWT) even when the caller wanted a plain render. Wrong layer — the request was
-renderable; only the *answerJWT emission* needed grounding.
+Surface friction rather than routing around it; this repo is upstream-adjacent, so
+conventions here cost other people review too.
 
 ## Known Quirks
 
