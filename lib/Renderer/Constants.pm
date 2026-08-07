@@ -64,13 +64,18 @@ use constant SENSITIVE_PARAMS => qw(
 # stripping it does not close a hole, it breaks the affordance; the tests
 # that exercise the reveal ratchet fail for exactly that reason.
 #
-# The real defect there is narrower and lives elsewhere: the mode bundle
-# decides whether to OFFER the reveal (`showCorrectAnswersButton` is 0 in
-# default / no-feedback / review, 1 only in no-stakes / preview), and
-# nothing enforces that a caller who was not offered it cannot send the
-# param anyway. Hiding a button is not refusing an action. See WW3-R46 for
-# the proposal to honour showCorrectAnswers only when the resolved bundle
-# offers it.
+# Each lane handles it according to what that lane is for:
+#
+#   Lane::Challenge — hard-zeroed, claim-or-nothing. Mid-play, live
+#     scoring; the severe case, and shut outright.
+#   Lane::Review    — still raw-form, a documented interim. WW3-117
+#     replaces it with a WW3-minted permission sidecar and the flag goes
+#     away entirely.
+#   Lane::Problem   — LibreTexts', and unchanged. There isInstructor is an
+#     AUTHORING AND BROWSING mode switch rather than a student-facing
+#     permission: reveal content reaches ADAPT out of band via
+#     /render-api/hint, /solution and /answer, so a student interaction
+#     never needs these flags at all.
 use constant ELEVATION_PARAMS => qw(
 	isInstructor
 );
