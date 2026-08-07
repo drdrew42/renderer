@@ -231,9 +231,8 @@ sub _parse_envelope ($c, $params, $ctx) {
 # Phase 2: lane application + post-dispatch finalize. Session prefix runs
 # first (combines with any body lane). Body lane runs second (problemJWT /
 # challengeJWT / submissionJWT / peer-signed). The entry gate then fires
-# for anything that reached no lane, whatever its output format; PTX skips
-# the ungrounded LANE but not that gate (WW3-R44). Finalize restores
-# originIP/parent_origin.
+# for anything that reached no lane, whatever its output format (WW3-R44).
+# Finalize restores originIP/parent_origin.
 sub _apply_lanes ($c, $params, $ctx) {
 
 	# Session prefix — sessionJWT decode + claim merge. Combines with any body lane.
@@ -282,21 +281,20 @@ sub _apply_lanes ($c, $params, $ctx) {
 	# pre-LANE but not pre-DISPATCH — one level too shallow.
 	#
 	# Public/student instances should set STRICT_JWT; VPC-isolated editor
-	# renderers can leave it unset to opt into the self-mint UX. PTX
-	# consumers are ungrounded by nature, so post-R44 they need either a
-	# credential or a STRICT_JWT=0 instance — the same trust boundary the
-	# editor posture already uses: the network, not the token.
+	# renderers can leave it unset to opt into the self-mint UX — the same
+	# trust boundary the editor posture already uses: the network, not the
+	# token.
+	#
+	# WW3-R45 removed the `outputFormat ne 'ptx'` carve-out that used to wrap
+	# the ungrounded lane here. PTX is no longer an output format of this
+	# endpoint at all — it has its own route, POST /render-ptx — so there is
+	# nothing left for the carve-out to except.
 	unless ($lane_applied) {
 		if ($ENV{STRICT_JWT}) {
 			return $c->exception('Request requires a problemJWT, sessionJWT, or X-Peer-Signature.', 401,);
 		}
 
-		# PTX still skips the ungrounded lane itself — no JWT minted, no
-		# lane defaults. That carve-out is about lane APPLICATION and is
-		# unchanged; it simply no longer swallows the gate above.
-		unless (($params->{outputFormat} // '') eq 'ptx') {
-			Renderer::Lane::Ungrounded::apply($c, $params) or return;
-		}
+		Renderer::Lane::Ungrounded::apply($c, $params) or return;
 	}
 
 	# Post-dispatch finalize.

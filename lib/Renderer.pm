@@ -356,7 +356,27 @@ sub _register_routes ($self) {
 	$r->post('/render-api/solution')->to('render#solution');
 	$r->post('/render-api/answer')->to('render#answer');
 	$r->post('/render-api/admin/inspect-cache')->to('AdminInspect#inspectCache');
-	$r->any('/render-ptx')->to('render#render_ptx');
+	# PTX — opt-in, and absent otherwise (WW3-R45).
+	#
+	# This route generates static textbook content from PG source for PreTeXt
+	# book compilation. It is not interactive and not student-facing: it runs
+	# showSolutions/showHints/processAnswers and serialises every AnswerHash
+	# key, correct_ans included. Its consumer is an author compiling a book on
+	# a local box, who legitimately wants all of that.
+	#
+	# So it is registered only where a deployment asks for it, and it carries
+	# no credential gate when it is — a local PreTeXt pipeline has no token to
+	# present, and requiring one would break the only use case. ENABLE_PTX is
+	# the whole access decision, the same way STRICT_JWT=0 is the whole access
+	# decision for the VPC-isolated editor posture.
+	#
+	# Absent beats gated: an unregistered route cannot be reached by a request,
+	# a misconfiguration, or a future lane bug. Measured 2026-08-07, while it
+	# was still registered unconditionally: POST /render-ptx returned 200 and
+	# correct_ans to an unauthenticated caller on a STRICT_JWT=1 deployment,
+	# because it does not route through ParseRequest and never met the entry
+	# gate.
+	$r->any('/render-ptx')->to('render#render_ptx') if $ENV{ENABLE_PTX};
 	$r->any(
 		'/health' => sub ($c) {
 			my $ok = eval { -d "$ENV{RENDER_ROOT}/private" };

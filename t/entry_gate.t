@@ -78,6 +78,12 @@ subtest 'STRICT_JWT=1: ungrounded PTX is refused too (WW3-R44)' => sub {
 	unlike($t->tx->res->body, qr/correct_ans/,  'no correct_ans in a refused response');
 };
 
+# `ptx` is no longer an output format of this endpoint (WW3-R45), so the
+# subtest above now sends a name that selects nothing. It is kept spelling
+# `ptx` rather than a generic string because that exact value is what walked
+# past the gate historically — it remains the precise regression guard for
+# the original defect, and it should stay 401 for both reasons at once.
+
 subtest 'STRICT_JWT=1: ungrounded debug format is refused as well' => sub {
 	local $ENV{STRICT_JWT} = 1;
 	$t->post_ok(
@@ -89,7 +95,16 @@ subtest 'STRICT_JWT=1: ungrounded debug format is refused as well' => sub {
 	)->status_is(401);
 };
 
-subtest 'STRICT_JWT=0: ungrounded PTX still renders (editor posture intact)' => sub {
+# ─── WW3-R45: PTX left this endpoint and became opt-in ────────────────────
+#
+# It used to be an output format here, which meant a student holding their own
+# problemJWT could spell `outputFormat=ptx` and receive correct_ans for their
+# assigned problem without submitting anything. PTX generates static textbook
+# content for PreTeXt book compilation — it is not interactive and not
+# student-facing — so it now has its own route, registered only where a
+# deployment sets ENABLE_PTX.
+
+subtest 'outputFormat=ptx no longer produces an answer hash here' => sub {
 	local $ENV{STRICT_JWT} = 0;
 	$t->post_ok(
 		'/render-api' => form => {
@@ -99,7 +114,26 @@ subtest 'STRICT_JWT=0: ungrounded PTX still renders (editor posture intact)' => 
 		}
 	)->status_is(200);
 
-	like($t->tx->res->body, qr/answerhashes/, 'PTX still produces its answer hash on a trusted-network box');
+	unlike($t->tx->res->body, qr/answerhashes/, 'no answer hash — ptx selects nothing here now');
+	unlike($t->tx->res->body, qr/correct_ans/,  'and no correct_ans');
+};
+
+subtest '/render-ptx is absent unless ENABLE_PTX is set' => sub {
+	$t->post_ok('/render-ptx' => form => { rawProblemSource => $pg_source })->status_is(404);
+};
+
+subtest '/render-ptx serves a PreTeXt author when ENABLE_PTX is set' => sub {
+	# Routes register at startup, so this needs its own app instance rather
+	# than a local() around a request.
+	my $t_ptx = do {
+		local $ENV{ENABLE_PTX} = 1;
+		Test::Mojo->new('Renderer');
+	};
+
+	$t_ptx->post_ok('/render-ptx' => form => { rawProblemSource => $pg_source, problemSeed => 1234 })
+		->status_is(200);
+
+	like($t_ptx->tx->res->body, qr/answerhashes/, 'the author gets the answer hash they came for');
 };
 
 # ─── WW3-R45: the response shape is not negotiable ────────────────────────

@@ -14,10 +14,10 @@ package Renderer::Lane::Ungrounded;
 # only re-injected from upstream claims) so _can_emit_answer_jwt stays
 # unset and answerJWTs cannot be produced even after round-tripping.
 #
-# Note: this lane fires only when outputFormat != 'ptx' AND STRICT_JWT is
-# falsy. PTX renders skip the body-lane entirely (no JWT minted, no
-# defaults applied); STRICT_JWT-rejected requests are short-circuited at
-# the dispatcher before this lane runs.
+# Note: this lane fires only when STRICT_JWT is falsy — STRICT_JWT-rejected
+# requests are short-circuited at the dispatcher before it runs. It used to
+# also except `outputFormat=ptx`; PTX left this endpoint in WW3-R45 and now
+# has its own route, so the exception went with it.
 
 use strict;
 use warnings;

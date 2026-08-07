@@ -164,20 +164,6 @@ sub formatRenderedProblem {
 		)->join('');
 	}
 
-	# Answer hash in XML format used by the PTX format.
-	my $answerhashXML = '';
-	if ($formatName eq 'ptx') {
-		my $dom = Mojo::DOM->new->xml(1);
-		for my $answer (sort keys %{ $rh_result->{answers} }) {
-			$dom->append_content($dom->new_tag(
-				$answer,
-				map { $_ => ($rh_result->{answers}{$answer}{$_} // '') } keys %{ $rh_result->{answers}{$answer} }
-			));
-		}
-		$dom->wrap_content('<answerhashes></answerhashes>');
-		$answerhashXML = $dom->to_string;
-	}
-
 	# Make sure this is defined and is an array reference as saveGradeToLTI might add to it.
 	$rh_result->{debug_messages} = [] unless defined $rh_result && ref $rh_result->{debug_messages} eq 'ARRAY';
 
@@ -277,9 +263,17 @@ sub formatRenderedProblem {
 	}
 
 	# Setup and render the appropriate template in the templates/RPCRenderFormats folder depending on the outputformat.
-	# "ptx" has a special template.  "json" uses the default json template.  All others use the default html template.
+	# "json" uses the default json template.  All others use the default html template.
+	#
+	# WW3-R45: "ptx" used to select RPCRenderFormats/ptx from here. PTX is not
+	# an interactive format — it generates static textbook content from PG
+	# source for PreTeXt book compilation — so it reaches that template through
+	# its own endpoint (POST /render-ptx), which builds its own answer hash in
+	# WeBWorK::PreTeXt::render_ptx. Serving it from here meant a student holding
+	# their own problemJWT could spell `outputFormat=ptx` and receive
+	# correct_ans for their assigned problem, before submitting anything.
 	my %template_params = (
-		template => $formatName eq 'ptx' ? 'RPCRenderFormats/ptx' : 'RPCRenderFormats/default',
+		template => 'RPCRenderFormats/default',
 		$formatName eq 'json' ? (format => 'json') : (),
 		formatName               => $formatName,
 		lh                       => WeBWorK::Localize::getLangHandle($inputs_ref->{language} // 'en'),
@@ -300,7 +294,6 @@ sub formatRenderedProblem {
 		resultSummary            => $resultSummary,
 		showSummary              => $showSummary,
 		showScoreSummary         => $showScoreSummary,
-		answerhashXML            => $answerhashXML,
 		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? 0 : 1,
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton}
 			// ($inputs_ref->{isInstructor} ? 1 : 0),
