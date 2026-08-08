@@ -257,10 +257,10 @@ subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' 
 		'subsequent submit still produces answerJWT (renderer never terminates post-R31)');
 };
 
-subtest 'showCorrectAnswers: answersRevealed ratchets, renderer keeps emitting' => sub {
+subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' => sub {
 	my $problemJWT = upstream_problem_jwt();
 
-	# Wrong answer + reveal → peek-before-earn → ratchet fires
+	# Wrong answer + reveal → this render showed the answer.
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT         => $problemJWT,
@@ -273,19 +273,19 @@ subtest 'showCorrectAnswers: answersRevealed ratchets, renderer keeps emitting' 
 		}
 	)->status_is(200);
 
-	my $submit         = $t->tx->res->json;
-	my $sessionJWT     = $submit->{tokens}{sessionJWT};
-	my $session_claims = decode_jwt(token => $sessionJWT, key => $ENV{webworkJWTsecret});
-	is($session_claims->{answersRevealed},
-		1, 'sessionJWT carries the answersRevealed ratchet (peek-before-earn fired)');
+	my $submit        = $t->tx->res->json;
+	my $answer1       = decode_jwt(token => $submit->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
+	is($answer1->{answers_shown}, 1, 'answerJWT.answers_shown = 1 (this render showed answers)');
 
-	# Subsequent submit — renderer keeps emitting; the answerJWT carries the
-	# inbound cumulative so the LMS sees this submission was post-reveal.
+	# Subsequent submit WITHOUT reveal → answers_shown = 0. There is no sticky
+	# carry-forward: each render reports its own fact. The old ratchet would
+	# have kept answersRevealed=1 here; the plain fact does not, because WW3
+	# owns reveal history in the chain, not the wire.
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT    => $problemJWT,
 			problemSource => $pg_source,
-			sessionJWT    => $sessionJWT,
+			sessionJWT    => $submit->{tokens}{sessionJWT},
 			outputFormat  => 'debug',
 			problemSeed   => 9999,
 			submitAnswers => 1,
@@ -294,11 +294,9 @@ subtest 'showCorrectAnswers: answersRevealed ratchets, renderer keeps emitting' 
 	)->status_is(200);
 
 	my $follow_up = $t->tx->res->json;
-	my $answer    = $follow_up->{tokens}{answerJWT};
-	ok($answer, 'follow-up submit still produces answerJWT (no terminal state)');
-	my $answer_claims = decode_jwt(token => $answer, key => $ENV{problemJWTsecret});
-	is($answer_claims->{answersRevealed},
-		1, 'answerJWT carries inbound cumulative — LMS sees the submission was post-reveal');
+	ok($follow_up->{tokens}{answerJWT}, 'follow-up submit still produces answerJWT');
+	my $answer2 = decode_jwt(token => $follow_up->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
+	is($answer2->{answers_shown}, 0, 'answers_shown = 0 on the follow-up (no sticky carry-forward)');
 };
 
 done_testing();

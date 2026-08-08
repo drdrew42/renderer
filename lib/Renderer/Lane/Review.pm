@@ -120,8 +120,14 @@ sub apply ($c, $params) {
 	# student saw on submit.
 	$params->{submitAnswers} = 1;
 
-	# outputFormat lock — reView is iframe-only.
-	$params->{outputFormat} = 'default';
+	# outputFormat lock — reView renders `static`: iframe-only, and a read-only
+	# replay rather than a live attempt. `static` hides the submit/reveal
+	# buttons (WW3-R21) and, critically, marks the render as "display, don't
+	# count" — Render.pm records no interaction telemetry for a static render,
+	# which is what stops a reView from logging a phantom submit (WW3-R49).
+	# (Genuinely non-interactive inputs — MathQuill as static divs — is a
+	# separate follow-up; static hides the buttons today.)
+	$params->{outputFormat} = 'static';
 
 	# Elevation params (WW3-R46). isInstructor lands on the student default
 	# and is NOT recoverable here: the submissionJWT carries no role claim,

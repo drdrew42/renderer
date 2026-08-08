@@ -71,41 +71,26 @@ sub resolve_permissions ($inputs_ref) {
 	};
 }
 
-# Compute the reveal-reporting facts for the current render. Returns the six
-# fields the answerJWT and submissionJWT carry per WW3-R29:
-#   answers_requested      — per-render, effective showCorrectAnswers
-#   solutions_requested    — per-render, effective showSolutions
-#   answers_revealed_in    — inbound cumulative (state-at-submission-time)
-#   solutions_revealed_in  — inbound cumulative
-#   answers_revealed_out   — outbound cumulative (sticky one-way: prior OR newly ratcheted)
-#   solutions_revealed_out — outbound cumulative
+# Compute the reveal-reporting fact for the current render: was each of
+# answers / solutions shown? A plain per-render pair, carried on the
+# answerJWT and submissionJWT so the backend has a record of what a render
+# disclosed — "just in case" (Drew, 2026-08-07).
 #
-# The ratchet only flips 0→1 when *_requested fires AND post-render is still
-# incomplete (recorded_score < 1). Earned-then-peek doesn't ratchet.
+#   answers_shown    — effective showCorrectAnswers this render
+#   solutions_shown  — effective showSolutions this render
 #
-# Decoupled from PG: caller passes the recorded_score scalar so this module
-# stays in pure-permission territory and doesn't reach into $pg internals.
-# Moved from WeBWorK::RenderProblem in WW3-R36.
-sub reveal_state ($inputs_ref, $recorded_score = 0) {
-	my $perms               = resolve_permissions($inputs_ref);
-	my $answers_requested   = $perms->{showCorrectAnswers};
-	my $solutions_requested = $perms->{showSolutions};
-
-	my $answers_revealed_in   = $inputs_ref->{answersRevealed}   ? 1 : 0;
-	my $solutions_revealed_in = $inputs_ref->{solutionsRevealed} ? 1 : 0;
-
-	my $earned = ($recorded_score // 0) >= 1;
-
-	my $answers_revealed_out   = ($answers_revealed_in   || ($answers_requested   && !$earned)) ? 1 : 0;
-	my $solutions_revealed_out = ($solutions_revealed_in || ($solutions_requested && !$earned)) ? 1 : 0;
-
+# This used to be a six-field dual-state ratchet (per-render *_requested plus
+# a sticky one-way *_revealed_in/out) so the orchestrator could INFER reveal
+# history from the wire. WW3-116/117 abandoned that: WW3 gates reveals on the
+# frontend and records them to the chain at mint, so nothing consumed the
+# sticky state — WW3 read none of it, and ADAPT hides the reveal button and
+# reads none of it either. The ratchet and its answer-URL peek-trigger are
+# gone; what remains is the honest per-render fact.
+sub reveal_state ($inputs_ref) {
+	my $perms = resolve_permissions($inputs_ref);
 	return {
-		answers_requested      => $answers_requested,
-		solutions_requested    => $solutions_requested,
-		answers_revealed_in    => $answers_revealed_in,
-		solutions_revealed_in  => $solutions_revealed_in,
-		answers_revealed_out   => $answers_revealed_out,
-		solutions_revealed_out => $solutions_revealed_out,
+		answers_shown   => $perms->{showCorrectAnswers},
+		solutions_shown => $perms->{showSolutions},
 	};
 }
 

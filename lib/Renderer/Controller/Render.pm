@@ -74,21 +74,15 @@ async sub problem ($c) {
 	$return_object->{inputs_ref} = $inputs_ref;
 
 	# If answerURL provided, send the answerJWT (problem-lane) or submissionJWT
-	# envelope (challenge-lane) back to the LMS. Triggers:
-	#   (a) submitAnswers — the canonical case (graded submission).
-	#   (b) ratchet flipped this render — student peeked (showCorrectAnswers=1
-	#       requested + recorded_score < 1) without submitting. The LMS learns
-	#       about reveals at render time rather than waiting for next submit.
-	#       Problem-lane only; challenge-lane peeks aren't notified here
-	#       because the orchestrator owns chain history via mode atoms.
-	# The renderer is dumb here: a JWT-declared answerURL means "report back."
-	my $ratchet_flipped = $return_object->{_reveal_state}
-		&& (($return_object->{_reveal_state}{answers_revealed_out} || 0) >
-			($return_object->{_reveal_state}{answers_revealed_in} || 0)
-			|| ($return_object->{_reveal_state}{solutions_revealed_out} || 0) >
-			($return_object->{_reveal_state}{solutions_revealed_in} || 0));
-
-	if ($inputs_ref->{JWTanswerURL} && ($inputs_ref->{submitAnswers} || $ratchet_flipped)) {
+	# envelope (challenge-lane) back to the LMS on a graded submission.
+	#
+	# This used to also fire on a "ratchet flip" — a peek (showCorrectAnswers
+	# without submit) reported to the LMS at render time. That path is gone: it
+	# only ever fired on the problem lane (the challenge lane hard-zeroes
+	# showCorrectAnswers), and ADAPT hides the reveal button so it never fired
+	# there either. Reveals are recorded by WW3 at mint now, not inferred from
+	# a render-time report. So the trigger is submit, full stop.
+	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}) {
 		# Emission gate. The renderer's contract is validate-then-render; we
 		# do NOT refuse to render based on grounding shape. What we DO refuse
 		# is to emit a signed answerJWT without upstream grounding — that's a
@@ -97,7 +91,7 @@ async sub problem ($c) {
 		# Orthogonal to STRICT_JWT (which governs whether ungrounded requests
 		# are admitted at all). Ref: WeBWorK3/Config and Secrets Evolution.
 		unless ($c->stash('_can_emit_answer_jwt')) {
-			$c->log->error('Student submit/peek without upstream JWT — rejecting answer emission.');
+			$c->log->error('Student submit without upstream JWT — rejecting answer emission.');
 			return $c->exception('Submit requires a problemJWT, challengeJWT, or sessionJWT.', 403);
 		}
 		await Renderer::Render::AnswerURL::process($c, $inputs_ref, $return_object);
@@ -141,9 +135,20 @@ async sub problem ($c) {
 			render_ms => $render_ms,
 		);
 
+		# `static` = "display, don't count." reView renders static (a read-only
+		# replay of acts that already happened), so it is neither a fresh
+		# content observation nor an interaction. One signal, both exclusions —
+		# and the thing that stops reView logging phantom submits to OPL
+		# (WW3-R49). record_render above is left universal: a reView IS an
+		# honest render for code-path health, whoever asked for it.
+		my $is_static = ($inputs_ref->{outputFormat} // '') eq 'static';
+
 		# Seed diversity: first-render only, error-free (an errored render's
-		# html_hash carries the error template, not a content variant).
-		if ($c->stash('_is_first_render') && !$error_count && defined $return_object->{text}) {
+		# html_hash carries the error template, not a content variant), and
+		# never a static replay. _is_first_render (no sessionJWT) already
+		# excludes the play loop's resume/submit re-renders; `static` excludes
+		# reView, which carries no sessionJWT and would otherwise read as first.
+		if ($c->stash('_is_first_render') && !$error_count && !$is_static && defined $return_object->{text}) {
 			my $html_hash = Renderer::Telemetry::content_hash($return_object->{text}, $return_object->{answers});
 			Renderer::Telemetry::record_seed_observation(
 				pg_hash   => $inputs_ref->{pg_hash},
@@ -152,7 +157,11 @@ async sub problem ($c) {
 			) if $html_hash;
 		}
 
-		unless ($inputs_ref->{isInstructor}) {
+		# An interaction is an ACT — a graded submit, or a give-up (peeking at
+		# the correct answer instead of finishing, which lumps with the
+		# never-finished tail in the per-problem outcome distribution). A
+		# reView is neither, so a static render records none.
+		unless ($inputs_ref->{isInstructor} || $is_static) {
 			if ($inputs_ref->{submitAnswers}) {
 				Renderer::Telemetry::record_interaction(
 					pg_hash => $inputs_ref->{pg_hash},

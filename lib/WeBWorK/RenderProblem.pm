@@ -223,14 +223,6 @@ sub standaloneRenderer {
 	# OR them together so any signal triggers it.
 	$inputs_ref->{answersSubmitted} ||= $isSubmit;
 
-	# Collapse the hideAttemptsTable alias into canonical hideFeedback before
-	# mode resolution. Lets the mode's override posture work correctly — a
-	# mode setting hideFeedback=0 (e.g. "default") wins over a stale legacy
-	# alias claim. DEPRECATED: remove this collapse after Summer 2026 along
-	# with the alias itself.
-	$inputs_ref->{hideFeedback} ||= $inputs_ref->{hideAttemptsTable}
-		if $inputs_ref->{hideAttemptsTable};
-
 	# Render-mode resolution happened upstream in
 	# Renderer::Render::ParseRequest::dispatch — pre-fork, parent process.
 	# By the time we get here, $inputs_ref already carries the resolved
@@ -386,38 +378,12 @@ sub generateJWTs {
 		result  => $pg->{problem_result}{score},
 		answers => unbless($pg->{answers}),
 	};
-	# Reveal reporting (WW3-R29 dual-state model):
-	#
-	#   *Requested — per-render fact: this render exposed correct answers /
-	#       solutions to the student. Effective value (from resolve_permissions)
-	#       so it reflects what was ACTUALLY rendered, not just what the caller
-	#       asked.
-	#
-	#   *Revealed — cumulative sticky one-way ratchet. The 0→1 flip happens
-	#       only when *Requested fires AND post-render recorded_score < 1
-	#       (the student saw the canonical answer/solution while it could
-	#       still affect their score). Earned-then-peek doesn't ratchet —
-	#       no concern if the student already got there on their own.
-	#
-	# Temporal correctness:
-	#   answerJWT carries inbound cumulative (state-at-submission-time —
-	#       the student's attempt this submission was made with this much
-	#       prior knowledge).
-	#   sessionJWT carries outbound cumulative (sticky-rolled with any new
-	#       ratchet from this render — propagates to next render).
-	my $reveal = reveal_state($inputs_ref, $pg->{problem_state}{recorded_score});
-
-	if (!$inputs_ref->{isInstructor}) {
-		$sessionHash->{answersRevealed}   = $reveal->{answers_revealed_out}   if $reveal->{answers_revealed_out};
-		$sessionHash->{solutionsRevealed} = $reveal->{solutions_revealed_out} if $reveal->{solutions_revealed_out};
-
-		# Stash reveal state on the render result so the controller's emission
-		# gate can fire on ratchet-activated peeks without submitAnswers. The
-		# LMS learns about a reveal event at render time rather than waiting
-		# for the next submit. Instructor renders skip the stash — instructor
-		# previews aren't accountability events the LMS cares to log.
-		$pg->{_reveal_state} = $reveal;
-	}
+	# Reveal reporting: a plain per-render fact — did this render show correct
+	# answers / solutions. The former sticky one-way ratchet (and the answer-URL
+	# peek-trigger it drove) is gone; WW3 records reveals to the chain at mint
+	# and gates them on the frontend, and ADAPT hides the reveal button, so
+	# nothing consumed the cumulative state. See Renderer::Permissions.
+	my $reveal = reveal_state($inputs_ref);
 
 	# store the current answer/response state for each entry
 	foreach my $ans (@{ $pg->{flags}{KEPT_EXTRA_ANSWERS} }) {
@@ -446,22 +412,18 @@ sub generateJWTs {
 	# remains self-contained as a restart token; the duplication is
 	# intentional for the legacy path.
 	#
-	# answerJWT carries INBOUND cumulative reveal state (state-at-submission-
-	# time) and per-render *Requested facts. The OUTBOUND cumulative lives in
-	# the sessionJWT we just minted; the LMS reads inbound here so it knows
-	# whether the student's attempt this submission happened with prior
-	# reveal knowledge. (WW3-R29 dual-state model.)
+	# answerJWT carries the per-render reveal fact — whether this render showed
+	# answers / solutions. No cumulative state: WW3 owns reveal history in the
+	# chain, and ADAPT reads none of these fields.
 	my $responseHash = {
-		iss                => $ENV{SITE_HOST},
-		aud                => $inputs_ref->{JWTanswerURL},
-		score              => $scoreHash,
-		problemJWT         => $inputs_ref->{problemJWT},
-		sessionJWT         => $sessionJWT,
-		answersRequested   => $reveal->{answers_requested},
-		solutionsRequested => $reveal->{solutions_requested},
-		answersRevealed    => $reveal->{answers_revealed_in},
-		solutionsRevealed  => $reveal->{solutions_revealed_in},
-		platform           => PLATFORM_NAME,
+		iss             => $ENV{SITE_HOST},
+		aud             => $inputs_ref->{JWTanswerURL},
+		score           => $scoreHash,
+		problemJWT      => $inputs_ref->{problemJWT},
+		sessionJWT      => $sessionJWT,
+		answers_shown   => $reveal->{answers_shown},
+		solutions_shown => $reveal->{solutions_shown},
+		platform        => PLATFORM_NAME,
 	};
 
 	my $answerJWT = mint_jwt($ENV{problemJWTsecret}, $responseHash);
@@ -573,11 +535,11 @@ sub generateSubmissionJWT {
 	my @t            = gmtime();
 	my $submitted_at = sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
 
-	# WW3-R29: per-render reveal facts in the modern lane. Only *_requested
-	# (per-render); cumulative *_revealed lives in the orchestrator's chain
-	# entries, queried by mode atoms when policy needs history. play_sessionJWT
-	# carries nothing reveal-related — navigation state only.
-	my $reveal = reveal_state($inputs_ref, $pg->{problem_state}{recorded_score});
+	# Per-render reveal fact: was each of answers/solutions shown this render.
+	# Cumulative reveal history lives in the orchestrator's chain entries (the
+	# reveal is minted and recorded by WW3, per WW3-117), not inferred from the
+	# wire. play_sessionJWT carries nothing reveal-related — navigation only.
+	my $reveal = reveal_state($inputs_ref);
 
 	my $payload = {
 		iss => $ENV{SITE_HOST},
@@ -595,11 +557,11 @@ sub generateSubmissionJWT {
 		part_scores       => \@part_scores,
 		score             => ($pg->{problem_result}{score} // 0) + 0,
 
-		# Per-render reveal facts (snake_case to match existing submissionJWT
-		# field convention). The orchestrator records to chain entries; mode
-		# atoms read history from chain when needed.
-		answers_requested   => $reveal->{answers_requested},
-		solutions_requested => $reveal->{solutions_requested},
+		# Per-render reveal fact (snake_case per submissionJWT convention). The
+		# orchestrator records reveals to chain entries at mint; this is a
+		# record of what the render disclosed, not a signal it acts on.
+		answers_shown   => $reveal->{answers_shown},
+		solutions_shown => $reveal->{solutions_shown},
 
 		submitted_at => $submitted_at,
 	};
