@@ -57,6 +57,13 @@ sub formatRenderedProblem {
 	# HTML document language setting
 	my $formLanguage = $inputs_ref->{language} // 'en';
 
+	# For a static (read-only) render, swap PG's editable MathQuill editor for a
+	# renderer-owned read-only initializer (WW3-121): drop mqeditor.js/.css from
+	# the PG asset lists below and inject js/apps/StaticMathQuill/. mathquill
+	# (the library) stays. Keeps static rendering on the renderer's side rather
+	# than forking PG's mqeditor.
+	my $static_render = (($inputs_ref->{outputFormat} // '') eq 'static');
+
 	# Third party CSS — config-driven (WW3-R24). Defaults baked into
 	# Renderer.pm startup; per-language asset resolution still happens here.
 	my $css_list        = $c->config('third_party_css') // [];
@@ -72,6 +79,7 @@ sub formatRenderedProblem {
 	my %cssFilesAdded;    # Used to avoid duplicates
 	my @extra_css_files;
 	for (@cssFiles) {
+		next if $static_render && $_->{file} =~ m{MathQuill/mqeditor\.css$};
 		next if $cssFilesAdded{ $_->{file} };
 		$cssFilesAdded{ $_->{file} } = 1;
 		if ($_->{external}) {
@@ -90,21 +98,23 @@ sub formatRenderedProblem {
 	# Get the requested format. (outputFormat or outputformat)
 	my $formatName = $inputs_ref->{outputFormat} || 'default';
 
-	# Collapse the default/simple/static alias cluster (WW3-R21). All three
-	# render the same template; `static` hides the two remaining buttons.
-	# `simple` is a pure alias for `default`. Caller's explicit per-button
-	# flags always win — translate only when the flag isn't already set.
+	# default / simple / static all render the same template: it is
+	# `RPCRenderFormats/default` for every format except json (below), so any
+	# non-json format lands there while keeping its own name. `static` also
+	# hides the two buttons and — via the data-static stamp the template reads
+	# from formatName — renders non-interactive (WW3-121). Caller's explicit
+	# per-button flags win; translate only when the flag isn't already set.
 	if ($formatName eq 'static') {
 		$inputs_ref->{hideCheckAnswersButton}   //= 1;
 		$inputs_ref->{showCorrectAnswersButton} //= 0;
 	}
-	$formatName = 'default' if $formatName eq 'simple' || $formatName eq 'static';
 
 	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
 	my @extra_js_files;
 	if (ref($rh_result->{flags}{extra_js_files}) eq 'ARRAY') {
 		my %jsFiles;
 		for (@{ $rh_result->{flags}{extra_js_files} }) {
+			next if $static_render && $_->{file} =~ m{MathQuill/mqeditor\.js$};
 			next if $jsFiles{ $_->{file} };
 			$jsFiles{ $_->{file} } = 1;
 			my %attributes = ref($_->{attributes}) eq 'HASH' ? %{ $_->{attributes} } : ();
@@ -121,6 +131,19 @@ sub formatRenderedProblem {
 				);
 			}
 		}
+	}
+
+	# Inject the renderer-owned read-only MathQuill initializer for static
+	# renders — its editable counterpart (PG's mqeditor.js) was dropped above.
+	if ($static_render) {
+		push(
+			@extra_js_files,
+			{
+				file       => getAssetURL($formLanguage, 'js/apps/StaticMathQuill/static-mathquill.js'),
+				external   => 0,
+				attributes => { defer => undef }
+			}
+		);
 	}
 
 	# Set up the problem language and direction

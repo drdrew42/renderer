@@ -1,10 +1,11 @@
 % use WeBWorK::Utils qw(getAssetURL wwRound);
 %
 <!DOCTYPE html>
+% my $static_attr = $formatName eq 'static' ? ' data-static="1"' : '';
 % if ($parent_origin) {
-<html <%== $COURSE_LANG_AND_DIR %> data-parent-origin="<%= $parent_origin %>" data-trust-lane="<%= $trust_lane %>">
+<html <%== $COURSE_LANG_AND_DIR %> data-parent-origin="<%= $parent_origin %>" data-trust-lane="<%= $trust_lane %>"<%== $static_attr %>>
 % } else {
-<html <%== $COURSE_LANG_AND_DIR %> data-trust-lane="<%= $trust_lane %>">
+<html <%== $COURSE_LANG_AND_DIR %> data-trust-lane="<%= $trust_lane %>"<%== $static_attr %>>
 % }
 <head>
 	<meta charset='utf-8'>
