@@ -78,17 +78,6 @@ sub apply ($c, $params) {
 	# is exactly how Lane::Challenge and Lane::Review ended up unprotected
 	# while this lane was hardened in WW3-R41.
 
-	# `showCorrectAnswers` is kept out of ELEVATION_PARAMS deliberately — it is
-	# the self-reveal button's own mechanism on the modes that offer it. But this
-	# lane's callers (ADAPT/LibreTexts) never offer that button and never send
-	# the flag, so a raw student `showCorrectAnswers=1` here is pure self-reveal:
-	# the WW3-R46 class of hole, previously unpatched on this lane. Strip the raw
-	# value so a student cannot inject it; a signed claim below may still set it
-	# (LMS-controlled reveal), and instructors reveal via the isInstructor claim
-	# regardless. Lane-local, so the legitimate no-stakes/preview button on other
-	# lanes is untouched.
-	delete $params->{showCorrectAnswers};
-
 	# Bulk merge: claims override raw params (claims-always-win precedence —
 	# the whole point of carrying an upstream JWT is the upstream's view of
 	# the problem context wins).

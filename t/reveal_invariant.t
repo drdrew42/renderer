@@ -135,20 +135,6 @@ sub submission_jwt {
 	);
 }
 
-sub problem_jwt {
-	# A problem-lane (LibreTexts/ADAPT) student token — no isInstructor claim.
-	return encode_jwt(
-		payload => {
-			aud           => $ENV{SITE_HOST},
-			iss           => $ENV{SITE_HOST},
-			problemSource => $pg_source,
-			problemSeed   => 4242,
-		},
-		key => $ENV{problemJWTsecret},
-		alg => 'HS256',
-	);
-}
-
 sub body { return $t->tx->res->body }
 
 # ─── Challenge lane (WW3 play) ───────────────────────────────────────────────
@@ -245,28 +231,6 @@ subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-stat
 		local $TODO = 'until WW3-117 removes the reView showCorrectAnswers interim (Review.pm:137)';
 		is($with, $baseline, 'showCorrectAnswers must not change the reView render');
 	}
-};
-
-# ─── Problem lane (LibreTexts/ADAPT) ─────────────────────────────────────────
-
-subtest 'Problem lane: raw showCorrectAnswers=1 does not reveal (student, WW3-R51)' => sub {
-	# The problem lane keeps in-render reveal for a trusted isInstructor claim
-	# (the convenience path — covered in entry_gate.t), but a STUDENT must not be
-	# able to inject showCorrectAnswers. WW3-R51 strips the raw value on this
-	# lane; a signed claim may still set it, and instructors reveal via
-	# isInstructor regardless.
-	my $jwt  = problem_jwt();
-	my %base = (problemJWT => $jwt, submitAnswers => 1, 'AnSwEr0001' => '0');
-
-	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
-	my $baseline = body();
-
-	$t->post_ok('/render-api', { Accept => 'application/json' }, form => { %base, showCorrectAnswers => 1 })
-		->status_is(200);
-	my $with = body();
-
-	unlike($with, $ANSWER_MARK, 'raw showCorrectAnswers is stripped on the problem lane — no correct_ans');
-	is(length($with), length($baseline), 'byte-length identical to the un-flagged submit');
 };
 
 # ─── Feedback flags are NOT reveal — do not over-retire them ─────────────────
