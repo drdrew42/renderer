@@ -2,8 +2,7 @@ package Renderer::Controller::Render;
 use Mojo::Base 'Mojolicious::Controller', -async_await, -signatures;
 
 # Core /render-api action plus the small content-fetch endpoints (hint,
-# solution, render_ptx) and the legacy JWT-mint helpers (jwtFromRequest,
-# jweFromRequest, used by the dev-mode supplementalRoutes).
+# solution, answer, render_ptx).
 #
 # The heavy lifting lives in dedicated modules (extracted in WW3-R33):
 #
@@ -335,26 +334,6 @@ sub croak ($c, $exception, $depth) {
 
 	$c->exception($pretty_error, 500);
 	return;
-}
-
-sub jweFromRequest ($c) {
-	my $inputs_ref = $c->parseRequest;
-	return unless $inputs_ref;
-	$inputs_ref->{aud} = $ENV{SITE_HOST};
-	return $c->render(
-		text => mint_jwt(
-			$ENV{problemJWTsecret}, $inputs_ref,
-			alg => 'PBES2-HS512+A256KW',
-			enc => 'A256GCM',
-		)
-	);
-}
-
-sub jwtFromRequest ($c) {
-	my $inputs_ref = $c->parseRequest;
-	return unless $inputs_ref;
-	$inputs_ref->{aud} = $ENV{SITE_HOST};
-	return $c->render(text => mint_jwt($ENV{problemJWTsecret}, $inputs_ref));
 }
 
 1;

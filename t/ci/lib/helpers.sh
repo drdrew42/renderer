@@ -35,44 +35,6 @@ render_raw() {
     curl -sf --max-time "$CURL_TIMEOUT" -X POST "${data[@]}" "${BASE_URL}/render-api" 2>/dev/null
 }
 
-# render_via_jwe PARAM=VALUE ...
-# First get JWE from /render-api/jwe, then render with problemJWT=<token>.
-render_via_jwe() {
-    local data=()
-    for param in "$@"; do
-        data+=(--data-urlencode "$param")
-    done
-    local token
-    token=$(curl -sf --max-time "$CURL_TIMEOUT" -X POST "${data[@]}" "${BASE_URL}/render-api/jwe" 2>/dev/null)
-    if [[ -z "$token" ]]; then
-        echo "ERROR: Failed to get JWE token" >&2
-        return 1
-    fi
-    curl -sf --max-time "$CURL_TIMEOUT" -X POST \
-        -d "problemJWT=${token}" \
-        -d "_format=json" \
-        "${BASE_URL}/render-api" 2>/dev/null
-}
-
-# render_via_jws PARAM=VALUE ...
-# Same as render_via_jwe but uses /render-api/jwt (HS256 signed).
-render_via_jws() {
-    local data=()
-    for param in "$@"; do
-        data+=(--data-urlencode "$param")
-    done
-    local token
-    token=$(curl -sf --max-time "$CURL_TIMEOUT" -X POST "${data[@]}" "${BASE_URL}/render-api/jwt" 2>/dev/null)
-    if [[ -z "$token" ]]; then
-        echo "ERROR: Failed to get JWS token" >&2
-        return 1
-    fi
-    curl -sf --max-time "$CURL_TIMEOUT" -X POST \
-        -d "problemJWT=${token}" \
-        -d "_format=json" \
-        "${BASE_URL}/render-api" 2>/dev/null
-}
-
 # http_status METHOD URL [DATA_PARAMS...]
 # Returns HTTP status code only.
 http_status() {

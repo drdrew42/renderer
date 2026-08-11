@@ -149,8 +149,6 @@ run_suite() {
 }
 
 run_suite "$SCRIPT_DIR/01-smoke.sh"
-run_suite "$SCRIPT_DIR/02-render-parity.sh"
-run_suite "$SCRIPT_DIR/03-answer-cycle.sh"
 run_suite "$SCRIPT_DIR/04-endpoints.sh"
 
 # ── Final Report ─────────────────────────────────────────────

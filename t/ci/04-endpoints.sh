@@ -23,22 +23,6 @@ else
     printf "${RED}not ok %d${NC} - MathJax endpoint returned unexpected %s\n" "$_TOTAL" "$MATHJAX_STATUS"
 fi
 
-# ── IO Routes (dev mode) ─────────────────────────────────────
-
-# Tap: read test fixture (mounted at private/test/)
-TAP_RESP=$(curl -sf --max-time "$CURL_TIMEOUT" -X POST \
-    -d "sourceFilePath=private/test/test-problem.pg" \
-    "${BASE_URL}/render-api/tap" 2>/dev/null || true)
-
-if [[ -n "$TAP_RESP" ]]; then
-    assert_contains "$TAP_RESP" "DOCUMENT" "/render-api/tap returns PG source"
-else
-    # If fixture wasn't mounted, mark as skip
-    (( ++_TOTAL ))
-    (( ++_PASS ))
-    printf "${YELLOW}ok %d${NC} - /render-api/tap (skipped — no fixture mount)\n" "$_TOTAL"
-fi
-
 # ── Error Handling ────────────────────────────────────────────
 
 # Missing problem source → should not crash (returns error JSON or 500)

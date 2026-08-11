@@ -400,7 +400,7 @@ sub _register_routes ($self) {
 		}
 	);
 
-	# Enable problem editor & OPL browser -- NOT recommended for production environment!
+	# Dev-only test hooks (/die, /timeout) — NOT for production.
 	supplementalRoutes($r) if ($self->mode eq 'development' || $self->config('FULL_APP_INSECURE'));
 
 	# Static file routes — must come last so the catch-all doesn't shadow real endpoints.
@@ -414,10 +414,6 @@ sub supplementalRoutes ($r) {
 	# Testing
 	$r->any('/die'     => sub { die "what did you expect, flowers?" });
 	$r->any('/timeout' => sub { timeout(@_) });
-
-	# JWT Convenience (hand-testing helpers)
-	$r->any('/render-api/jwt')->to('render#jwtFromRequest');
-	$r->any('/render-api/jwe')->to('render#jweFromRequest');
 }
 
 sub timeout ($c) {
