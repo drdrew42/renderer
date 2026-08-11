@@ -156,17 +156,26 @@ Single-stage Dockerfile. Ubuntu 24.04, Node 22 (for PG client-side JS). Hypnotoa
 
 ## Testing posture
 
-Perl test suite (`t/*.t`) is exercised via `pgperl prove -lr t/` (the
-`pgperl` wrapper uses the perlbrew `pg-perl` install with the renderer's
-CPAN deps). Suite is currently 166/166 with zero warnings.
+**One entrypoint: `bash t/ci/run-all.sh`.** It builds the image, starts a container, and
+runs every layer — PG unit tests (informational), the renderer Perl suite (`prove -lr t/`),
+and the bash integration suites (`t/ci/0*.sh`) against a live `morbo`. CI
+(`.github/workflows/test.yml`) runs the same layers. The Perl `t/*.t` layer was historically
+**not** in CI — which is how the WW3-089 source-resolution regression sat broken (the
+challenge/reView render tests silently could not resolve without OPL) until it was caught by
+hand. It gates now.
 
-**Never reach for system perl** — it's missing the renderer's dependencies and the
-failures are confusing. Useful beyond `prove`: `pgperl perl -Ilib -c lib/Renderer/Foo.pm`
-for a syntax check, `pgperl perl -Ilib -e '…'` for a one-off.
+**Run it on a Docker host, in a clean container.** On macOS the x86 image build is emulated
+and slow — run on an x86 host (the homelab `topton` builds and runs it natively). It does not
+run on the bare Mac (no renderer Perl deps), and must **not** be run against the live
+production container: its `STRICT_JWT` / `CONTENT_ADDRESSED` / real-OPL config breaks the test
+fixtures, which want a clean env.
 
-Unit tests with no Mojo HTTP or async-await dispatch run fine under a local perl
-environment. Anything needing the full stack — OPL-resolved macros, `STRICT_JWT`,
-container-only deps — needs a deployed renderer container.
+For local iteration on individual files, `pgperl prove -lr t/` uses the perlbrew `pg-perl`
+install with the renderer's CPAN deps. **Never reach for system perl** — it's missing the deps
+and the failures are confusing. `pgperl perl -Ilib -c lib/Renderer/Foo.pm` syntax-checks a
+module; `pgperl perl -Ilib -e '…'` runs a one-off. Unit tests with no Mojo HTTP or async-await
+dispatch run under a local perl; anything needing the full stack — the render pipeline,
+OPL-resolved macros, `STRICT_JWT` — needs the container.
 
 When smoke-testing against a deployed container, note that **secrets are read from the
 container ENV, not from `renderer.conf`**: `problemJWTsecret`, `webworkJWTsecret`, and

@@ -131,12 +131,12 @@ hash_html() {
 # assert_eq ACTUAL EXPECTED DESCRIPTION
 assert_eq() {
     local actual="$1" expected="$2" desc="$3"
-    (( _TOTAL++ ))
+    (( ++_TOTAL ))
     if [[ "$actual" == "$expected" ]]; then
-        (( _PASS++ ))
+        (( ++_PASS ))
         printf "${GREEN}ok %d${NC} - %s\n" "$_TOTAL" "$desc"
     else
-        (( _FAIL++ ))
+        (( ++_FAIL ))
         printf "${RED}not ok %d${NC} - %s\n" "$_TOTAL" "$desc"
         printf "  expected: %s\n  got:      %s\n" "$expected" "$actual"
     fi
@@ -145,12 +145,12 @@ assert_eq() {
 # assert_ne ACTUAL UNEXPECTED DESCRIPTION
 assert_ne() {
     local actual="$1" unexpected="$2" desc="$3"
-    (( _TOTAL++ ))
+    (( ++_TOTAL ))
     if [[ "$actual" != "$unexpected" ]]; then
-        (( _PASS++ ))
+        (( ++_PASS ))
         printf "${GREEN}ok %d${NC} - %s\n" "$_TOTAL" "$desc"
     else
-        (( _FAIL++ ))
+        (( ++_FAIL ))
         printf "${RED}not ok %d${NC} - %s\n" "$_TOTAL" "$desc"
         printf "  expected anything except: %s\n" "$unexpected"
     fi
@@ -168,12 +168,12 @@ assert_status() {
 # assert_contains HAYSTACK NEEDLE DESCRIPTION
 assert_contains() {
     local haystack="$1" needle="$2" desc="$3"
-    (( _TOTAL++ ))
+    (( ++_TOTAL ))
     if [[ "$haystack" == *"$needle"* ]]; then
-        (( _PASS++ ))
+        (( ++_PASS ))
         printf "${GREEN}ok %d${NC} - %s\n" "$_TOTAL" "$desc"
     else
-        (( _FAIL++ ))
+        (( ++_FAIL ))
         printf "${RED}not ok %d${NC} - %s\n" "$_TOTAL" "$desc"
         printf "  expected to contain: %s\n" "$needle"
     fi
@@ -185,12 +185,12 @@ assert_json_field() {
     local json="$1" filter="$2" desc="$3"
     local val
     val=$(echo "$json" | jq -r "$filter // empty" 2>/dev/null)
-    (( _TOTAL++ ))
+    (( ++_TOTAL ))
     if [[ -n "$val" ]]; then
-        (( _PASS++ ))
+        (( ++_PASS ))
         printf "${GREEN}ok %d${NC} - %s\n" "$_TOTAL" "$desc"
     else
-        (( _FAIL++ ))
+        (( ++_FAIL ))
         printf "${RED}not ok %d${NC} - %s\n" "$_TOTAL" "$desc"
         printf "  jq filter '%s' returned empty\n" "$filter"
     fi

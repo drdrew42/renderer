@@ -14,12 +14,12 @@ echo "=== Endpoint Tests ==="
 MATHJAX_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$CURL_TIMEOUT" \
     "${BASE_URL}/pg_files/MathJax/es5/tex-chtml.js" 2>/dev/null)
 # MathJax may be served from CDN instead of locally — 200 or 404 are both valid
-(( _TOTAL++ ))
+(( ++_TOTAL ))
 if [[ "$MATHJAX_STATUS" == "200" || "$MATHJAX_STATUS" == "404" ]]; then
-    (( _PASS++ ))
+    (( ++_PASS ))
     printf "${GREEN}ok %d${NC} - MathJax endpoint responded (%s)\n" "$_TOTAL" "$MATHJAX_STATUS"
 else
-    (( _FAIL++ ))
+    (( ++_FAIL ))
     printf "${RED}not ok %d${NC} - MathJax endpoint returned unexpected %s\n" "$_TOTAL" "$MATHJAX_STATUS"
 fi
 
@@ -28,12 +28,12 @@ fi
 # Catalog: list private/ directory
 CAT_STATUS=$(http_status "POST" "/render-api/cat" "basePath=private")
 # If private/ dir doesn't exist in the container, 500 is acceptable
-(( _TOTAL++ ))
+(( ++_TOTAL ))
 if [[ "$CAT_STATUS" == "200" || "$CAT_STATUS" == "500" ]]; then
-    (( _PASS++ ))
+    (( ++_PASS ))
     printf "${GREEN}ok %d${NC} - /render-api/cat responded (%s)\n" "$_TOTAL" "$CAT_STATUS"
 else
-    (( _FAIL++ ))
+    (( ++_FAIL ))
     printf "${RED}not ok %d${NC} - /render-api/cat returned unexpected %s\n" "$_TOTAL" "$CAT_STATUS"
 fi
 
@@ -46,8 +46,8 @@ if [[ -n "$TAP_RESP" ]]; then
     assert_contains "$TAP_RESP" "DOCUMENT" "/render-api/tap returns PG source"
 else
     # If fixture wasn't mounted, mark as skip
-    (( _TOTAL++ ))
-    (( _PASS++ ))
+    (( ++_TOTAL ))
+    (( ++_PASS ))
     printf "${YELLOW}ok %d${NC} - /render-api/tap (skipped — no fixture mount)\n" "$_TOTAL"
 fi
 
@@ -57,12 +57,12 @@ fi
 MISSING_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$CURL_TIMEOUT" \
     -X POST -d "_format=json" \
     "${BASE_URL}/render-api" 2>/dev/null)
-(( _TOTAL++ ))
+(( ++_TOTAL ))
 if [[ "$MISSING_STATUS" =~ ^[45][0-9][0-9]$ ]]; then
-    (( _PASS++ ))
+    (( ++_PASS ))
     printf "${GREEN}ok %d${NC} - Missing problem returns error status (%s)\n" "$_TOTAL" "$MISSING_STATUS"
 else
-    (( _FAIL++ ))
+    (( ++_FAIL ))
     printf "${RED}not ok %d${NC} - Missing problem returned unexpected %s\n" "$_TOTAL" "$MISSING_STATUS"
 fi
 
@@ -73,12 +73,12 @@ NOFILE_RESP=$(curl -s -w '\n%{http_code}' --max-time "$CURL_TIMEOUT" \
     -d "_format=json" \
     "${BASE_URL}/render-api" 2>/dev/null)
 NOFILE_STATUS=$(echo "$NOFILE_RESP" | tail -1)
-(( _TOTAL++ ))
+(( ++_TOTAL ))
 if [[ "$NOFILE_STATUS" =~ ^[45][0-9][0-9]$ ]]; then
-    (( _PASS++ ))
+    (( ++_PASS ))
     printf "${GREEN}ok %d${NC} - Nonexistent file path returns error (%s)\n" "$_TOTAL" "$NOFILE_STATUS"
 else
-    (( _FAIL++ ))
+    (( ++_FAIL ))
     printf "${RED}not ok %d${NC} - Nonexistent file path returned %s\n" "$_TOTAL" "$NOFILE_STATUS"
 fi
 
@@ -88,12 +88,12 @@ BADJWT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$CURL_TIMEOUT
     -d "problemJWT=this.is.garbage" \
     -d "_format=json" \
     "${BASE_URL}/render-api" 2>/dev/null)
-(( _TOTAL++ ))
+(( ++_TOTAL ))
 if [[ "$BADJWT_STATUS" =~ ^[45][0-9][0-9]$ ]]; then
-    (( _PASS++ ))
+    (( ++_PASS ))
     printf "${GREEN}ok %d${NC} - Malformed JWT returns error (%s)\n" "$_TOTAL" "$BADJWT_STATUS"
 else
-    (( _FAIL++ ))
+    (( ++_FAIL ))
     printf "${RED}not ok %d${NC} - Malformed JWT returned %s (expected 4xx/5xx)\n" "$_TOTAL" "$BADJWT_STATUS"
 fi
 
