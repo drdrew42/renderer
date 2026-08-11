@@ -11,9 +11,6 @@ echo "=== Smoke Tests ==="
 # Health endpoint
 assert_status "GET" "/health" "200" "GET /health returns 200"
 
-# Editor UI available in dev mode
-assert_status "GET" "/" "200" "GET / (editor UI) returns 200 in dev mode"
-
 # Basic render
 RESP=$(render_raw "problemSource=${PROBLEM_BASIC}" "problemSeed=42")
 

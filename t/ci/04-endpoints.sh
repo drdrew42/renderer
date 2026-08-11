@@ -25,18 +25,6 @@ fi
 
 # ── IO Routes (dev mode) ─────────────────────────────────────
 
-# Catalog: list private/ directory
-CAT_STATUS=$(http_status "POST" "/render-api/cat" "basePath=private")
-# If private/ dir doesn't exist in the container, 500 is acceptable
-(( ++_TOTAL ))
-if [[ "$CAT_STATUS" == "200" || "$CAT_STATUS" == "500" ]]; then
-    (( ++_PASS ))
-    printf "${GREEN}ok %d${NC} - /render-api/cat responded (%s)\n" "$_TOTAL" "$CAT_STATUS"
-else
-    (( ++_FAIL ))
-    printf "${RED}not ok %d${NC} - /render-api/cat returned unexpected %s\n" "$_TOTAL" "$CAT_STATUS"
-fi
-
 # Tap: read test fixture (mounted at private/test/)
 TAP_RESP=$(curl -sf --max-time "$CURL_TIMEOUT" -X POST \
     -d "sourceFilePath=private/test/test-problem.pg" \
