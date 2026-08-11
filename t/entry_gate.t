@@ -220,21 +220,16 @@ subtest 'mode bundles: default and review refuse the reveal, not just the button
 	}
 };
 
-# TODO(WW3-R46) — the CHALLENGE and REVIEW lanes still have no END-TO-END guard here,
-# and they are the two lanes the bug was actually measured on. The subtest
-# above exercises Lane::Problem, which WW3-R41 had already hardened, so it
-# passes against the pre-fix tree and proves nothing about the regression.
+# The CHALLENGE and REVIEW lane guards live in t/reveal_invariant.t — WW3-R46's
+# regression guard and drift test, generalized to the whole reveal invariant
+# (per lane x flag). The subtest above stays here as the Lane::Problem half.
 #
-# Both lanes resolve their source through pg_hash, and unlike the challenge
-# lane's own tests, passing raw problemSource does not bypass that on
-# review — the request 404s with "Cannot resolve pg_hash" before any
-# permission resolution happens. Writing this guard needs a content-cache
-# or mocked-OPL fixture that this file does not currently stand up.
-#
-# Until then the evidence for the fix is the homelab measurement recorded
-# in the ticket (8,451 bytes with isInstructor=1 against a 6,583-byte
-# baseline, solution div plus canonical answer), which is a measurement and
-# not a regression guard. Do not close R46 on the strength of this file.
+# Writing those end-to-end became possible once WW3-R52 fixed SourceResolver to
+# honor caller-provided raw source: the "passing raw problemSource does not
+# bypass, request 404s with Cannot resolve pg_hash" that used to block this file
+# was itself the WW3-089 regression, not a fixture gap. With the source fetch
+# skipped when source is in hand, both lanes render from inline problemSource
+# with no OPL or content-cache fixture needed.
 
 subtest 'ungrounded under STRICT_JWT=0: isInstructor still honoured (VPC editor)' => sub {
 	local $ENV{STRICT_JWT} = 0;

@@ -113,7 +113,16 @@ async sub resolve_source ($c, $inputs_ref) {
 	# removes that choice. The URL branch above stays for Tier-0 consumers
 	# (LibreTexts/ADAPT) that legitimately point us at content, so this does
 	# not by itself close that surface — it removes WW3's reason to need it.
-	if ($inputs_ref->{pg_hash}) {
+	#
+	# Skipped when problemSource is already in hand. The challenge and reView
+	# lanes carry a pg_hash on EVERY render but also honor a caller-supplied raw
+	# source ("use this verbatim" — editor preview and tests): they set pg_hash
+	# for the submissionJWT and macro injection, not to force a re-fetch over
+	# source they were handed. Without this guard the hash fetch overrode
+	# provided source, contradicting those lanes' own bypass and leaving the
+	# challenge/reView render-test layer unable to resolve without a live OPL.
+	# pg_hash stays set for its other uses; only the source fetch is skipped.
+	if ($inputs_ref->{pg_hash} && !defined $inputs_ref->{problemSource}) {
 		my $pg_hash = $inputs_ref->{pg_hash};
 		my $opl_url = $c->opl_client->problem_url_by_hash($pg_hash);
 
