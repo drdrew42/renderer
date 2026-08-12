@@ -61,6 +61,7 @@ use feature 'signatures';
 no warnings qw(experimental::signatures);
 
 use Crypt::JWT qw(decode_jwt);
+use Renderer::RevealSidecar ();
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply);
@@ -100,6 +101,17 @@ sub apply ($c, $params) {
 		$params->{$k} = $claims->{$k} if defined $claims->{$k};
 	}
 
+	# WW3-117: a WW3-minted reveal sidecar (revealJWT) may ride alongside the
+	# submissionJWT to deliver the answer reveal out of band — verified by
+	# signature, aud, play-binding, and TTL, so it is a trusted grant rather
+	# than a form field the student controls. On a valid, play-bound sidecar,
+	# _reveal_grant is set and resolve_permissions expands it to answers +
+	# solutions. Absent/invalid ⇒ no grant, and the raw showCorrectAnswers
+	# interim below still applies until the portal migrates (slices 3-4).
+	if (Renderer::RevealSidecar::verify($c, $params, $claims->{play_id})) {
+		$params->{_reveal_grant} = 1;
+	}
+
 	# Synthesize problemSourceURL from pg_hash unless caller supplied raw
 	# source (editor preview / test bypass — "use this verbatim").
 	unless (defined $params->{problemSource}) {
@@ -134,10 +146,14 @@ sub apply ($c, $params) {
 	# and nothing in the reView flow has ever legitimately supplied one.
 	$params->{isInstructor} = 0;
 
-	# showCorrectAnswers still rides as a raw form param here — see the
-	# header. Not stripped, because it is the button's own mechanism; the
-	# gap is that reView's bundle never offers the button and nothing
-	# refuses the param anyway. WW3-117 removes the flag entirely.
+	# showCorrectAnswers is hard-zeroed on this lane (WW3-117): the reView reveal
+	# now arrives only through the verified permission sidecar above
+	# (_reveal_grant), never a raw form field the student controls. A student
+	# adding showCorrectAnswers to their own POST reveals nothing — the sidecar
+	# is the sole reveal path, which closes the R46-class interim. The claim
+	# path mirrors Lane::Challenge: hard-zero here, re-enable via the trusted
+	# grant in resolve_permissions.
+	$params->{showCorrectAnswers} = 0;
 
 	$c->stash(_trust_lane => 'review');
 	return 1;

@@ -63,6 +63,19 @@ sub resolve_permissions ($inputs_ref) {
 		$showHints          = 0;
 	}
 
+	# WW3-117: a verified reveal sidecar is a trusted grant and wins here — it
+	# lights answers AND solutions (one grant; every problem has an answer, only
+	# some a written solution, and that is a property of content, not a policy
+	# to gate twice). `_reveal_grant` is set only by a lane that verified a
+	# play-bound revealJWT (Renderer::RevealSidecar), and it is a SENSITIVE_PARAM
+	# stripped from raw input, so it cannot be self-declared. Hints are left
+	# untouched — reveal is answers + solutions, never the mode's mid-play
+	# scaffolding.
+	if ($inputs_ref->{_reveal_grant}) {
+		$showCorrectAnswers = 1;
+		$showSolutions      = 1;
+	}
+
 	return {
 		isInstructor       => $isInstructor,
 		showCorrectAnswers => $showCorrectAnswers,

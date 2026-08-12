@@ -153,6 +153,27 @@ sub problem_jwt {
 	);
 }
 
+sub reveal_jwt {
+	# A WW3-minted permission sidecar: HS256 under problemJWTsecret, aud the
+	# renderer verifies against SITE_HOST, bound to a play_id. Defaults bind to
+	# the same play as submission_jwt() so a caller only overrides to test a
+	# mismatch or an expiry.
+	my (%claims) = @_;
+	return encode_jwt(
+		payload => {
+			aud                => $ENV{SITE_HOST},
+			iss                => $ENV{SITE_HOST},
+			play_id            => '11111111-1111-1111-1111-111111111111',
+			showCorrectAnswers => 1,
+			showSolutions      => 1,
+			exp                => time + 300,
+			%claims,
+		},
+		key => $ENV{problemJWTsecret},
+		alg => 'HS256',
+	);
+}
+
 sub body { return $t->tx->res->body }
 
 # ─── Challenge lane (WW3 play) ───────────────────────────────────────────────
@@ -232,10 +253,9 @@ subtest 'Review lane: raw isInstructor=1 is hard-zeroed (no reveal)' => sub {
 };
 
 subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-state)' => sub {
-	# The one pin that is not yet green: reView still honors a raw
-	# showCorrectAnswers as a bounded interim (Review.pm:137). WW3-117 removes
-	# the flag. Written as the end-state and marked TODO so the suite documents
-	# the target and flips green when 117 lands — do not "fix" by deleting it.
+	# WW3-117 landed: raw showCorrectAnswers is hard-zeroed on this lane, so a
+	# student's own POST reveals nothing — the permission sidecar is the sole
+	# reveal path now.
 	my $sub  = submission_jwt();
 	my %base = (submissionJWT => $sub, problemSource => $pg_source);
 
@@ -245,10 +265,72 @@ subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-stat
 	$t->post_ok('/render-api', form => { %base, showCorrectAnswers => 1 })->status_is(200);
 	my $with = length(body());
 
-	TODO: {
-		local $TODO = 'until WW3-117 removes the reView showCorrectAnswers interim (Review.pm:137)';
-		is($with, $baseline, 'showCorrectAnswers must not change the reView render');
-	}
+	is($with, $baseline, 'raw showCorrectAnswers is hard-zeroed — no reveal without the sidecar');
+};
+
+# ─── Review lane — the WW3-117 permission sidecar ────────────────────────────
+#
+# The out-of-band reveal. A verified, play-bound revealJWT is a trusted grant
+# that lights answers AND solutions — and solutions are the tell, because they
+# are hardwired off for a student render (Permissions.pm) and NOTHING but the
+# grant (or isInstructor, hard-zeroed on this lane) can turn them on. So the
+# SOLUTION marker appearing is proof the sidecar crossed the trust boundary.
+
+subtest 'Review lane: a play-bound reveal sidecar reveals answers + solutions (WW3-117)' => sub {
+	my $sub  = submission_jwt();
+	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+
+	$t->post_ok('/render-api', form => {%base})->status_is(200);
+	my $baseline = length(body());
+
+	$t->post_ok('/render-api', form => { %base, revealJWT => reveal_jwt() })->status_is(200);
+	my $revealed = body();
+
+	like($revealed, $SOLUTION_MARK, 'the sidecar lights the solution — a student render otherwise cannot');
+	cmp_ok(length($revealed), '>', $baseline, 'the reveal adds content');
+};
+
+subtest 'Review lane: a sidecar bound to a DIFFERENT play does not reveal' => sub {
+	my $sub  = submission_jwt();
+	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+
+	$t->post_ok('/render-api', form => {%base})->status_is(200);
+	my $baseline = length(body());
+
+	# Valid signature, valid aud, but play_id names another play.
+	my $mismatched = reveal_jwt(play_id => '99999999-9999-9999-9999-999999999999');
+	$t->post_ok('/render-api', form => { %base, revealJWT => $mismatched })->status_is(200);
+	my $out = body();
+
+	unlike($out, $SOLUTION_MARK, 'play_id mismatch — the binding refuses the grant');
+	is(length($out), $baseline, 'byte-identical to the un-revealed render');
+};
+
+subtest 'Review lane: an expired sidecar does not reveal' => sub {
+	my $sub  = submission_jwt();
+	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+
+	$t->post_ok('/render-api', form => {%base})->status_is(200);
+	my $baseline = length(body());
+
+	my $expired = reveal_jwt(exp => time - 60);
+	$t->post_ok('/render-api', form => { %base, revealJWT => $expired })->status_is(200);
+	unlike(body(), $SOLUTION_MARK, 'a lapsed sidecar does not grant');
+	is(length(body()), $baseline, 'byte-identical');
+};
+
+subtest 'Review lane: a raw _reveal_grant injection does not reveal (stripped)' => sub {
+	# The grant flag is un-self-declarable: SENSITIVE_PARAMS strips it from raw
+	# input, so only a lane that verified a sidecar can set it.
+	my $sub  = submission_jwt();
+	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+
+	$t->post_ok('/render-api', form => {%base})->status_is(200);
+	my $baseline = length(body());
+
+	$t->post_ok('/render-api', form => { %base, _reveal_grant => 1 })->status_is(200);
+	unlike(body(), $SOLUTION_MARK, 'a self-declared _reveal_grant reveals nothing');
+	is(length(body()), $baseline, 'byte-identical — the flag was stripped');
 };
 
 # ─── Problem lane (LibreTexts) — showCorrectAnswers mode-gate ────────────────

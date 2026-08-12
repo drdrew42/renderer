@@ -33,7 +33,13 @@ use constant SENSITIVE_PARAMS => qw(
 	solutionsRequested
 	answersRevealed
 	solutionsRevealed
+	_reveal_grant
 );
+
+# _reveal_grant is the internal "a verified reveal sidecar granted this" flag
+# (WW3-117). It must arrive only from a lane that verified a revealJWT, never
+# from raw input — stripping it here is what makes it un-self-declarable, the
+# same structure that closed the WW3-R46 flags.
 
 # Params that ELEVATE what a render reveals. Stripped from raw inputs
 # alongside SENSITIVE_PARAMS, with the same peer-signed exemption, so that
