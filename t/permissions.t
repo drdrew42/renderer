@@ -258,7 +258,11 @@ subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' 
 };
 
 subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' => sub {
-	my $problemJWT = upstream_problem_jwt();
+	# no-stakes is an OFFERING mode (WW3-R51): it lets a student render honour
+	# showCorrectAnswers. It rides the JWT claim because renderMode is stripped
+	# from raw form input on grounded lanes. Without it the flag is gated off on
+	# the `custom` default and answers_shown would stay 0.
+	my $problemJWT = upstream_problem_jwt(renderMode => 'no-stakes');
 
 	# Wrong answer + reveal → this render showed the answer.
 	$t->post_ok(

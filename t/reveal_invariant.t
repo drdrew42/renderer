@@ -135,6 +135,24 @@ sub submission_jwt {
 	);
 }
 
+sub problem_jwt {
+	# A LibreTexts/ADAPT-style problemJWT: decoded under problemJWTsecret with
+	# verify_aud against SITE_HOST (Lane::Problem). JWTanswerURL so a graded
+	# submit produces an answerJWT.
+	my (%extra) = @_;
+	return encode_jwt(
+		payload => {
+			aud          => $ENV{SITE_HOST},
+			iss          => $ENV{SITE_HOST},
+			JWTanswerURL => 'http://127.0.0.1:9999/fake-answer-callback',
+			%extra,
+		},
+		key      => $ENV{problemJWTsecret},
+		alg      => 'HS256',
+		auto_iat => 1,
+	);
+}
+
 sub body { return $t->tx->res->body }
 
 # ─── Challenge lane (WW3 play) ───────────────────────────────────────────────
@@ -233,6 +251,55 @@ subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-stat
 	}
 };
 
+# ─── Problem lane (LibreTexts) — showCorrectAnswers mode-gate ────────────────
+
+subtest 'Problem lane: raw showCorrectAnswers does not reveal on the custom default (WW3-R51)' => sub {
+	# The last raw reveal path left open on this lane: on the `custom` default
+	# (ADAPT's mode) a student could POST showCorrectAnswers=1 and read the
+	# canonical answer. Now gated on the resolved mode offering the button. Same
+	# mode, with and without the flag, isolates the reveal from any chrome delta.
+	my %base = (
+		problemJWT    => problem_jwt(), problemSource => $pg_source, problemSeed => 1234,
+		submitAnswers => 1, 'AnSwEr0001' => '0',    # wrong submit
+	);
+
+	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
+	my $baseline = body();
+
+	$t->post_ok('/render-api', { Accept => 'application/json' }, form => { %base, showCorrectAnswers => 1 })
+		->status_is(200);
+	my $injected = body();
+
+	unlike($injected, $ANSWER_MARK, 'raw showCorrectAnswers does not reveal on custom (no offering bundle)');
+	is(length($injected), length($baseline), 'byte-length identical to the un-revealed render');
+};
+
+subtest 'Problem lane: an offering-mode CLAIM keeps showCorrectAnswers working' => sub {
+	# The other half — the button's mechanism is not broken, only mode-gated. A
+	# no-stakes CLAIM (renderMode is claim-only on a grounded lane, WW3-R51 §0,
+	# so the mode is trusted) offers the button, and a student pressing it
+	# reveals. Compared under the SAME mode so the delta is the reveal, not the
+	# no-stakes chrome.
+	my $jwt = problem_jwt(renderMode => 'no-stakes');
+	my %base = (
+		problemJWT    => $jwt, problemSource => $pg_source, problemSeed => 1234,
+		submitAnswers => 1, 'AnSwEr0001' => '0',
+	);
+
+	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
+	my $ns_baseline = body();
+
+	$t->post_ok('/render-api', { Accept => 'application/json' }, form => { %base, showCorrectAnswers => 1 })
+		->status_is(200);
+	my $revealed = body();
+
+	# Same mode, so the only difference is the flag: a content delta is the
+	# reveal, isolated. (reveal_reporting.t asserts the authoritative
+	# answerJWT.answers_shown=1 for the no-stakes case; here we pin that the
+	# affordance still lights on the render itself.)
+	cmp_ok(length($revealed), '>', length($ns_baseline), 'no-stakes honours showCorrectAnswers — the reveal renders');
+};
+
 # ─── Feedback flags are NOT reveal — do not over-retire them ─────────────────
 
 subtest 'Feedback flags do not leak reveal content' => sub {
@@ -257,10 +324,11 @@ subtest 'Feedback flags do not leak reveal content' => sub {
 
 # ─── Notes on siblings, so the coverage map is explicit ──────────────────────
 #
-# * Problem lane (LibreTexts). Its reveal-negative (raw isInstructor stripped)
-#   and its trusted-claim / VPC-editor reveal-positive live in entry_gate.t
-#   (:188, :239). It KEEPS in-render reveal for trusted claims (Tier B, WW3-R51)
-#   — nothing to retire here yet.
+# * Problem lane (LibreTexts). Its raw-isInstructor-stripped reveal-negative and
+#   its trusted-claim / VPC-editor reveal-positive live in entry_gate.t (:188,
+#   :239). Its showCorrectAnswers mode-gate — the last raw reveal path here — is
+#   pinned above (WW3-R51). It KEEPS in-render reveal for a trusted isInstructor
+#   claim (Tier B): instructor reveal is revealAll, not this student flag.
 # * The typed reveal endpoints (/hint, /solution, /answer) — source (b) of the
 #   invariant — are pinned in hint_solution_endpoints.t and answer_endpoint.t
 #   (valid typed token → content; wrong/absent typ → 401).

@@ -11,11 +11,14 @@ package Renderer::Lane::Problem;
 #     "LMS mints incomplete claims, raw form `isInstructor=1` wins" edge
 #     case. Stable across renders; an LMS that wants instructor preview
 #     mints with `isInstructor=1` once.
-#   * Bulk merge for everything else: claims override raw params. This
-#     includes per-render directives like `showCorrectAnswers` (the LMS's
-#     "Show Correct Answers" toggle is render-time, not session-time —
-#     keeping it claim-or-form lets the LMS update it per render without
-#     re-establishing the session).
+#   * Bulk merge for everything else: claims override raw params — the whole
+#     point of carrying an upstream JWT is that the upstream's view of the
+#     problem context wins.
+#   * `showCorrectAnswers` is mode-gated (WW3-R51): honoured only when the
+#     resolved mode offers the button (no-stakes / preview). On the `custom`
+#     default it does not reveal, so a student cannot self-inject it; ADAPT
+#     takes reveal out of band (/answer, /solution) and drives instructor
+#     reveal through isInstructor -> revealAll, so nothing legitimate needs it.
 #   * Sets _can_emit_answer_jwt — this lane is upstream-grounded and may
 #     produce answerJWTs.
 
@@ -25,6 +28,7 @@ use feature 'signatures';
 no warnings qw(experimental::signatures);
 
 use Crypt::JWT qw(decode_jwt);
+use Renderer::RenderMode qw(mode_bundle);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply decode_claims);
@@ -88,6 +92,18 @@ sub apply ($c, $params) {
 	# incomplete JWT would leave $params->{isInstructor} undef (resolved to
 	# 0 downstream anyway, but setting it explicitly documents intent).
 	$params->{isInstructor} //= 0;
+
+	# WW3-R51: a showCorrectAnswers reveals only when the resolved mode offers
+	# the button (no-stakes / preview). On the `custom` default it does not —
+	# ADAPT never sends the flag (reveal is out of band via /answer, /solution)
+	# and drives instructor reveal through isInstructor -> revealAll, so a
+	# lingering showCorrectAnswers here is a student self-inject on the last raw
+	# reveal path left open on this lane. renderMode is claim-only on a grounded
+	# lane (WW3-R51 elevation strip), so the mode is trusted — a student cannot
+	# opt into an offering bundle. Mirrors Lane::Challenge's hard-zero, gated by
+	# mode so an offering context keeps the button's own mechanism intact.
+	$params->{showCorrectAnswers} = 0
+		unless mode_bundle($params->{renderMode} // 'custom')->{showCorrectAnswersButton};
 
 	$c->stash(_can_emit_answer_jwt => 1);
 	$c->stash(_trust_lane          => 'problem');
