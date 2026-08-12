@@ -159,6 +159,32 @@ subtest 'problemJWT: renderMode claim wins over raw form renderMode' => sub {
 		'JWT claim wins over raw form param (Lane::Problem bulk merge)');
 };
 
+subtest 'problemJWT: raw form renderMode is stripped on a grounded lane — no self-elevation (WW3-R51)' => sub {
+	# The confirmed R46 sibling. A grounded student POSTs renderMode=preview in
+	# the raw form; with NO renderMode claim to legitimize it, the grounded
+	# strip removes it before mode resolution, so it resolves to 'custom'
+	# (student view) instead of promoting to instructor revealAll. Measured on
+	# the homelab as the same 8452-vs-6584-byte reveal R46 left open here.
+	my $jwt = make_problem_jwt(
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+		# deliberately no renderMode claim
+	);
+
+	$t->post_ok('/render-api' => form => {
+		problemJWT   => $jwt,
+		outputFormat => 'debug',
+		renderMode   => 'preview',    # raw injection attempt
+	})->status_is(200);
+
+	my $debug = $t->tx->res->json;
+	is($debug->{renderMode}, undef, 'raw renderMode stripped on a grounded request');
+	is($debug->{permissions}{isInstructor},       0, 'no elevation to instructor');
+	is($debug->{permissions}{showCorrectAnswers}, 0, 'no answer reveal');
+	is($debug->{permissions}{showSolutions},      0, 'no solution reveal');
+	is($debug->{permissions}{showHints},          0, 'no hint reveal');
+};
+
 subtest 'problemJWT: preview claim overrides caller isInstructor=0 in form' => sub {
 	my $jwt = make_problem_jwt(
 		problemSource => $pg_source,

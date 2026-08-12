@@ -7,6 +7,7 @@ use Exporter 'import';
 our @EXPORT_OK = qw(
 	SENSITIVE_PARAMS
 	ELEVATION_PARAMS
+	RENDER_MODE_PARAMS
 	SOURCE_OVERRIDE_FIELDS
 	ANSWER_RESPONSE_SUBJECT
 	ANSWER_RESPONSE_DEFAULT_MESSAGE
@@ -78,6 +79,31 @@ use constant SENSITIVE_PARAMS => qw(
 #     never needs these flags at all.
 use constant ELEVATION_PARAMS => qw(
 	isInstructor
+);
+
+# Render-MODE selectors — a renderMode picks a primitive-flag bundle
+# (Renderer::RenderMode), and two bundles ELEVATE: `preview` sets
+# isInstructor=1 (→ revealAll) and `preview`/`no-stakes` set
+# showCorrectAnswersButton=1. So a raw `renderMode=preview` re-derives the very
+# isInstructor that ELEVATION_PARAMS strips — the WW3-R46 defect class, one
+# indirection over. Measured 2026-08-12 on the homelab: a student's own
+# challengeJWT plus a raw `renderMode=preview` resolved to revealAll mid-play
+# (8452 bytes against a 6584 baseline — the R46 footprint).
+#
+# So renderMode is trusted-claim-only on grounded lanes: stripped from raw input
+# alongside ELEVATION_PARAMS, with the SAME grounded-only exemption (an
+# ungrounded STRICT_JWT=0 editor legitimately previews with renderMode=preview;
+# STRICT_JWT=1 refuses ungrounded requests at the entry gate regardless). A lane
+# carrying a renderMode CLAIM recovers it (Lane::Challenge reads it,
+# Lane::Problem bulk-merges it); otherwise it is simply absent and
+# resolve_render_mode maps undef → 'custom', the student passthrough.
+#
+# A separate list, not more ELEVATION_PARAMS entries: an elevation param has a
+# meaningful default of 0 that every lane must land on, and renderMode does not
+# — absence IS its safe default, so it needs no per-lane landing and is not
+# stashed for restoration.
+use constant RENDER_MODE_PARAMS => qw(
+	renderMode
 );
 
 # Problem-source fields a sidecar problemJWT may override on an in-flight

@@ -39,7 +39,7 @@ use Renderer::Lane::Challenge;
 use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
-use Renderer::Constants qw(SENSITIVE_PARAMS ELEVATION_PARAMS);
+use Renderer::Constants qw(SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS);
 use Renderer::RenderMode qw(resolve_render_mode);
 
 use Exporter qw(import);
@@ -222,6 +222,16 @@ sub _parse_envelope ($c, $params, $ctx) {
 				$elevation{$_} = delete $params->{$_} if exists $params->{$_};
 			}
 			$c->stash(_stripped_elevation => \%elevation);
+
+			# Render-mode selectors are trusted-claim-only on grounded lanes
+			# (WW3-R51). A raw `renderMode=preview` would re-derive
+			# isInstructor → revealAll through the bundle, AFTER the elevation
+			# strip above — the R46 hole via the indirect param. Deleted, not
+			# stashed: a lane recovers it from its claim, and absence resolves
+			# to 'custom' (the student passthrough).
+			for (RENDER_MODE_PARAMS) {
+				delete $params->{$_};
+			}
 		}
 	}
 
