@@ -13,10 +13,12 @@ BEGIN {
 }
 
 use Test::Mojo;
+use Crypt::JWT qw(encode_jwt);
 
 # Renderer startup refuses placeholder secrets; supply test values.
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
+$ENV{SITE_HOST}        //= 'https://test.example.com';
 
 # Boot the app — Renderer.pm's BEGIN block auto-derives RENDER_ROOT.
 my $t           = Test::Mojo->new('Renderer');
@@ -119,6 +121,38 @@ subtest 'editor preview: problemSource overrides cached source, path still resol
 		}
 	)->status_is(200)->content_like(qr/EDITOR VERSION/i, 'editor source rendered (not the cached bytes)')
 		->content_unlike(qr/CACHED VERSION/i, 'cached source not used when editor source supplied');
+};
+
+# ─── R50 guard: a bad-credential problemJWT is a 401, not a 500 ──────────────
+#
+# Lane::Problem verifies aud (and the signature) before any lane logic. A caller
+# presenting a wrong-audience or wrong-signature token is a client error — 401,
+# not 500 — and the response names which failure it is so an integrator can tell
+# "fix your token" from "the renderer broke". Before WW3-R50 these routed through
+# croak, which hardcoded 500. Guards the credential_error mapping directly.
+subtest 'a bad-credential problemJWT is a 401, not a 500 (WW3-R50)' => sub {
+	my %as_json = (Accept => 'application/json');
+
+	# Wrong audience: signed correctly, but aud != SITE_HOST.
+	my $wrong_aud = encode_jwt(
+		payload  => { aud => 'https://someone-else.example', problemSourceURL => 'https://x/y' },
+		key      => $ENV{problemJWTsecret},
+		alg      => 'HS256',
+		auto_iat => 1,
+	);
+	$t->post_ok('/render-api' => \%as_json => form => { problemJWT => $wrong_aud, outputFormat => 'simple' })
+		->status_is(401)
+		->json_like('/message', qr/audience/i, 'wrong aud → 401, naming the audience failure');
+
+	# Wrong signature: right aud, signed with a key the renderer does not hold.
+	my $bad_sig = encode_jwt(
+		payload  => { aud => $ENV{SITE_HOST}, problemSourceURL => 'https://x/y' },
+		key      => 'not-the-renderers-secret',
+		alg      => 'HS256',
+		auto_iat => 1,
+	);
+	$t->post_ok('/render-api' => \%as_json => form => { problemJWT => $bad_sig, outputFormat => 'simple' })
+		->status_is(401, 'bad signature → 401, not 500');
 };
 
 done_testing();
