@@ -17,7 +17,8 @@ public/static-assets.json
 *.bs
 *.pid
 .idea/
-CLAUDE.md
 
-# Local-only Claude context (machine paths, deployment hosts)
+# Local-only Claude context (machine paths, deployment hosts). The shared
+# CLAUDE.md and t/CLAUDE.md are tracked — general, public-safe context; the
+# .local.md holds the machine/deployment particulars and stays untracked.
 CLAUDE.local.md

@@ -7,7 +7,7 @@ WeBWorK standalone problem renderer. Executes PG (Problem Generator) code in a s
 **Stack**: Perl, Mojolicious (Hypnotoad prefork server), PG (submodule at `lib/PG/`)
 **Entry point**: `lib/Renderer.pm` (routes, startup, content-cache wiring)
 **Config**: `renderer.conf.dist` → `renderer.conf`
-**Branch**: `feature/content-cache` — content-addressed mode for LibreTexts/ADAPT deployment
+**Content mode**: content-addressed rendering for the LibreTexts/ADAPT deployment (the `CONTENT_ADDRESSED` path)
 
 ### Module Map
 
@@ -165,24 +165,23 @@ challenge/reView render tests silently could not resolve without OPL) until it w
 hand. It gates now.
 
 **Run it on a Docker host, in a clean container.** On macOS the x86 image build is emulated
-and slow — run on an x86 host (the homelab `topton` builds and runs it natively). It does not
-run on the bare Mac (no renderer Perl deps), and must **not** be run against the live
-production container: its `STRICT_JWT` / `CONTENT_ADDRESSED` / real-OPL config breaks the test
-fixtures, which want a clean env.
+and slow — run it on an x86 Docker host natively. It does not run on a bare Mac (no renderer
+Perl deps), and must **not** be run against a live production container: its `STRICT_JWT` /
+`CONTENT_ADDRESSED` / real-OPL config breaks the test fixtures, which want a clean env.
 
-For local iteration on individual files, `pgperl prove -lr t/` uses the perlbrew `pg-perl`
-install with the renderer's CPAN deps. **Never reach for system perl** — it's missing the deps
-and the failures are confusing. `pgperl perl -Ilib -c lib/Renderer/Foo.pm` syntax-checks a
-module; `pgperl perl -Ilib -e '…'` runs a one-off. Unit tests with no Mojo HTTP or async-await
-dispatch run under a local perl; anything needing the full stack — the render pipeline,
-OPL-resolved macros, `STRICT_JWT` — needs the container.
+For local iteration, unit tests with no Mojo HTTP or async-await dispatch run under a local
+perl that carries the renderer's CPAN deps; **never reach for system perl** — it lacks them and
+the failures are confusing. Anything needing the full stack — the render pipeline, OPL-resolved
+macros, `STRICT_JWT`, the four async-await files — needs the container. See `t/CLAUDE.md` for
+the tight/loose posture the suite runs under.
 
 When smoke-testing against a deployed container, note that **secrets are read from the
 container ENV, not from `renderer.conf`**: `problemJWTsecret`, `webworkJWTsecret`, and
 `RENDERER_URL` all come from `$ENV` inside the container. That one costs an iteration
 every time it's forgotten.
 
-*(Local environment paths and the deployment host recipe are in `CLAUDE.local.md`.)*
+*(The local perl wrapper, the deployment host, and the container smoke recipe are in the
+gitignored `CLAUDE.local.md`.)*
 
 JS companion code (`public/js/apps/Problem/problem.js`,
 `public/js/apps/CSSMessage/css-message.js`,
