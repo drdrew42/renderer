@@ -107,6 +107,40 @@ subtest 'submissionJWT triggers graded-view rendering (submitAnswers forced)' =>
 	like(encode_json($resp), qr/score/, 'graded view (score data) present in response');
 };
 
+# ─── R49 guard: a reView render records no interaction ──────────────────────
+#
+# reView renders static (Lane::Review sets outputFormat=static) AND forces
+# submitAnswers (the replay). So a reView render reaches the interaction block
+# in Render.pm and is stopped ONLY by the is_static gate — pull that gate and
+# every reView logs a phantom submit to OPL (inflated attempt counts, skewed
+# score distributions, instructors counted as students). Before WW3-R49
+# telemetry had no assertions at all, which is exactly how the phantom submits
+# went unnoticed: a fix without a guard can regress. This is the guard.
+subtest 'a reView render records no interaction (WW3-R49)' => sub {
+	my $jwt = make_submission_jwt();
+
+	# Spy on the telemetry hook rather than the buffer (@BUFFER is file-lexical in
+	# Telemetry.pm). record_interaction runs in the parent after the render
+	# subprocess returns, so a local override here intercepts it.
+	my $submits = 0;
+	no warnings qw(redefine once);
+	local *Renderer::Telemetry::record_interaction = sub {
+		my %a = @_;
+		$submits++ if ($a{action} // '') eq 'submit';
+	};
+
+	post_json({
+		submissionJWT => $jwt,
+		problemSource => $pg_source,
+	})->status_is(200);
+
+	# Non-vacuous by construction: the graded score data proves submitAnswers was
+	# reached, so record_interaction was one is_static gate away from firing.
+	my $resp = decode_json($t->tx->res->body);
+	like(encode_json($resp), qr/score/, 'the reView graded (submitAnswers reached the interaction block)');
+	is($submits, 0, 'reView (static) render logged no interaction — no phantom submit to OPL');
+};
+
 # ─── No-emission contract ───────────────────────────────────────────────────
 
 subtest 'submissionJWT path mints no continuation tokens' => sub {
