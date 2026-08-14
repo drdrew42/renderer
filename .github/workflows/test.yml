@@ -55,16 +55,12 @@ jobs:
       - name: Renderer Perl tests (t/*.t)
         run: docker exec renderer-test bash -c 'cd /usr/app && prove -lr t/'
 
-      # Bash HTTP suites — informational until WW3-R53. Resurrected this pass
-      # (script name, secrets, set -e counter gotcha); they run but a few
-      # assertions have drifted from the current API. The Perl t/*.t step above
-      # is the gating coverage; re-gate these once WW3-R53 triages the drift.
-      - name: Smoke tests
-        continue-on-error: true
-        run: bash t/ci/01-smoke.sh
-
+      # HTTP-boundary smoke — gating (WW3-R53). Status codes for MathJax, a
+      # missing problem, a malformed JWT, and the /timeout path; no equivalent in
+      # the Perl layer. The former 01-smoke render-parity suite was retired — it
+      # duplicated the Perl t/*.t render/JWT coverage and parsed an envelope the
+      # raw source lane no longer returns (WW3-R45).
       - name: Endpoint tests
-        continue-on-error: true
         run: bash t/ci/04-endpoints.sh
 
       - name: Cleanup

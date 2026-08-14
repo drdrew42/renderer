@@ -24,17 +24,6 @@ fi
 
 # ── HTTP Helpers ──────────────────────────────────────────────
 
-# render_raw PARAM=VALUE ...
-# POST form params to /render-api with _format=json. Prints JSON response.
-render_raw() {
-    local data=()
-    for param in "$@"; do
-        data+=(--data-urlencode "$param")
-    done
-    data+=(--data-urlencode "_format=json")
-    curl -sf --max-time "$CURL_TIMEOUT" -X POST "${data[@]}" "${BASE_URL}/render-api" 2>/dev/null
-}
-
 # http_status METHOD URL [DATA_PARAMS...]
 # Returns HTTP status code only.
 http_status() {

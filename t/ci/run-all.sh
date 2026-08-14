@@ -127,14 +127,14 @@ else
     OVERALL_EXIT=1
 fi
 
-# ── Integration Test Suites (informational — WW3-R53) ────────
-# These HTTP suites were resurrected from total breakage in this pass: the morbo
-# start referenced a renamed script, the container ran without secrets, and the
-# assert helpers tripped `set -e` on the first counter increment — all fixed. So
-# they RUN now, but a few assertions have drifted from the current API (e.g.
-# GET / editor UI, /render-api/cat). Kept running for visibility but NON-gating
-# until WW3-R53 triages test-drift vs real regression and re-gates them. The
-# Perl t/*.t layer above is the gating coverage.
+# ── Integration Test Suite (gating — WW3-R53) ────────────────
+# 04-endpoints is an HTTP-boundary smoke — MathJax route, /timeout, and the
+# status codes for a missing problem / malformed JWT — with no equivalent in the
+# Perl layer, so it gates: a failure blocks. The former 01-smoke render-parity
+# suite was retired (WW3-R53): it duplicated the Perl t/*.t render/JWT coverage,
+# and its raw-source lane cannot return the .renderedHTML/.JWT envelope it parsed
+# — output is non-negotiable on that lane since WW3-R45, so there was nothing to
+# fix that the Perl layer did not already assert.
 run_suite() {
     local script="$1"
     local name
@@ -144,11 +144,11 @@ run_suite() {
     if bash "$script"; then
         echo "Suite $name: PASS"
     else
-        echo "Suite $name: FAIL (informational — WW3-R53)"
+        echo "Suite $name: FAIL"
+        OVERALL_EXIT=1
     fi
 }
 
-run_suite "$SCRIPT_DIR/01-smoke.sh"
 run_suite "$SCRIPT_DIR/04-endpoints.sh"
 
 # ── Final Report ─────────────────────────────────────────────
