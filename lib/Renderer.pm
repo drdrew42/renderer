@@ -262,7 +262,7 @@ sub _register_helpers ($self) {
 
 	$self->helper(format       => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
 	$self->helper(parseRequest => sub { Renderer::Render::ParseRequest::dispatch(@_) });
-	$self->helper(croak        => sub { Renderer::Controller::Render::croak(@_) });
+	$self->helper(credential_error => sub { Renderer::Controller::Render::credential_error(@_) });
 	$self->helper(logID        => sub { shift->req->request_id });
 	$self->helper(exception    => sub { Renderer::Controller::Render::exception(@_) });
 }

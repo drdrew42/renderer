@@ -78,7 +78,7 @@ sub apply ($c, $params) {
 		);
 		1;
 	} or do {
-		return $c->croak($@, 3);
+		return $c->credential_error($@);
 	};
 
 	# Required claims to reproduce the rendered state. Any of these missing

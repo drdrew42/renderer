@@ -68,7 +68,9 @@ async sub problem ($c) {
 	my $return_object;
 	eval { $return_object = decode_json($ww_return_json); 1; } or do {
 		$c->log->error('problem.render: Failed to parse JSON', $ww_return_json);
-		return $c->croak($@, 3);
+		# The renderer's own subprocess returned unparseable JSON — a server
+		# fault, not a caller error, so this one stays a 500.
+		return $c->exception(_pretty_error($@), 500);
 	};
 	$return_object->{inputs_ref} = $inputs_ref;
 
@@ -300,7 +302,11 @@ async sub answer ($c) {
 sub exception ($c, $message, $status, @extra) {
 	my $id = $c->logID;
 	$message = "[$id] " . (ref $message eq 'ARRAY' ? join "\n", @$message : $message);
-	$c->log->error("($status) EXCEPTION: $message");
+	# Server faults (5xx) log at error; client refusals (4xx) at info. A bad
+	# token or wrong audience is the caller's problem — logging it at error
+	# buries real renderer faults under other people's mistakes (WW3-R50).
+	my $level = $status >= 500 ? 'error' : 'info';
+	$c->log->$level("($status) EXCEPTION: $message");
 	# If the client disconnected during an async chain, the transaction is
 	# already torn down. respond_to / res below would croak. Log the error
 	# (which we already did above) and bail — no one is on the line.
@@ -323,17 +329,30 @@ sub exception ($c, $message, $status, @extra) {
 	return undef;
 }
 
-sub croak ($c, $exception, $depth) {
-	my $err_stack = $exception->message;
+# _pretty_error($err) — the human-facing first line of a die/exception, with the
+# Perl "at FILE line N" location stripped. $err may be a plain string or a
+# Mojo::Exception (whose ->message carries the same first line).
+sub _pretty_error ($err) {
+	my $str = (ref $err && $err->can('message')) ? $err->message : "$err";
+	my ($first) = split /\n/, $str;
+	$first =~ s/\s+at\s+\S+\s+line\s+\d+.*$//;
+	$first =~ s/^\s+|\s+$//g;
+	return $first;
+}
 
-	my @err = split("\n", $err_stack);
-	splice(@err, $depth, $#err) if ($depth <= scalar @err);
-	$c->log->error(join "\n", @err);
-
-	my $pretty_error = $err[0] =~ s/^(.*?) at .*$/$1/r;
-
-	$c->exception($pretty_error, 500);
-	return;
+# credential_error($c, $err) — a caller presented a token the renderer will not
+# accept. Always 401: a bad signature, wrong audience, expired, or malformed
+# token is "fix your credential", never "the renderer broke" (WW3-R50). The four
+# failures read differently to an operator, so the response names which one it
+# is; the info-level log falls out of exception()'s status-aware logging.
+sub credential_error ($c, $err) {
+	my $msg  = _pretty_error($err);
+	my $kind =
+		  $msg =~ /\baud\b|audience/i     ? 'audience'
+		: $msg =~ /signature|\bJW[SE]\b/i ? 'signature'
+		: $msg =~ /expired|\bexp\b/i      ? 'expired'
+		:                                   'malformed';
+	return $c->exception("$msg ($kind)", 401);
 }
 
 1;

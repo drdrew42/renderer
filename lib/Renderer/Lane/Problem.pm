@@ -73,7 +73,7 @@ sub apply ($c, $params) {
 	$c->log->info("Received JWT: using problemJWT");
 
 	my ($claims, $err) = decode_claims($c, $params->{problemJWT});
-	return $c->croak($err, 3) if $err;
+	return $c->credential_error($err) if $err;
 
 	# `isInstructor` claim-only. The raw-form value is stripped centrally in
 	# ParseRequest now (ELEVATION_PARAMS, WW3-R46), so the hand-rolled

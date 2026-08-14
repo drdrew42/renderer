@@ -43,7 +43,7 @@ our @EXPORT_OK = qw(apply_prefix apply_source_override);
 # apply_prefix($c, $params)
 #
 # Runs only when $params->{sessionJWT} is defined. Decodes and merges into
-# $params. Returns 1 on success, returns the result of $c->croak(...) on
+# $params. Returns 1 on success, returns the result of $c->credential_error(...) on
 # decode failure (which short-circuits the controller).
 sub apply_prefix ($c, $params) {
 	my $sessionJWT = $params->{sessionJWT};
@@ -57,7 +57,7 @@ sub apply_prefix ($c, $params) {
 		);
 		1;
 	} or do {
-		return $c->croak($@, 3);
+		return $c->credential_error($@);
 	};
 
 	# Security-sensitive claims always win over raw params.
@@ -115,12 +115,12 @@ sub apply_prefix ($c, $params) {
 # claims in the sidecar are ignored (future scope).
 #
 # Returns 1 (incl. the no-sidecar no-op). A sidecar that fails to decode is a
-# malformed request → croak (short-circuits the controller).
+# malformed request → credential_error, a 401 (short-circuits the controller).
 sub apply_source_override ($c, $params) {
 	my $sidecar = $c->stash('_sidecar_problemJWT') or return 1;
 
 	my ($claims, $err) = decode_claims($c, $sidecar);
-	return $c->croak($err, 3) if $err;
+	return $c->credential_error($err) if $err;
 
 	# NB: assign to an array first — a bareword constant inside a {} hash
 	# slice subscript autoquotes to a string instead of calling the sub.

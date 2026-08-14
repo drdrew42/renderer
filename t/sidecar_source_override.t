@@ -21,7 +21,7 @@ $ENV{SITE_HOST}        //= 'https://render.test';
 
 # ─── Minimal mock controller ─────────────────────────────────────────────
 # Implements just the surface apply_prefix / apply_source_override touch:
-# log->info (no-op), stash (Mojo dual get/set), croak (records + returns 0).
+# log->info (no-op), stash (Mojo dual get/set), credential_error (records + returns 0).
 {
 
 	package MockLog;
@@ -30,7 +30,7 @@ $ENV{SITE_HOST}        //= 'https://render.test';
 	sub warn { }
 
 	package MockController;
-	sub new { bless { stash => {}, croaked => undef }, shift }
+	sub new { bless { stash => {}, rejected => undef }, shift }
 	sub log { $_[0]{log} //= MockLog->new }
 
 	sub stash {
@@ -40,7 +40,7 @@ $ENV{SITE_HOST}        //= 'https://render.test';
 		@{ $self->{stash} }{ keys %kv } = values %kv;
 		return $self;
 	}
-	sub croak { $_[0]{croaked} = { msg => $_[1], code => $_[2] }; return 0 }
+	sub credential_error { $_[0]{rejected} = { err => $_[1] }; return 0 }
 }
 
 sub problem_jwt {
@@ -155,7 +155,7 @@ subtest 'no sidecar stashed → no-op' => sub {
 	is($params{problemSourceURL}, 'http://keep', 'params untouched');
 };
 
-subtest 'malformed sidecar → croak (rejected as a bad request)' => sub {
+subtest 'malformed sidecar → credential_error (401, rejected as a bad request)' => sub {
 	my %params = (problemSourceURL => 'http://old');
 	my $c      = MockController->new;
 	$c->stash(_sidecar_problemJWT => 'not.a.valid.jwt');
@@ -163,7 +163,7 @@ subtest 'malformed sidecar → croak (rejected as a bad request)' => sub {
 	my $rv = apply_source_override($c, \%params);
 	ok(!$rv,                             'returns falsy (short-circuits the controller)');
 	ok($c->stash('_sidecar_problemJWT'), 'sidecar was present');
-	is(ref $c->{croaked}, 'HASH', 'croak was invoked on decode failure');
+	is(ref $c->{rejected}, 'HASH', 'credential_error was invoked on decode failure');
 };
 
 # ─── expired problemJWT: exp is the LMS's, never enforced by us ───────────

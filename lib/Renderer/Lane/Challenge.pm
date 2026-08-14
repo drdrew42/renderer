@@ -44,7 +44,7 @@ sub apply ($c, $params) {
 		);
 		1;
 	} or do {
-		return $c->croak($@, 3);
+		return $c->credential_error($@);
 	};
 
 	# Position resolves the problem within the pool. Initial render gets
