@@ -72,6 +72,13 @@
 					% if ($rh_result->{sessionJWT}) {
 						%= hidden_field sessionJWT => $rh_result->{sessionJWT}, id => 'sessionJWT'
 					% }
+					% # solutionExists (WW3-142): the PG-parse fact of whether this
+					% # problem has a written SOLUTION block. problem.js reads it off
+					% # this field and forwards it as `has_solution` on the
+					% # webwork.session.minted postMessage, so the portal can gate the
+					% # forfeit-reveal Solution affordance before rendering it. Always
+					% # emitted (1/0) so the value is a stable bool, never absent-vs-false.
+					%= hidden_field solutionExists => ($rh_result->{flags}{solutionExists} ? 1 : 0), id => 'solutionExists'
 					% # challengeJWT lane: form-submit re-render needs position to
 					% # know which problem to render. sessionJWT.state.current_focus
 					% # was the obvious carrier — and works for modes that auto-

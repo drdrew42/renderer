@@ -35,10 +35,15 @@
 	// the verdict-folded state without needing a separate verdict callback.
 	const sessionJWTValue = document.getElementById('sessionJWT')?.value;
 	if (sessionJWTValue) {
+		// has_solution (WW3-142): whether this problem parsed a PG SOLUTION block.
+		// Read off the solutionExists hidden field (1/0) the simple format emits;
+		// the portal gates its forfeit-reveal Solution affordance on this.
+		const hasSolution = document.getElementById('solutionExists')?.value === '1';
 		window.parent.postMessage(
 			JSON.stringify({
 				type: 'webwork.session.minted',
 				session_jwt: sessionJWTValue,
+				has_solution: hasSolution,
 				frame: frame
 			}),
 			parentOrigin

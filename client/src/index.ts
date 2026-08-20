@@ -124,6 +124,12 @@ export interface LifecycleResize extends FromRendererBase {
 export interface SessionMinted extends FromRendererBase {
 	type: typeof FROM_RENDERER.SESSION_MINTED;
 	session_jwt: string;
+	/**
+	 * Whether the rendered problem has a PG `SOLUTION` block (WW3-142). Lets a
+	 * consumer gate a "view solution" affordance before rendering it. Present on
+	 * the play render; optional so pre-field messages still parse.
+	 */
+	has_solution?: boolean;
 }
 
 /** Client-side score read from `problem-result-score` DOM element. */
