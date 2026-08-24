@@ -22,6 +22,20 @@
 		parentOrigin
 	);
 
+	// Lifecycle: announce a render failure so the embedder can flag a broken
+	// problem instead of treating the error body as a working one. Set from
+	// flags.error_flag / errors, templated as data-render-error on <html>.
+	// Payload is minimal by contract — that it errored, not the PG internals.
+	if (document.documentElement.dataset.renderError === '1') {
+		window.parent.postMessage(
+			JSON.stringify({
+				type: 'webwork.lifecycle.error',
+				frame: frame
+			}),
+			parentOrigin
+		);
+	}
+
 	// Activate the popovers in the results table.
 	document.querySelectorAll('.attemptResults .answer-preview[data-bs-toggle="popover"]').forEach((preview) => {
 		if (preview.dataset.bsContent) new bootstrap.Popover(preview);

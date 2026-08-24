@@ -176,4 +176,47 @@ subtest 'parent_origin + trust_lane both render on grounded lane' => sub {
 	);
 };
 
+# ─── WW3-R54: render-error lifecycle signal ─────────────────────────────────
+# A render whose PG failed to compile carries flags.error_flag, which
+# FormatRenderedProblem surfaces as data-render-error="1" on <html>.
+# problem.js reads that attribute to broadcast webwork.lifecycle.error, so an
+# embedder can flag a broken problem instead of treating the error body as a
+# working one. Clean renders omit the attribute entirely.
+
+subtest 'render error → data-render-error="1" on <html>' => sub {
+	my $broken = <<'PG';
+DOCUMENT();
+loadMacros("PGstandard.pl", "PGbasicmacros.pl");
+$broken = ;
+ENDDOCUMENT();
+PG
+	my $jwt = make_problem_jwt(
+		problemSource => $broken,
+		problemSeed   => 1234,
+	);
+
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)
+		->content_like(qr{<html[^>]*\bdata-render-error="1"}, 'broken render sets data-render-error="1"');
+};
+
+subtest 'clean render → no data-render-error attribute' => sub {
+	my $jwt = make_problem_jwt(
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+	);
+
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)
+		->content_unlike(qr{data-render-error}, 'clean render omits data-render-error');
+};
+
 done_testing();

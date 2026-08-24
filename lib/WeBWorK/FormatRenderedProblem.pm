@@ -305,6 +305,7 @@ sub formatRenderedProblem {
 		FORM_ACTION_URL          => $FORM_ACTION_URL,
 		parent_origin            => $parent_origin,
 		trust_lane               => $trust_lane,
+		render_error             => $renderErrorOccurred ? 1 : 0,
 		COURSE_LANG_AND_DIR      => get_lang_and_dir($formLanguage),
 		PROBLEM_LANG_AND_DIR     => $PROBLEM_LANG_AND_DIR,
 		third_party_css          => \@third_party_css,
