@@ -484,6 +484,11 @@ sub generatePlaySessionJWT {
 			next_available => $prior_state->{next_available} // [],
 			draws          => $prior_state->{draws}          // [],
 			finalization   => $prior_state->{finalization},
+			# Play-mode projection (WW3-042/041) carried forward across a plain
+			# re-render, so it survives between a verdict fold and the next render
+			# rather than being dropped. Copied from prior state, never computed.
+			(defined $prior_state->{progress}  ? (progress  => $prior_state->{progress})  : ()),
+			(defined $prior_state->{deadlines} ? (deadlines => $prior_state->{deadlines}) : ()),
 		},
 
 		# Cumulative "has submitted at some point" — see comment in

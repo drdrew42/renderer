@@ -299,4 +299,41 @@ subtest 'fold preserves base challenge_jwt verbatim' => sub {
 	is($claims->{challenge_jwt}, $cjwt, 'embedded challenge_jwt is byte-identical to base');
 };
 
+# Play-mode projection fold (WW3-042/041) -------------------------------------
+
+subtest 'fold carries verdict.progress and verdict.deadlines into state' => sub {
+	my $cjwt = make_challenge_jwt();
+	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 2);
+	my $vsigned = make_verdict_signed(
+		basis   => 2,
+		verdict => {
+			current_focus  => 1,
+			next_available => [ 1, 2 ],
+			draw_next      => undef,
+			finalization   => undef,
+			progress       => { kind => 'classic', attempted => 2, total => 3, passed => 1 },
+			deadlines      => { 0 => '2026-08-24T09:05:00Z' },
+		},
+	);
+
+	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
+	is($err, undef, 'fold succeeds');
+	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
+	is($claims->{state}{progress}{kind}, 'classic', 'progress.kind folded through');
+	is($claims->{state}{progress}{passed}, 1, 'progress body folded through');
+	is($claims->{state}{deadlines}{0}, '2026-08-24T09:05:00Z', 'deadlines folded through');
+};
+
+subtest 'fold omits projection fields a verdict does not carry' => sub {
+	my $cjwt    = make_challenge_jwt();
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 1);
+	my $vsigned = make_verdict_signed(basis => 1);    # default verdict: no progress/deadlines
+
+	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
+	is($err, undef, 'fold succeeds');
+	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
+	ok(!exists $claims->{state}{progress},  'no progress key when the verdict omits it');
+	ok(!exists $claims->{state}{deadlines}, 'no deadlines key when the verdict omits it');
+};
+
 done_testing();

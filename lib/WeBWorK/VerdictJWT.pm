@@ -46,6 +46,8 @@ package WeBWorK::VerdictJWT;
 #   - state.next_available ← verdict.next_available  (defaults to [])
 #   - state.draws[]        ← base.state.draws ∪ verdict.draw_next  (open mode)
 #   - state.finalization   ← verdict.finalization
+#   - state.progress       ← verdict.progress    (WW3-042, when present)
+#   - state.deadlines      ← verdict.deadlines   (WW3-041, when present)
 #   - state.started_at     ← base.state.started_at  (preserved — duration
 #                            anchor doesn't move under verdict folding)
 #   - mint_sequence        ← base.mint_sequence + 1
@@ -151,6 +153,14 @@ sub verifyAndFoldVerdict {
 		draws          => \@base_draws,
 		finalization   => $verdict->{finalization},
 	};
+
+	# Play-mode projection (WW3-042/041): the orchestrator's mode-shaped progress
+	# and per-problem deadlines ride the verdict; fold them through unchanged so
+	# the portal reads them off the sessionJWT state per submission. Copied, never
+	# computed — the renderer is not the atom evaluator. Present only when the
+	# verdict carries them (a mode with no per-problem timer omits deadlines).
+	$new_state->{progress}  = $verdict->{progress}  if defined $verdict->{progress};
+	$new_state->{deadlines} = $verdict->{deadlines} if defined $verdict->{deadlines};
 
 	# answersSubmitted is the cumulative "this play has seen at least one
 	# submit" flag. The base sessionJWT carries it forward via parseRequest's
