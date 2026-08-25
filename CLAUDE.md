@@ -94,6 +94,21 @@ And two orthogonal gates govern what any given request may do:
 
 **Raw `problemSource` one-shot rule**: peer-signed render requests carrying raw source render one-shot only — no `sessionJWT` minted, no `answerJWT` emitted, no `pg_hash` leak to the browser. Editor-providers hold the state; every interaction is a fresh peer-signed render from their backend.
 
+### Debug-flag vocabulary
+
+PG's debug surfaces are gated by flags whose casing encodes *which trust source owns them* — a distinction that is invisible from the names and has bitten before (WW3-R56). Read this before touching any `show_*` / `showXxx` flag.
+
+**The `show_*` family is a request×permission pair.** PG shows each surface only when **both** halves are truthy (`PG.pl:1500/1517/1535`, `Translator.pm:950` — e.g. `$inputs_ref->{showPGInfo} && $rh_envir->{show_pg_info}`):
+
+| Half | Casing | Lives in | Owned by | Means |
+|---|---|---|---|---|
+| **Request** | camelCase — `showPGInfo`, `showAnsHashInfo`, `showAnsGroupInfo`, `showResourceInfo` | PG `inputs_ref` | **Caller** (raw request param) | "Do I want this shown *now*?" |
+| **Permission** | snake_case — `show_pg_info`, `show_answer_hash_info`, `show_answer_group_info`, `show_resource_info` | PG `envir` (via `debuggingOptions`) | **`Renderer::Permissions`** (`= isInstructor`) | "Is this render *allowed* to show it?" |
+
+Since WW3-R56 the permission half comes from `resolve_permissions` (keyed on `isInstructor`), **not** from caller input — so a caller supplies only the camelCase request half; a caller-sent snake flag is ignored. This is why the two axes are not redundant: authorization ≠ desire. Dropping the request half would dump the answer hash on every instructor preview; dropping the permission half lets a student self-grant it (the leak WW3-R56 closed). The names are PG's contract at the PG boundary — do not rename them here (fork drift). Set the permission half in `Renderer::Permissions`, never forward it from `$inputs_ref`.
+
+**`view_problem_debugging_info` is the exception — a lone permission-half flag, deliberately caller-controlled.** PG reads it *only* from `envir` (`Translator.pm:737/756/926`, `MatrixReduce.pl`); there is **no** `viewProblemDebuggingInfo` request twin. So structurally it is a permission-half flag, but `RenderProblem.pm` sets it `$inputs_ref->{view_problem_debugging_info} // $isInstructor` — **permission as default, caller override wins**. That is intentional: it gates error *verbosity* (caught translator error text, backend non-fatal warnings) — never answers, internals, or the answer hash — so a student self-granting it is harmless, and ADAPT depends on it as a stable request lever (suppress hints via `isInstructor:0`, still get fuller error detail). **Do not fold it into the `isInstructor` permission sweep** — it is *not* a `show_*` flag despite its snake casing, and gating it away breaks the ADAPT contract (WW3-R56 carve-out).
+
 ### Cross-Origin Broadcast (`parent_origin`)
 
 The rendered iframe broadcasts postMessage events (scores, hint clicks, focus/blur) to `window.parent`. To enable principled cross-origin embedding, the renderer accepts a `parent_origin` declaration from either trust lane:
