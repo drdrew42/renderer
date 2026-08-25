@@ -1,7 +1,10 @@
 package Renderer::Permissions;
 
 # resolve_permissions($inputs_ref) → hashref of booleans:
-#   { isInstructor, showCorrectAnswers, showSolutions, showHints }
+#   { isInstructor, showCorrectAnswers, showSolutions, showHints,
+#     show_pg_info, show_answer_hash_info, show_answer_group_info,
+#     show_resource_info }
+# The four show_* flags are the permission half of PG's debug gate (WW3-R56).
 #
 # Single decision point for the renderer's "what gets shown" rules.
 # Previously these defaults lived in an inline if/else inside
@@ -76,11 +79,29 @@ sub resolve_permissions ($inputs_ref) {
 		$showSolutions      = 1;
 	}
 
+	# WW3-R56: the debug-info envir flags PG reads — show_pg_info,
+	# show_answer_hash_info, show_answer_group_info, show_resource_info — are the
+	# PERMISSION half of PG's two-factor debug gate. PG shows each surface only
+	# when both this envir flag AND its camelCase request twin (showPGInfo etc.)
+	# are set. The front end owns the permission half; the request half stays
+	# caller-controlled in RenderProblem. Gate the permission half on
+	# isInstructor so a student cannot self-grant the answer hash or the internals
+	# dump by declaring both halves themselves.
+	#
+	# view_problem_debugging_info is deliberately NOT here: it is error verbosity
+	# (caught error text, backend warnings — never the answer), an ADAPT request
+	# contract, and stays caller-controlled in RenderProblem.
+	my $debugPermission = $isInstructor;
+
 	return {
-		isInstructor       => $isInstructor,
-		showCorrectAnswers => $showCorrectAnswers,
-		showSolutions      => $showSolutions,
-		showHints          => $showHints,
+		isInstructor           => $isInstructor,
+		showCorrectAnswers     => $showCorrectAnswers,
+		showSolutions          => $showSolutions,
+		showHints              => $showHints,
+		show_pg_info           => $debugPermission,
+		show_answer_hash_info  => $debugPermission,
+		show_answer_group_info => $debugPermission,
+		show_resource_info     => $debugPermission,
 	};
 }
 

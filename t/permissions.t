@@ -303,4 +303,49 @@ subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' 
 	is($answer2->{answers_shown}, 0, 'answers_shown = 0 on the follow-up (no sticky carry-forward)');
 };
 
+# ─── WW3-R56: debug permission half is isInstructor-gated ─────────────────
+#
+# RENDERER_DEBUG_FORMAT is set for this file, so outputFormat=debug returns the
+# diagnostic JSON envelope, which serializes the resolver's `permissions` block.
+# The show_* flags are the PERMISSION half of PG's debug gate and now come from
+# the resolver, not raw input — so a student who self-declares them stays 0 and
+# an instructor gets 1. (WW3-R57 removes the format entirely on a deployment
+# that has NOT set RENDERER_DEBUG_FORMAT — a different gate, tested in entry_gate.t.)
+
+subtest 'student cannot self-grant the debug permission half' => sub {
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource         => $pg_source,
+			outputFormat          => 'debug',
+			problemSeed           => 1234,
+			isInstructor          => 0,
+			show_answer_hash_info => 1,
+			showAnsHashInfo       => 1,
+			show_pg_info          => 1,
+			showPGInfo            => 1,
+		}
+	)->status_is(200);
+	my $perms = $t->tx->res->json->{permissions};
+	is($perms->{show_answer_hash_info},  0, 'student: show_answer_hash_info stays 0 despite self-declaration');
+	is($perms->{show_pg_info},           0, 'student: show_pg_info stays 0');
+	is($perms->{show_answer_group_info}, 0, 'student: show_answer_group_info stays 0');
+	is($perms->{show_resource_info},     0, 'student: show_resource_info stays 0');
+};
+
+subtest 'instructor gets the debug permission half' => sub {
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			isInstructor  => 1,
+		}
+	)->status_is(200);
+	my $perms = $t->tx->res->json->{permissions};
+	is($perms->{show_answer_hash_info},  1, 'instructor: show_answer_hash_info granted');
+	is($perms->{show_pg_info},           1, 'instructor: show_pg_info granted');
+	is($perms->{show_answer_group_info}, 1, 'instructor: show_answer_group_info granted');
+	is($perms->{show_resource_info},     1, 'instructor: show_resource_info granted');
+};
+
 done_testing();

@@ -286,11 +286,17 @@ sub standaloneRenderer {
 		htmlURL                 => 'pg_files/',
 		tempURL                 => 'pg_files/tmp/',
 		debuggingOptions        => {
-			show_resource_info          => $inputs_ref->{show_resource_info},
+			# WW3-R56: permission half from the resolver (isInstructor-gated). PG
+			# shows each surface only when this AND its caller-controlled request
+			# twin (showPGInfo etc., carried in inputs_ref) are set, so a student
+			# who self-declares the twins still gets nothing.
+			show_resource_info          => $perms->{show_resource_info},
+			show_pg_info                => $perms->{show_pg_info},
+			show_answer_hash_info       => $perms->{show_answer_hash_info},
+			show_answer_group_info      => $perms->{show_answer_group_info},
+			# Carve-out: error verbosity, not answer disclosure. Caller-controlled
+			# (defaults to isInstructor); a stable ADAPT request contract. See WW3-R56.
 			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $isInstructor,
-			show_pg_info                => $inputs_ref->{show_pg_info},
-			show_answer_hash_info       => $inputs_ref->{show_answer_hash_info},
-			show_answer_group_info      => $inputs_ref->{show_answer_group_info}
 		}
 	);
 

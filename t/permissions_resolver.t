@@ -69,6 +69,42 @@ subtest 'student: inbound showSolutions/showHints are ignored' => sub {
 	is($p->{showHints},     0, 'inbound showHints=1 ignored — fetch via /render-api/hint');
 };
 
+# ─── Debug permission half (WW3-R56) ──────────────────────────────────────
+
+subtest 'student: debug permission flags are all off' => sub {
+	my $p = resolve_permissions({ isInstructor => 0 });
+	is($p->{show_pg_info},           0, 'show_pg_info off for student');
+	is($p->{show_answer_hash_info},  0, 'show_answer_hash_info off for student');
+	is($p->{show_answer_group_info}, 0, 'show_answer_group_info off for student');
+	is($p->{show_resource_info},     0, 'show_resource_info off for student');
+};
+
+subtest 'student: self-declared debug flags are ignored (permission half is not caller input)' => sub {
+	my $p = resolve_permissions({
+		isInstructor           => 0,
+		show_pg_info           => 1,
+		show_answer_hash_info  => 1,
+		show_answer_group_info => 1,
+		show_resource_info     => 1,
+	});
+	is($p->{show_pg_info},           0, 'inbound show_pg_info=1 ignored');
+	is($p->{show_answer_hash_info},  0, 'inbound show_answer_hash_info=1 ignored — no answer-hash self-grant');
+	is($p->{show_answer_group_info}, 0, 'inbound show_answer_group_info=1 ignored');
+	is($p->{show_resource_info},     0, 'inbound show_resource_info=1 ignored');
+};
+
+subtest 'instructor: debug permission flags are all on' => sub {
+	my $p = resolve_permissions({ isInstructor => 1 });
+	is($p->{show_pg_info},           1, 'show_pg_info on for instructor');
+	is($p->{show_answer_hash_info},  1, 'show_answer_hash_info on for instructor');
+	is($p->{show_answer_group_info}, 1, 'show_answer_group_info on for instructor');
+	is($p->{show_resource_info},     1, 'show_resource_info on for instructor');
+};
+
+# view_problem_debugging_info is intentionally NOT a resolver key — it is
+# caller-controlled in RenderProblem (WW3-R56 carve-out), so the resolver
+# never sees it and must not grow one.
+
 # ─── Output shape ─────────────────────────────────────────────────────────
 
 subtest 'returns hashref with exactly the documented keys' => sub {
@@ -77,9 +113,15 @@ subtest 'returns hashref with exactly the documented keys' => sub {
 	my @keys = sort keys %$p;
 	is_deeply(
 		\@keys,
-		[ sort qw(isInstructor showCorrectAnswers showSolutions showHints) ],
+		[
+			sort qw(
+				isInstructor showCorrectAnswers showSolutions showHints
+				show_pg_info show_answer_hash_info show_answer_group_info show_resource_info
+			)
+		],
 		'no extra keys, no missing keys'
 	);
+	ok(!exists $p->{view_problem_debugging_info}, 'view_problem_debugging_info is NOT a resolver key (carve-out)');
 	for my $k (@keys) {
 		ok($p->{$k} == 0 || $p->{$k} == 1, "$k is strict 0/1 (no magic value, no undef)");
 	}
