@@ -98,6 +98,14 @@ sub formatRenderedProblem {
 	# Get the requested format. (outputFormat or outputformat)
 	my $formatName = $inputs_ref->{outputFormat} || 'default';
 
+	# WW3-R57: debug is a deployment affordance (RENDERER_DEBUG_FORMAT), never a
+	# request option — WW3-R45 gated the JSON envelope but left the HTML
+	# debug_messages block (default.html.ep) reachable by anyone who spelled
+	# outputFormat=debug. Degrade to default here, before the template, so on a
+	# deployment that has not opted in the debug surface is inert on every lane
+	# regardless of credential (an authenticated student holds a valid JWT).
+	$formatName = 'default' if $formatName eq 'debug' && !$ENV{RENDERER_DEBUG_FORMAT};
+
 	# default / simple / static all render the same template: it is
 	# `RPCRenderFormats/default` for every format except json (below), so any
 	# non-json format lands there while keeping its own name. `static` also

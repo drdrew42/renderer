@@ -179,6 +179,34 @@ subtest 'outputFormat=debug is unreachable without the deployment flag' => sub {
 	like($t->tx->res->headers->content_type, qr{text/html}, 'falls back to an ordinary HTML render');
 };
 
+# WW3-R57: the JSON envelope was gated (WW3-R45) but the HTML debug_messages
+# block (default.html.ep) was not — outputFormat=debug still rendered it, so a
+# self-declared show_answer_hash_info dumped correct_ans into the HTML on a
+# deployment with RENDERER_DEBUG_FORMAT unset. Reproduced live on staging
+# 2026-08-25. With the format degraded to default before the template, the
+# debug block is unreachable whatever the caller declares.
+subtest 'outputFormat=debug: HTML debug block does not leak the answer hash' => sub {
+	local $ENV{STRICT_JWT} = 0;
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource         => $pg_source,
+			problemSeed           => 1234,
+			outputFormat          => 'debug',
+			show_answer_hash_info => 1,
+			showAnsHashInfo       => 1,
+			show_pg_info          => 1,
+			showPGInfo            => 1,
+			submitAnswers         => 1,
+			answersSubmitted      => 1,
+			AnSwEr0001            => 99,
+		}
+	)->status_is(200);
+
+	unlike($t->tx->res->body, qr/correct_ans/,        'no correct_ans in the HTML debug block');
+	unlike($t->tx->res->body, qr/PG debug messages/,  'no PG-debug-messages block rendered');
+	unlike($t->tx->res->body, qr/Environment variables/, 'no show_pg_info envir dump');
+};
+
 # ─── WW3-R46: isInstructor is not self-declarable on a grounded request ───
 #
 # Measured on the homelab 2026-08-05: a student's own challengeJWT plus
