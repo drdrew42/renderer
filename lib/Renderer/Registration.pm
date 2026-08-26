@@ -248,9 +248,8 @@ sub verify_peer_signature {
 	return (ok => 0, reason => 'signature wrong length')     unless length($sig) == 64;
 
 	my $canonical = $method . "\n" . $path . "\n" . $timestamp . "\n" . $body;
-	# Force to bytes — Mojo's $req->body is raw bytes, but $req->url->path may be
-	# UTF-8-flagged. Concatenation mixes states; Ed25519 operates on bytes.
-	utf8::encode($canonical);
+	# verify() encodes to UTF-8 bytes internally, symmetric with sign() —
+	# no manual pre-encode here (Ed25519 operates on bytes).
 	my $valid = Renderer::Identity::verify($canonical, $sig, $pubkey);
 	return (ok => 0, reason => 'signature verification failed') unless $valid;
 

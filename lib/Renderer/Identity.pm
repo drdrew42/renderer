@@ -95,10 +95,13 @@ sub sign {
 	return Crypt::Ed25519::sign($bytes, $PUBLIC_KEY, $PRIVATE_KEY);
 }
 
-# Verify a signature given message, signature, and public key (all raw bytes).
+# Verify a signature given message, signature, and public key.
+# Symmetric with sign(): the message is encoded to UTF-8 bytes internally
+# (same mechanism), so callers pass the logical message and never pre-encode.
 sub verify {
 	my ($message, $signature, $public_key) = @_;
-	return eval { Crypt::Ed25519::verify($message, $public_key, $signature) };
+	my $bytes = encode('UTF-8', $message);
+	return eval { Crypt::Ed25519::verify($bytes, $public_key, $signature) };
 }
 
 sub public_key     { return $PUBLIC_KEY }
