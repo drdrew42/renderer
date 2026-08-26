@@ -85,10 +85,13 @@ sub verifyAndFoldVerdict {
 	return (undef, 'renderer_secret is required')     unless defined $renderer_secret  && $renderer_secret ne '';
 
 	# 1. Verify and decode the signed verdict.
-	my $verdict_claims = eval { decode_jwt(token => $verdict_signed, key => $orch_secret, accepted_alg => 'HS256'); };
-	if ($@) {
+	my $verdict_claims;
+	eval {
+		$verdict_claims = decode_jwt(token => $verdict_signed, key => $orch_secret, accepted_alg => 'HS256');
+		1;
+	} or do {
 		return (undef, "verdict_signed: invalid signature ($@)");
-	}
+	};
 
 	# 2. Required claims present.
 	my $verdict_play_id = $verdict_claims->{play_id};
@@ -101,11 +104,13 @@ sub verifyAndFoldVerdict {
 	return (undef, 'verdict_signed: missing verdict claim') unless ref $verdict eq 'HASH';
 
 	# 3. Verify and decode the base sessionJWT.
-	my $base_claims =
-		eval { decode_jwt(token => $base_session_jwt, key => $renderer_secret, accepted_alg => 'HS256'); };
-	if ($@) {
+	my $base_claims;
+	eval {
+		$base_claims = decode_jwt(token => $base_session_jwt, key => $renderer_secret, accepted_alg => 'HS256');
+		1;
+	} or do {
 		return (undef, "base_session_jwt: invalid signature ($@)");
-	}
+	};
 
 	# 4. Embedded challengeJWT carries the play_id we cross-check against.
 	my $embedded_cjwt = $base_claims->{challenge_jwt};
@@ -114,10 +119,13 @@ sub verifyAndFoldVerdict {
 
 	# Decode the embedded challengeJWT under the orchestrator's secret. The
 	# renderer trusts orchestrator-signed claims; this is the standard verify.
-	my $cjwt_claims = eval { decode_jwt(token => $embedded_cjwt, key => $orch_secret, accepted_alg => 'HS256'); };
-	if ($@) {
+	my $cjwt_claims;
+	eval {
+		$cjwt_claims = decode_jwt(token => $embedded_cjwt, key => $orch_secret, accepted_alg => 'HS256');
+		1;
+	} or do {
 		return (undef, "embedded challenge_jwt: invalid signature ($@)");
-	}
+	};
 
 	my $session_play_id = $cjwt_claims->{play_id};
 	return (undef, 'embedded challenge_jwt: missing play_id') unless defined $session_play_id;
@@ -179,10 +187,13 @@ sub verifyAndFoldVerdict {
 		answersSubmitted => $answers_submitted,
 	};
 
-	my $new_session_jwt = eval { mint_jwt($renderer_secret, $payload) };
-	if ($@) {
+	my $new_session_jwt;
+	eval {
+		$new_session_jwt = mint_jwt($renderer_secret, $payload);
+		1;
+	} or do {
 		return (undef, "mint_jwt failed ($@)");
-	}
+	};
 
 	return ($new_session_jwt, undef);
 }

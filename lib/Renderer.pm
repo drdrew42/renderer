@@ -191,6 +191,11 @@ sub _configure_cors ($self) {
 			$c->res->headers->header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
 			$c->res->headers->header('Access-Control-Allow-Headers' => 'Content-Type');
 
+			# The allowed origin is reflected per request Origin, so caches must
+			# key on it — otherwise one origin's allow header can be served to
+			# another origin from cache.
+			$c->res->headers->append(Vary => 'Origin');
+
 			# Short-circuit preflight requests
 			if ($c->req->method eq 'OPTIONS') {
 				$c->res->headers->header('Access-Control-Max-Age' => '86400');
