@@ -26,7 +26,7 @@ use feature 'signatures';
 no warnings qw(experimental::signatures);
 
 use Renderer::Registration;
-use Renderer::Util::JWT qw(mint_jwt);
+use Renderer::Util::JWT qw(self_mint_problem_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(verify apply_body);
@@ -65,14 +65,7 @@ sub verify ($c) {
 # arrive as Lane::Problem requests and emit answerJWTs normally via the
 # claim-merge / emission-gate path.
 sub apply_body ($c, $params) {
-	$params->{aud} = $ENV{SITE_HOST};
-	$params->{isInstructor} //= 0;
-	$params->{sessionID} ||= time;
-	$params->{problemJWT} = mint_jwt(
-		$ENV{problemJWTsecret}, $params,
-		alg => 'PBES2-HS512+A256KW',
-		enc => 'A256GCM',
-	);
+	self_mint_problem_jwt($params);
 	return 1;
 }
 
