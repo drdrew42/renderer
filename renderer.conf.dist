@@ -107,11 +107,6 @@
   # logs/interactions.log with timing data.
   INTERACTION_LOG => 0,
 
-  # STATIC_EXPIRES: Cache-Control max-age (in seconds) for static assets
-  # served under /webwork2_files/. Problem-generated temp files are always
-  # marked as expired regardless of this setting.
-  STATIC_EXPIRES => 86400,
-
   # --- Hypnotoad (production server) ---
   #
   # accepts: connections a worker handles before Hypnotoad gracefully retires

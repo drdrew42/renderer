@@ -149,7 +149,7 @@ See `LibreTexts/Renderer Secrets Migration.md`, `LibreTexts/Editor Provider Inte
 | Var | Default | Purpose |
 |---|---|---|
 | `CONTENT_ADDRESSED` | — | Enable content-addressed mode (OPL source resolution) |
-| `OPL_URL` | — | OPL API base URL for source fetching |
+| `OPL_API_URL` | `http://webwork-opl:3000` | OPL API base URL for source fetching |
 | `IDENTITY_PUBLIC_KEY_B64` | — | Ed25519 public key (base64, for fleet identity) |
 | `IDENTITY_PRIVATE_KEY_B64` | — | Ed25519 private key (base64, for fleet identity) |
 | `LOG_TO_STDERR` | — | Log to stderr (container mode) |
