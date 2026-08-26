@@ -60,8 +60,8 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
-use Crypt::JWT qw(decode_jwt);
 use Renderer::RevealSidecar ();
+use Renderer::Util::JWT     qw(verify_problem_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply);
@@ -69,17 +69,8 @@ our @EXPORT_OK = qw(apply);
 sub apply ($c, $params) {
 	$c->log->info("Received JWT: using submissionJWT (reView)");
 
-	my $claims;
-	eval {
-		$claims = decode_jwt(
-			token      => $params->{submissionJWT},
-			key        => $ENV{problemJWTsecret},
-			verify_aud => $ENV{SITE_HOST},
-		);
-		1;
-	} or do {
-		return $c->credential_error($@);
-	};
+	my ($claims, $err) = verify_problem_jwt($params->{submissionJWT});
+	return $c->credential_error($err) if $err;
 
 	# Required claims to reproduce the rendered state. Any of these missing
 	# means the JWT wasn't minted by generateSubmissionJWT — refuse rather

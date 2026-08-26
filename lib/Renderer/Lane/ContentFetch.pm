@@ -24,7 +24,7 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
-use Crypt::JWT qw(decode_jwt);
+use Renderer::Util::JWT qw(verify_problem_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply);
@@ -36,8 +36,11 @@ sub apply ($c, $params, $expected_typ) {
 		return;
 	}
 
-	my $claims = eval { decode_jwt(token => $jwt, key => $ENV{problemJWTsecret}, verify_aud => $ENV{SITE_HOST},); };
-	if (my $err = $@) {
+	# Shared decode WITHOUT hoist: `typ` is an auth-shape claim that may live at
+	# the OUTER level (sibling of iss/aud), so this lane must see the un-hoisted
+	# claims first, then unwrap the provider envelope for the problem detail.
+	my ($claims, $err) = verify_problem_jwt($jwt);
+	if ($err) {
 		$c->log->info("Content-fetch JWT verify failed: $err");
 		$c->exception('Invalid or expired problemJWT', 401);
 		return;

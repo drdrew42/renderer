@@ -23,7 +23,7 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
-use Crypt::JWT qw(decode_jwt);
+use Renderer::Util::JWT qw(verify_problem_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(verify);
@@ -45,20 +45,13 @@ sub verify ($c, $params, $expected_play_id) {
 	# carries no play_id cannot host a play-scoped sidecar.
 	return 0 unless defined $expected_play_id && length $expected_play_id;
 
-	my $claims;
-	eval {
-		$claims = decode_jwt(
-			token      => $token,
-			key        => $ENV{problemJWTsecret},
-			verify_aud => $ENV{SITE_HOST},
-			# exp is enforced automatically by decode_jwt — a lapsed sidecar
-			# does not grant.
-		);
-		1;
-	} or do {
-		$c->log->info("revealJWT rejected: $@");
+	# exp is enforced (verify_problem_jwt defaults verify_exp => 1) — a lapsed
+	# sidecar does not grant. A short TTL is the sidecar's replay window.
+	my ($claims, $err) = verify_problem_jwt($token);
+	if ($err) {
+		$c->log->info("revealJWT rejected: $err");
 		return 0;
-	};
+	}
 
 	# Binding: the sidecar must name the same play as the body token it rides
 	# beside. A mismatch means it was minted for a different play — ignore it,

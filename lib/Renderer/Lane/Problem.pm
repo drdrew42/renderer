@@ -27,46 +27,25 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
-use Crypt::JWT qw(decode_jwt);
 use Renderer::RenderMode qw(mode_bundle);
+use Renderer::Util::JWT  qw(verify_problem_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply decode_claims);
 
 # decode_claims($c, $token) → (\%claims, undef) | (undef, $err)
 #
-# Decode a problemJWT under problemJWTsecret with verify_aud => SITE_HOST and
-# hoist the LibreTexts `webwork` provider wrapper. Shared by apply() (body
-# lane) and Renderer::Lane::Session's sidecar source-override (LTW-088) so
-# both decode a problemJWT through exactly one path. Returns the error string
-# rather than croaking so the caller decides how to short-circuit.
+# The body-lane decode: the shared problemJWT verifier with this lane's two
+# options — verify_exp => 0 (the renderer is not the issuer of a problemJWT's
+# `exp`; the LMS is, and the nested "matryoshka" problemJWT rides verbatim
+# inside our sessionJWT so it must outlive its own launch-TTL across a
+# continuing session) and hoist_provider => 1 (unwrap the LibreTexts `webwork`
+# envelope). Kept as a named entry point because Lane::Session's sidecar
+# source-override (LTW-088) decodes a problemJWT through exactly this path.
+# Provenance is still the HMAC under problemJWTsecret; persistence/scoring is
+# still gated by the JWTanswerURL POST the LMS controls.
 sub decode_claims ($c, $token) {
-	my $claims;
-	eval {
-		$claims = decode_jwt(
-			token      => $token,
-			key        => $ENV{problemJWTsecret},
-			verify_aud => $ENV{SITE_HOST},
-			# The renderer is not the issuer of a problemJWT's `exp` — the LMS
-			# (ADAPT/LibreTexts) is. We must not enforce it: the nested
-			# ("matryoshka") problemJWT is embedded verbatim in our sessionJWT
-			# and is meant to outlive its own launch-TTL across a continuing
-			# session, so honoring `exp` here breaks every render past the
-			# launch window (and instructor review). Once a problemJWT is
-			# accepted into our session, the session — not the launch token —
-			# governs continuation lifetime. Provenance is still the HMAC under
-			# problemJWTsecret; persistence/scoring is still gated by the
-			# JWTanswerURL POST the LMS controls.
-			verify_exp => 0,
-		);
-		1;
-	} or do {
-		return (undef, $@);
-	};
-
-	# LibreTexts wraps claims under a provider key.
-	$claims = $claims->{webwork} if defined $claims->{webwork};
-	return ($claims, undef);
+	return verify_problem_jwt($token, verify_exp => 0, hoist_provider => 1);
 }
 
 sub apply ($c, $params) {
