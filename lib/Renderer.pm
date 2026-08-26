@@ -268,11 +268,11 @@ sub _register_helpers ($self) {
 	);
 	$self->helper(opl_client => sub {$client});
 
-	$self->helper(format       => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
-	$self->helper(parseRequest => sub { Renderer::Render::ParseRequest::dispatch(@_) });
+	$self->helper(format           => sub { WeBWorK::FormatRenderedProblem::formatRenderedProblem(@_) });
+	$self->helper(parseRequest     => sub { Renderer::Render::ParseRequest::dispatch(@_) });
 	$self->helper(credential_error => sub { Renderer::Controller::Render::credential_error(@_) });
-	$self->helper(logID        => sub { shift->req->request_id });
-	$self->helper(exception    => sub { Renderer::Controller::Render::exception(@_) });
+	$self->helper(logID            => sub { shift->req->request_id });
+	$self->helper(exception        => sub { Renderer::Controller::Render::exception(@_) });
 }
 
 # Per-request structured log line — one JSON entry per non-/health request.

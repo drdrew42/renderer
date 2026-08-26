@@ -336,7 +336,7 @@ sub exception ($c, $message, $status, @extra) {
 # Perl "at FILE line N" location stripped. $err may be a plain string or a
 # Mojo::Exception (whose ->message carries the same first line).
 sub _pretty_error ($err) {
-	my $str = (ref $err && $err->can('message')) ? $err->message : "$err";
+	my $str     = (ref $err && $err->can('message')) ? $err->message : "$err";
 	my ($first) = split /\n/, $str;
 	$first =~ s/\s+at\s+\S+\s+line\s+\d+.*$//;
 	$first =~ s/^\s+|\s+$//g;
@@ -349,9 +349,9 @@ sub _pretty_error ($err) {
 # failures read differently to an operator, so the response names which one it
 # is; the info-level log falls out of exception()'s status-aware logging.
 sub credential_error ($c, $err) {
-	my $msg  = _pretty_error($err);
+	my $msg = _pretty_error($err);
 	my $kind =
-		  $msg =~ /\baud\b|audience/i     ? 'audience'
+		$msg   =~ /\baud\b|audience/i     ? 'audience'
 		: $msg =~ /signature|\bJW[SE]\b/i ? 'signature'
 		: $msg =~ /expired|\bexp\b/i      ? 'expired'
 		:                                   'malformed';

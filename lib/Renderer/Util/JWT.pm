@@ -72,7 +72,7 @@ sub self_mint_problem_jwt ($params) {
 	$params->{aud} = $ENV{SITE_HOST};
 	$params->{isInstructor} //= 0;
 	$params->{sessionID} ||= time;
-	$params->{problemJWT}   = mint_jwt(
+	$params->{problemJWT} = mint_jwt(
 		$ENV{problemJWTsecret}, $params,
 		alg => 'PBES2-HS512+A256KW',
 		enc => 'A256GCM',

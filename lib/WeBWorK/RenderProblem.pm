@@ -283,10 +283,10 @@ sub standaloneRenderer {
 			# shows each surface only when this AND its caller-controlled request
 			# twin (showPGInfo etc., carried in inputs_ref) are set, so a student
 			# who self-declares the twins still gets nothing.
-			show_resource_info          => $perms->{show_resource_info},
-			show_pg_info                => $perms->{show_pg_info},
-			show_answer_hash_info       => $perms->{show_answer_hash_info},
-			show_answer_group_info      => $perms->{show_answer_group_info},
+			show_resource_info     => $perms->{show_resource_info},
+			show_pg_info           => $perms->{show_pg_info},
+			show_answer_hash_info  => $perms->{show_answer_hash_info},
+			show_answer_group_info => $perms->{show_answer_group_info},
 			# Carve-out: error verbosity, not answer disclosure. Caller-controlled
 			# (defaults to isInstructor); a stable ADAPT request contract. See WW3-R56.
 			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $isInstructor,
@@ -317,7 +317,7 @@ sub standaloneRenderer {
 					response_obj => unbless($pg->{pgcore}{PG_ANSWERS_HASH}{$_}->response_obj),
 					rh_ans       => $pg->{pgcore}{PG_ANSWERS_HASH}{$_}{ans_eval}{rh_ans}
 				}
-			}
+				}
 				keys %{ $pg->{pgcore}{PG_ANSWERS_HASH} }
 		};
 		# TODO: replace resources after PG merges #1046

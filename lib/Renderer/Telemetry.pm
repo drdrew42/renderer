@@ -109,7 +109,7 @@ sub record_interaction {
 			type       => 'interaction',
 			pg_hash    => $args{pg_hash},
 			pg_version => pg_version(),
-			action     => $args{action}    // 'submit',
+			action     => $args{action} // 'submit',
 			score      => $args{score},
 			attempt    => $args{attempt} // 1,
 			timestamp  => iso8601_now(),
