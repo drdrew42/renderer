@@ -8,9 +8,8 @@ package Renderer::Lane::Session;
 #     the shared secret IS the provenance proof; iss was only ever a
 #     hostname coupling (see LibreTexts Decisions D-003 / v2.0.4).
 #   * Security-sensitive claims always win over raw params (prevents
-#     student-side claw-back of isInstructor / answersRevealed /
-#     solutionsRevealed / answersSubmitted, plus showCorrectAnswers
-#     backward-compat).
+#     student-side claw-back of isInstructor / answersSubmitted, plus
+#     showCorrectAnswers backward-compat).
 #   * For all other claims, raw params win (current responses vs prior).
 #   * The body problemJWT comes from the session's nested ("matryoshka")
 #     claim. A sidecar problemJWT submitted top-level in tandem is NOT
@@ -21,11 +20,10 @@ package Renderer::Lane::Session;
 #   * Hoist embedded challenge_jwt → challengeJWT so the body-lane
 #     dispatcher recognizes form-submit re-renders as challengeJWT-lane.
 #
-# answersRevealed / solutionsRevealed propagate as session state (visible
-# to LMS via answerJWT, sticky across renders) but do NOT auto-fire any
-# directive on subsequent renders. Cross-render directive-persistence is
-# a caller concern. The cumulative ratchet semantics live in
-# WeBWorK::RenderProblem::generateJWTs (WW3-R29 dual-state model).
+# Reveal state is a per-render fact (answers_shown / solutions_shown on the
+# answerJWT), not sticky session state — the former cumulative one-way
+# ratchet is gone (WW3 records reveals to the chain and gates them on the
+# frontend). See WeBWorK::RenderProblem::generateJWTs.
 
 use strict;
 use warnings;
@@ -61,7 +59,7 @@ sub apply_prefix ($c, $params) {
 	};
 
 	# Security-sensitive claims always win over raw params.
-	for (qw(isInstructor showCorrectAnswers answersRevealed solutionsRevealed answersSubmitted)) {
+	for (qw(isInstructor showCorrectAnswers answersSubmitted)) {
 		$params->{$_} = $claims->{$_} if exists $claims->{$_};
 	}
 
