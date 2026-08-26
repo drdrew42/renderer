@@ -158,4 +158,30 @@ subtest 'invalidate_problem: unknown pg_hash → 200 evicted=false' => sub {
 		->json_is('/invalidated' => 'pg_never_cached')->json_is('/evicted' => Mojo::JSON::false);
 };
 
+# ── Header rename (WW3-R62) ──────────────────────────────────────────
+# The verifier reads the neutral X-OPL-Signature; the historical
+# X-Telemetry-Signature (exercised by every subtest above) stays accepted
+# for an in-flight OPL. This pins the new name so the rename can't silently
+# regress to legacy-only.
+
+subtest 'invalidate_macro: accepts the neutral X-OPL-Signature header' => sub {
+	my $hash = 'sha256:opl-header-target';
+	my $path = File::Spec->catfile($macros_dir, $hash);
+	open my $fh, '>', $path or die "Cannot create macro fixture: $!";
+	print $fh "sub fixture { 1 }";
+	close $fh;
+
+	my $body = encode_json({ action => 'invalidate_macro', hash => $hash });
+	my $sig  = Crypt::Ed25519::sign($body, $opl_pub, $opl_sec);
+
+	$t->post_ok(
+		'/render-api/callback' => {
+			'Content-Type'    => 'application/json',
+			'X-OPL-Signature' => encode_base64($sig, ''),
+		} => $body
+	)->status_is(200)->json_is('/invalidated' => $hash)->json_is('/deleted' => Mojo::JSON::true);
+
+	ok(!-f $path, 'macro removed via the X-OPL-Signature header');
+};
+
 done_testing();

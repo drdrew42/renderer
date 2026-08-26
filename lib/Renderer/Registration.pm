@@ -9,7 +9,13 @@ use Mojo::JSON   qw(encode_json decode_json);
 use MIME::Base64 qw(encode_base64 decode_base64);
 use Digest::SHA  qw(sha256_hex);
 use Renderer::Identity;
-use Renderer::Version qw(pg_version renderer_version);
+use Renderer::Version   qw(pg_version renderer_version);
+use Renderer::Constants qw(
+	OPL_SIGNATURE_HEADER
+	OPL_PUBLICKEY_HEADER
+	OPL_SIGNATURE_HEADER_LEGACY
+	OPL_PUBLICKEY_HEADER_LEGACY
+);
 
 # Unified peer registry: name → raw 32-byte Ed25519 public key.
 # Populated from two sources:
@@ -108,12 +114,17 @@ sub _attempt_register {
 		renderer_version => renderer_version(),
 	});
 
-	my $sig     = Renderer::Identity::sign($payload);
-	my %headers = (
-		'Content-Type'          => 'application/json',
-		'X-Telemetry-PublicKey' => Renderer::Identity::public_key_b64(),
-		'X-Telemetry-Signature' => encode_base64($sig, ''),
-	);
+	my $sig       = Renderer::Identity::sign($payload);
+	my $pubkey    = Renderer::Identity::public_key_b64();
+	my $sig_b64   = encode_base64($sig, '');
+	my %headers   = ('Content-Type' => 'application/json');
+	# Canonical X-OPL- names plus the legacy X-Telemetry- names, so an OPL on
+	# either side of the rename verifies this registration. Constant subs are
+	# called via () — a bareword before => would autoquote to a literal key.
+	$headers{ OPL_PUBLICKEY_HEADER() }        = $pubkey;
+	$headers{ OPL_SIGNATURE_HEADER() }        = $sig_b64;
+	$headers{ OPL_PUBLICKEY_HEADER_LEGACY() } = $pubkey;
+	$headers{ OPL_SIGNATURE_HEADER_LEGACY() } = $sig_b64;
 
 	my $url = "$ENV{OPL_API_URL}/api/renderers/register";
 

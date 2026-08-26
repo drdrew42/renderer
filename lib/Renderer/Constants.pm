@@ -12,6 +12,10 @@ our @EXPORT_OK = qw(
 	ANSWER_RESPONSE_SUBJECT
 	ANSWER_RESPONSE_DEFAULT_MESSAGE
 	PLATFORM_NAME
+	OPL_SIGNATURE_HEADER
+	OPL_PUBLICKEY_HEADER
+	OPL_SIGNATURE_HEADER_LEGACY
+	OPL_PUBLICKEY_HEADER_LEGACY
 );
 
 # Parameters that may only arrive from a trusted source. Stripped from raw
@@ -136,5 +140,19 @@ use constant ANSWER_RESPONSE_DEFAULT_MESSAGE => 'initial message';
 # consumers (LMS, ADAPT). Distinct from the standaloneRenderer() sub name in
 # WeBWorK::RenderProblem, which is the PG entry-point function.
 use constant PLATFORM_NAME => 'standaloneRenderer';
+
+# OPL↔renderer Ed25519 request-auth headers. The "X-Telemetry-" prefix is
+# HISTORICAL: these gate OPL-signed cache-invalidation callbacks and audit
+# endpoints (Renderer::OPLAuthed) and the renderer's TOFU registration POST
+# (Renderer::Registration) — NOT telemetry. The actual telemetry POST that
+# earned the name lives in Renderer::Telemetry and keeps the legacy header.
+#
+# The neutral X-OPL- names are canonical. The legacy names stay accepted on
+# the verify side and are still sent alongside the new ones, so an in-flight
+# OPL that has not learned the new names is not broken during the rollover.
+use constant OPL_SIGNATURE_HEADER        => 'X-OPL-Signature';
+use constant OPL_PUBLICKEY_HEADER        => 'X-OPL-PublicKey';
+use constant OPL_SIGNATURE_HEADER_LEGACY => 'X-Telemetry-Signature';
+use constant OPL_PUBLICKEY_HEADER_LEGACY => 'X-Telemetry-PublicKey';
 
 1;
