@@ -19,23 +19,13 @@ my $log = Renderer::Log::structured('ContentCache');
 # Return the pg_hash associated with a URL, or undef if unknown.
 sub pg_hash_for_url {
 	my ($url) = @_;
-	my $index_file = _url_index_path($url);
-	return unless -f $index_file;
-	open my $fh, '<', $index_file or return;
-	chomp(my $hash = <$fh>);
-	close $fh;
-	return $hash;
+	return _read_index('.url_index', $url);
 }
 
 # Record the mapping from URL → pg_hash.
 sub save_url_index {
 	my ($url, $pg_hash) = @_;
-	my $index_file = _url_index_path($url);
-	make_path(File::Spec->catdir($PRIVATE, '.url_index'));
-	open my $fh, '>', $index_file or do { $log->warn("Cannot write url_index: $!"); return };
-	print $fh $pg_hash;
-	close $fh;
-	return 1;
+	return _write_index('.url_index', $url, $pg_hash);
 }
 
 # True if a cached problem directory exists for this hash.
@@ -127,7 +117,7 @@ sub problem_path {
 # Read the cached raw source for a problem, or undef.
 sub read_problem {
 	my ($pg_hash) = @_;
-	my $path = File::Spec->catfile($PRIVATE, 'problems', $pg_hash, 'problem.pg');
+	my $path = File::Spec->catfile(_problem_dir($pg_hash), 'problem.pg');
 	return unless -f $path;
 	open my $fh, '<:encoding(UTF-8)', $path or return;
 	local $/;
@@ -139,23 +129,13 @@ sub read_problem {
 # Return the pg_hash associated with a file path, or undef if unknown.
 sub pg_hash_for_path {
 	my ($file_path) = @_;
-	my $index_file = _path_index_path($file_path);
-	return unless -f $index_file;
-	open my $fh, '<', $index_file or return;
-	chomp(my $hash = <$fh>);
-	close $fh;
-	return $hash;
+	return _read_index('.path_index', $file_path);
 }
 
 # Record the mapping from file path → pg_hash.
 sub save_path_index {
 	my ($file_path, $pg_hash) = @_;
-	my $index_file = _path_index_path($file_path);
-	make_path(File::Spec->catdir($PRIVATE, '.path_index'));
-	open my $fh, '>', $index_file or do { $log->warn("Cannot write path_index: $!"); return };
-	print $fh $pg_hash;
-	close $fh;
-	return 1;
+	return _write_index('.path_index', $file_path, $pg_hash);
 }
 
 # Build the injectedMacros hash for a cached problem.
@@ -416,7 +396,7 @@ sub invalidate {
 # OPL returns the same hash content, the renderer re-indexes.
 sub invalidate_path {
 	my ($file_path) = @_;
-	my $idx = _path_index_path($file_path);
+	my $idx = _index_path('.path_index', $file_path);
 	return 0 unless -f $idx;
 
 	# Capture the bound hash before we unlink so we know what url_index
@@ -468,16 +448,33 @@ sub _sweep_index_dir {
 
 # --- private helpers ---
 
-sub _url_index_path {
-	my ($url) = @_;
-	my $url_hash = sha256_hex($url);
-	return File::Spec->catfile($PRIVATE, '.url_index', $url_hash);
+# Index entry path for a key ($url or $file_path) under $index_dir
+# (.url_index / .path_index). The filename is the sha256 of the key.
+sub _index_path {
+	my ($index_dir, $key) = @_;
+	return File::Spec->catfile($PRIVATE, $index_dir, sha256_hex($key));
 }
 
-sub _path_index_path {
-	my ($file_path) = @_;
-	my $path_hash = sha256_hex($file_path);
-	return File::Spec->catfile($PRIVATE, '.path_index', $path_hash);
+# Read a single-hash index entry, or undef if the entry is absent/unreadable.
+sub _read_index {
+	my ($index_dir, $key) = @_;
+	my $index_file = _index_path($index_dir, $key);
+	return unless -f $index_file;
+	open my $fh, '<', $index_file or return;
+	chomp(my $hash = <$fh>);
+	close $fh;
+	return $hash;
+}
+
+# Write a single-hash index entry, creating $index_dir as needed.
+sub _write_index {
+	my ($index_dir, $key, $pg_hash) = @_;
+	make_path(File::Spec->catdir($PRIVATE, $index_dir));
+	my $index_file = _index_path($index_dir, $key);
+	open my $fh, '>', $index_file or do { $log->warn("Cannot write $index_dir: $!"); return };
+	print $fh $pg_hash;
+	close $fh;
+	return 1;
 }
 
 sub _problem_dir {
