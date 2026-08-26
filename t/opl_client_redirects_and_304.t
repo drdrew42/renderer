@@ -116,4 +116,20 @@ subtest 'fetch_macro: hash-form URL stays as-is' => sub {
 	is($canonical_hash, $direct_hash, 'hash extracted directly when no redirect needed');
 };
 
+# Transport failure must be as recoverable as fetch_problem_p's catch — a dead
+# OPL host yields () rather than croaking out of the serial macro-fetch loop.
+subtest 'fetch_macro: transport failure returns () rather than dying' => sub {
+	my $dead_ua = Mojo::UserAgent->new;
+	$dead_ua->connect_timeout(1);
+	my $dead_client = Renderer::OPLClient->new(
+		ua       => $dead_ua,
+		base_url => 'http://127.0.0.1:1',
+		log      => Mojo::Log->new(level => 'fatal'),
+	);
+
+	my @result = eval { $dead_client->fetch_macro('/api/macros/whatever.pl') };
+	ok(!$@, 'fetch_macro does not die on transport failure') or diag($@);
+	is_deeply(\@result, [], 'returns empty list on transport failure');
+};
+
 done_testing();

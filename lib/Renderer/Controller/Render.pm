@@ -191,11 +191,14 @@ async sub problem ($c) {
 async sub render_ptx ($c) {
 
 	$c->render_later;
-	my $res = await WeBWorK::PreTeXt::render_ptx($c->req->params->to_hash);
+	my $res = eval { await WeBWorK::PreTeXt::render_ptx($c->req->params->to_hash) };
+	my $err = $@;
 
 	# Client disconnect during the PreTeXt await tears down the tx; subsequent
 	# $c->render / $c->res would croak. Drop the abandoned response.
 	return unless $c->tx;
+
+	return $c->exception(_pretty_error($err), 500) if $err;
 
 	return $c->render(text => $res) unless ref($res) eq 'HASH';
 

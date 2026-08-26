@@ -145,7 +145,14 @@ sub fetch_macro ($self, $macro_url) {
 	# is sticky once set; previously this method worked by accident because
 	# fetch_problem_p set it first in the typical request order.
 	my $tx  = $self->{ua}->max_redirects(5)->get($url);
-	my $res = $tx->result;
+	my $res = eval { $tx->result };
+	unless ($res) {
+		# Transport failure — $tx->result croaks on a connection error. Match
+		# fetch_problem_p's catch: log and return () so the caller's serial
+		# macro loop degrades instead of dying.
+		$self->_log->warn("OPLClient: transport failure fetching macro from $url - $@");
+		return ();
+	}
 
 	unless ($res->is_success) {
 		$self->_log->warn("OPLClient: failed to fetch macro from $url");

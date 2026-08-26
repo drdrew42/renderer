@@ -8,8 +8,10 @@ use Time::HiRes qw/time/;
 use Proc::ProcessTable;
 use Date::Format;
 
-use Mojo::JSON  qw( encode_json );
-use Digest::MD5 qw( md5_hex );
+use Mojo::JSON            qw( encode_json );
+use Digest::MD5           qw( md5_hex );
+use Storable              qw( dclone );
+use Data::Structure::Util qw( unbless );
 
 use lib "$ENV{PG_ROOT}/lib";
 
@@ -41,12 +43,7 @@ eval {
 
 sub UNIVERSAL::TO_JSON {
 	my ($self) = shift;
-
-	use Storable              qw(dclone);
-	use Data::Structure::Util qw(unbless);
-
 	my $clone = unbless(dclone($self));
-
 	$clone;
 }
 

@@ -26,21 +26,25 @@ sub render_ptx {
 			$source              ? (r_source       => \$source)             : ()
 		);
 
-		my $dom = Mojo::DOM->new->xml(1);
-		for my $answer (sort keys %{ $pg->{answers} }) {
-			$dom->append_content($dom->new_tag(
-				$answer, map { $_ => ($pg->{answers}{$answer}{$_} // '') } keys %{ $pg->{answers}{$answer} }
-			));
-		}
-		$dom->wrap_content('<answerhashes></answerhashes>');
-
-		my $ret = { problemText => $pg->{body_text}, answerhashXML => $dom->to_string };
+		# Assemble the result under eval so $pg->free runs on every path — a
+		# failure building the answerhash DOM must still release the PG object
+		# before the error propagates.
+		my $ret = eval {
+			my $dom = Mojo::DOM->new->xml(1);
+			for my $answer (sort keys %{ $pg->{answers} }) {
+				$dom->append_content($dom->new_tag(
+					$answer, map { $_ => ($pg->{answers}{$answer}{$_} // '') } keys %{ $pg->{answers}{$answer} }
+				));
+			}
+			$dom->wrap_content('<answerhashes></answerhashes>');
+			{ problemText => $pg->{body_text}, answerhashXML => $dom->to_string };
+		};
+		my $err = $@;
 
 		$pg->free;
+		die $err if $err;
 		return $ret;
-	})->catch(sub {
-		my $err = shift;
-		return "error: $err";
 	});
+	# Failure leaves the promise rejected; the caller maps that to a 500.
 }
 1;
