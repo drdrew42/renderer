@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Mojo::IOLoop;
+use Mojo::UserAgent;
 use Mojo::JSON   qw(encode_json decode_json);
 use MIME::Base64 qw(encode_base64 decode_base64);
 use Digest::SHA  qw(sha256_hex);
@@ -191,7 +192,11 @@ sub _build_callback_url {
 
 sub _fetch_task_ipv4 {
 	my ($app, $meta_uri) = @_;
-	my $tx = eval { $app->ua->connect_timeout(2)->request_timeout(2)->get("$meta_uri/task") };
+	# Own UA: the short connect_timeout/request_timeout for this probe must not
+	# mutate the shared $app->ua, which serves OPL fetches and the grade-carrying
+	# answer-URL postbacks.
+	my $ua = Mojo::UserAgent->new;
+	my $tx = eval { $ua->connect_timeout(2)->request_timeout(2)->get("$meta_uri/task") };
 	return undef if $@ || !$tx;
 	my $res = $tx->result or return undef;
 	return undef unless $res->is_success;

@@ -17,6 +17,7 @@ use Mojo::Base -async_await, -signatures;
 # Moved out of Renderer::Controller::Render in WW3-R33.
 
 use Mojo::JSON qw(encode_json);
+use Mojo::UserAgent;
 
 use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
 use Renderer::Constants qw(
@@ -87,6 +88,16 @@ async sub process ($c, $inputs_ref, $return_object) {
 	return 1;
 }
 
+# Dedicated UA for answer-URL postbacks. These carry graded verdicts, so they
+# ride their own agent with stable timeouts rather than the shared $c->ua,
+# whose connect_timeout is set by other callers (Registration's ECS probe).
+my $POST_UA;
+
+sub _post_ua {
+	$POST_UA //= Mojo::UserAgent->new->max_redirects(5)->request_timeout(7);
+	return $POST_UA;
+}
+
 # Single helper for the renderer's answer-URL POSTs. Both lanes — legacy
 # problemJWT (raw JWT body, text/plain) and challengeJWT (JSON envelope,
 # application/json) — share the same UA setup, default-response shape, and
@@ -109,7 +120,7 @@ async sub post_p ($c, $url, $body, %opts) {
 	};
 
 	$c->log->info("POSTing to $url");
-	await $c->ua->max_redirects(5)->request_timeout(7)->post_p($url, $headers, $body)->then(sub {
+	await _post_ua()->post_p($url, $headers, $body)->then(sub {
 		my $tx = shift->result;
 		$response->{status} = int($tx->code);
 		# answerURL responses are expected to be JSON; fall back to body-as-message.

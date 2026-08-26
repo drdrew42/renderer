@@ -24,6 +24,7 @@ print "using root directory: $ENV{RENDER_ROOT}\n";
 
 use Mojo::JSON;
 use Mojo::URL;
+use Mojo::UserAgent;
 use Renderer::Log;
 use Renderer::Identity;
 use Renderer::OPLClient;
@@ -252,9 +253,11 @@ sub _register_helpers ($self) {
 		$self->log->info("ContentCache sweep: evicted $evicted stale problem(s)") if $evicted;
 	}
 
-	# OPL HTTP client (single instance per app; closes over $self->ua at init time).
+	# OPL HTTP client (single instance per app). Its own UA — OPLClient sets
+	# per-call max_redirects/request_timeout, kept off the shared $self->ua that
+	# also serves telemetry and registration.
 	my $client = Renderer::OPLClient->new(
-		ua       => $self->ua,
+		ua       => Mojo::UserAgent->new,
 		base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
 		log      => $self->log,
 	);
