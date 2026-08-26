@@ -258,7 +258,7 @@ sub _register_helpers ($self) {
 	# also serves telemetry and registration.
 	my $client = Renderer::OPLClient->new(
 		ua       => Mojo::UserAgent->new,
-		base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
+		base_url => $ENV{OPL_API_URL} || Renderer::OPLClient::DEFAULT_BASE_URL,
 		log      => $self->log,
 	);
 	$self->helper(opl_client => sub {$client});

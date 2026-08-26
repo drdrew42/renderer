@@ -10,7 +10,8 @@ use MIME::Base64 qw(encode_base64);
 use Digest::SHA  qw(sha256_hex);
 use Encode       qw(encode);
 use Renderer::Identity;
-use Renderer::Log qw(iso8601_now);
+use Renderer::Log     qw(iso8601_now);
+use Renderer::Version qw(pg_version);
 
 # Process-global event buffer. Hypnotoad workers rotate every ~100-200 requests,
 # so this never grows unbounded. Events are lost on worker death — that's fine,
@@ -86,7 +87,7 @@ sub record_render {
 		{
 			type       => 'render',
 			pg_hash    => $args{pg_hash},
-			pg_version => $ENV{PG_VERSION} // 'unknown',
+			pg_version => pg_version(),
 			warnings   => $args{warnings}  // 0,
 			errors     => $args{errors}    // 0,
 			render_ms  => $args{render_ms} // 0,
@@ -107,7 +108,7 @@ sub record_interaction {
 		{
 			type       => 'interaction',
 			pg_hash    => $args{pg_hash},
-			pg_version => $ENV{PG_VERSION} // 'unknown',
+			pg_version => pg_version(),
 			action     => $args{action}    // 'submit',
 			score      => $args{score},
 			attempt    => $args{attempt} // 1,
@@ -129,7 +130,7 @@ sub record_seed_observation {
 		{
 			type       => 'seed_observation',
 			pg_hash    => $args{pg_hash},
-			pg_version => $ENV{PG_VERSION} // 'unknown',
+			pg_version => pg_version(),
 			seed       => $args{seed} + 0,
 			html_hash  => $args{html_hash},
 			timestamp  => iso8601_now(),

@@ -22,7 +22,7 @@ package Renderer::OPLClient;
 # Construction:
 #   Renderer::OPLClient->new(
 #       ua       => $self->ua,                 # Mojo::UserAgent
-#       base_url => $ENV{OPL_API_URL} || 'http://webwork-opl:3000',
+#       base_url => $ENV{OPL_API_URL} || Renderer::OPLClient::DEFAULT_BASE_URL,
 #       log      => $self->log,
 #   );
 
@@ -34,8 +34,13 @@ no warnings qw(experimental::signatures);
 use Mojo::JSON qw(decode_json);
 use Mojo::Promise;
 
+# Homelab default OPL host. The single source of truth for the fallback the
+# renderer uses when OPL_API_URL is unset; the app callsite (Renderer.pm) reads
+# it too rather than re-typing the literal.
+use constant DEFAULT_BASE_URL => 'http://webwork-opl:3000';
+
 sub new ($class, %args) {
-	my $base_url = $args{base_url} // 'http://webwork-opl:3000';
+	my $base_url = $args{base_url} // DEFAULT_BASE_URL;
 	$base_url =~ s!/+$!!;    # strip trailing slash; URL templates re-add as needed
 	return bless {
 		ua       => $args{ua},
