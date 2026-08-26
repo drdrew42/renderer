@@ -25,15 +25,15 @@ use Renderer::Permissions qw( resolve_permissions reveal_state );
 
 my $path_to_log_file = "$ENV{RENDER_ROOT}/logs/resource_usage.log";
 
-eval {    # attempt to create log file
-	local (*FH);
-	open(FH, '>>:encoding(UTF-8)', $path_to_log_file)
-		or die "Can't open file $path_to_log_file for writing";
-	close(FH);
-};
-
-die "You must first create an output file at $path_to_log_file with permissions 777 "
-	unless -w $path_to_log_file;
+# Best-effort touch of the resource-usage log at load. writeRenderLogEntry
+# re-opens it (append) per write and warns on failure, so an unavailable log
+# is a degraded log, never a dead module — keep this non-fatal.
+eval {
+	open(my $fh, '>>:encoding(UTF-8)', $path_to_log_file)
+		or die "Can't open $path_to_log_file for writing: $!";
+	close($fh);
+	1;
+} or warn "resource_usage.log unavailable at load ($path_to_log_file): $@";
 
 ##################################################
 # define universal TO_JSON for JSON::XS unbless
@@ -80,11 +80,7 @@ sub process_pg_file {
 	my $log_file_path  = $inputs_ref->{sourceFilePath} || 'source provided without path';
 	my $memory_use_end = get_current_process_memory();
 	my $memory_use     = $memory_use_end - $memory_use_start;
-	writeRenderLogEntry(
-		sprintf("(duration: %.3f sec) ", $pg_duration)
-			. sprintf("{memory: %6d bytes} ", $memory_use)
-			. "file: $log_file_path"
-			. $error_flag ? $error_string : '');
+	writeRenderLogEntry(_render_log_message($pg_duration, $memory_use, $log_file_path, $error_flag, $error_string));
 
 	# havoc caused by problemRandomize.pl inserting CODE ref into pg->{flags}
 	# HACK: remove flags->{problemRandomize} if it exists -- cannot include CODE refs
@@ -578,6 +574,19 @@ sub generateSubmissionJWT {
 	};
 
 	return mint_jwt($ENV{problemJWTsecret}, $payload);
+}
+
+# Resource-usage log line: timing + memory + source path, with the error
+# string appended only when the render flagged an error. The parens around the
+# ternary are load-bearing — `.` binds tighter than `?:`, so without them the
+# whole timing line collapses to just the error string (empty on success).
+sub _render_log_message {
+	my ($duration, $memory_use, $path, $error_flag, $error_string) = @_;
+	return
+		sprintf("(duration: %.3f sec) ", $duration)
+		. sprintf("{memory: %6d bytes} ", $memory_use)
+		. "file: $path"
+		. ($error_flag ? $error_string : '');
 }
 
 sub writeRenderLogEntry($) {
