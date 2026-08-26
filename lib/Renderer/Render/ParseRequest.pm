@@ -67,14 +67,23 @@ sub dispatch ($c) {
 	return \%params;
 }
 
+# First client IP from a (possibly multi-value) X-Forwarded-For header
+# ("client, proxy1, proxy2…"): the leading dotted-quad. Returns the header
+# unchanged when it carries no IPv4, or '' when absent, so the caller falls
+# back to remote_address on an empty result. The parens around `// ''` are
+# load-bearing — `=~` binds tighter than `//`, so without them the substitution
+# runs on '' and the raw multi-value header leaks through.
+sub _origin_ip_from_xff ($xff) {
+	return (($xff // '') =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r);
+}
+
 # Phase 1: raw form → normalized params + context. Runs all pre-dispatch
 # validations, the render-time verdict fold, peer-sig verify, parent_origin
 # capture, and the SENSITIVE_PARAMS strip. On any rejection, returns the
 # result of $c->exception(...) (falsy).
 sub _parse_envelope ($c, $params, $ctx) {
 
-	$ctx->{originIP} = $c->req->headers->header('X-Forwarded-For')
-		// '' =~ s!^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*$!$1!r;
+	$ctx->{originIP} = _origin_ip_from_xff($c->req->headers->header('X-Forwarded-For'));
 	$ctx->{originIP} ||= $c->tx->remote_address || 'unknown-origin';
 
 	# Treat empty-string JWT params as not-present. Hidden form fields whose
