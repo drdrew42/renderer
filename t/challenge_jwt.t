@@ -436,6 +436,41 @@ subtest 'verdict_signed: open-mode draw_next appends to draws[]' => sub {
 	is($claims->{state}{draws}[1]{seed},    77777, 'new draw seed appended');
 };
 
+# WW3-177b sibling: a PLAIN re-render (navigation, no verdict) re-mints the play
+# sessionJWT via generatePlaySessionJWT — a different path from the verdict fold
+# (verdict_jwt.t). It carries prior state forward; spent_on_record must ride
+# along, or a capped position vanishes from the menu the moment the student
+# navigates. Pre-fix this dropped it, so this asserts the render-mint path too.
+subtest 'plain re-render preserves spent_on_record (render-mint path)' => sub {
+	my $challengeJWT = make_challenge_jwt();
+	my $base         = make_play_session_jwt(
+		challenge_jwt => $challengeJWT,
+		state         => {
+			started_at      => undef,
+			current_focus   => 0,
+			next_available  => [ 1, 2 ],
+			spent_on_record => [0],
+			draws           => [],
+			finalization    => undef,
+		},
+		mint_sequence => 3,
+	);
+
+	# No verdict_signed and no submitAnswers → a plain re-render.
+	post_json({
+		challengeJWT  => $challengeJWT,
+		sessionJWT    => $base,
+		position      => 1,
+		problemSource => $pg_source,
+	})->status_is(200);
+
+	my $resp     = decode_json($t->tx->res->body);
+	my $surfaced = $resp->{JWT}{session};
+	my $claims   = decode_jwt(token => $surfaced, key => $ENV{webworkJWTsecret});
+	is_deeply($claims->{state}{spent_on_record}, [0], 'spent_on_record carried across a plain re-render');
+	is_deeply($claims->{state}{next_available}, [ 1, 2 ], 'next_available carried across a plain re-render');
+};
+
 subtest 'verdict_signed: invalid signature → 400' => sub {
 	my $jwt   = make_challenge_jwt();
 	my $base  = make_play_session_jwt(challenge_jwt => $jwt);

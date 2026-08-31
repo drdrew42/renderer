@@ -478,11 +478,12 @@ sub generatePlaySessionJWT {
 		# (the rendered problem) lives in render-context (form/URL), not
 		# in state.current_focus — student_picks mode keeps focus null.
 		state => {
-			started_at     => $prior_state->{started_at},
-			current_focus  => $prior_state->{current_focus},
-			next_available => $prior_state->{next_available} // [],
-			draws          => $prior_state->{draws}          // [],
-			finalization   => $prior_state->{finalization},
+			started_at      => $prior_state->{started_at},
+			current_focus   => $prior_state->{current_focus},
+			next_available  => $prior_state->{next_available}  // [],
+			spent_on_record => $prior_state->{spent_on_record} // [],
+			draws           => $prior_state->{draws}           // [],
+			finalization    => $prior_state->{finalization},
 			# Play-mode projection (WW3-042/041) carried forward across a plain
 			# re-render, so it survives between a verdict fold and the next render
 			# rather than being dropped. Copied from prior state, never computed.
