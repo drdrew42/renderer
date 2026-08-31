@@ -91,10 +91,11 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 	my $vsigned = make_verdict_signed(
 		basis   => 5,
 		verdict => {
-			current_focus  => 1,
-			next_available => [ 1, 2 ],
-			draw_next      => undef,
-			finalization   => undef,
+			current_focus   => 1,
+			next_available  => [ 1, 2 ],
+			spent_on_record => [0],
+			draw_next       => undef,
+			finalization    => undef,
 		},
 	);
 
@@ -106,6 +107,7 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 	is($claims->{mint_sequence},        6, 'mint_sequence advanced by 1');
 	is($claims->{state}{current_focus}, 1, 'current_focus from verdict');
 	is_deeply($claims->{state}{next_available}, [ 1, 2 ], 'next_available from verdict');
+	is_deeply($claims->{state}{spent_on_record}, [0], 'spent_on_record from verdict (WW3-177b)');
 	is($claims->{state}{started_at}, '2026-04-27T17:00:00Z', 'started_at preserved');
 	is_deeply($claims->{state}{draws}, [], 'draws[] empty (closed mode, no draw_next)');
 	is($claims->{state}{finalization}, undef, 'finalization undef');
@@ -162,6 +164,7 @@ subtest 'finalization: terminal verdict folds finalization into state' => sub {
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
 	is($claims->{state}{finalization}{reason}, 'student_finalized', 'finalization reason set');
 	is_deeply($claims->{state}{next_available}, [], 'next_available empty on terminal');
+	is_deeply($claims->{state}{spent_on_record}, [], 'spent_on_record defaults to [] when the verdict omits it');
 };
 
 # Verification gates ----------------------------------------------------------

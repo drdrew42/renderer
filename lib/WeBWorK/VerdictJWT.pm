@@ -42,10 +42,12 @@ package WeBWorK::VerdictJWT;
 #
 # # The fold itself
 #
-#   - state.current_focus  ← verdict.current_focus
-#   - state.next_available ← verdict.next_available  (defaults to [])
-#   - state.draws[]        ← base.state.draws ∪ verdict.draw_next  (open mode)
-#   - state.finalization   ← verdict.finalization
+#   - state.current_focus   ← verdict.current_focus
+#   - state.next_available  ← verdict.next_available   (defaults to [])
+#   - state.spent_on_record ← verdict.spent_on_record  (defaults to []; WW3-177b —
+#                             the recorded-but-uncounted lane the portal renders)
+#   - state.draws[]         ← base.state.draws ∪ verdict.draw_next  (open mode)
+#   - state.finalization    ← verdict.finalization
 #   - state.progress       ← verdict.progress    (WW3-042, when present)
 #   - state.deadlines      ← verdict.deadlines   (WW3-041, when present)
 #   - state.started_at     ← base.state.started_at  (preserved — duration
@@ -155,11 +157,12 @@ sub verifyAndFoldVerdict {
 	}
 
 	my $new_state = {
-		started_at     => $base_state->{started_at},                                                     # preserved
-		current_focus  => $verdict->{current_focus},
-		next_available => ref $verdict->{next_available} eq 'ARRAY' ? $verdict->{next_available} : [],
-		draws          => \@base_draws,
-		finalization   => $verdict->{finalization},
+		started_at      => $base_state->{started_at},                                                       # preserved
+		current_focus   => $verdict->{current_focus},
+		next_available  => ref $verdict->{next_available} eq 'ARRAY' ? $verdict->{next_available} : [],
+		spent_on_record => ref $verdict->{spent_on_record} eq 'ARRAY' ? $verdict->{spent_on_record} : [],
+		draws           => \@base_draws,
+		finalization    => $verdict->{finalization},
 	};
 
 	# Play-mode projection (WW3-042/041): the orchestrator's mode-shaped progress
