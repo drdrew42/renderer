@@ -143,10 +143,10 @@ sub process_problem {
 
 	# Mint continuation tokens. The discriminator is JWTanswerURL: its presence
 	# is the caller's signal "I want this rendering's answers reported back to
-	# me" — i.e., persistence is desired. isInstructor is a second-tier gate
-	# applied later in the controller, where the actual answerJWT POST is
-	# refused for instructors (Render.pm:639). The artifact is still produced
-	# here so the HTML form has a sessionJWT to carry forward.
+	# me" — i.e., persistence is desired. Whether the answerJWT is then POSTed
+	# is decided in the controller by the _can_emit_answer_jwt emission gate
+	# (upstream grounding), for instructors and students alike. The artifact is
+	# produced here so the HTML form has a sessionJWT to carry forward.
 	if ($inputs_ref->{challengeJWT}) {
 		# challengeJWT path (WW3-032). Mints the play-level sessionJWT (always)
 		# and the per-submission submissionJWT (only on submit). These minters
@@ -157,9 +157,8 @@ sub process_problem {
 			if $inputs_ref->{submitAnswers};
 	} elsif ($inputs_ref->{problemJWT} && $inputs_ref->{JWTanswerURL}) {
 		# Caller asked for persistence (provided JWTanswerURL). Mint full
-		# session+answer pair. Works for instructors and students alike;
-		# the controller-side POST gate handles the instructor-as-second-tier
-		# distinction.
+		# session+answer pair, for instructors and students alike; the
+		# controller-side emission gate decides whether it is POSTed.
 		my ($sessionJWT, $answerJWT) = generateJWTs($return_object, $inputs_ref);
 		$return_object->{sessionJWT} = $sessionJWT;
 		$return_object->{answerJWT}  = $answerJWT;
@@ -358,8 +357,9 @@ sub get_current_process_memory {
 #   LMS implementations MUST:
 #   - Verify that (numCorrect + numIncorrect) is strictly increasing on each
 #     answerJWT received. A stale or equal sum indicates a replayed session.
-#   - Treat answersRevealed=1 / solutionsRevealed=1 as a signal that this
-#     submission was made post-reveal — apply scoring policy accordingly.
+#   - Read answers_shown / solutions_shown as the per-render reveal fact —
+#     whether this render showed correct answers / solutions — and apply
+#     scoring policy accordingly.
 #   - The answerJWT is a report, not a command. The LMS owns scoring policy.
 sub generateJWTs {
 	my $pg          = shift;

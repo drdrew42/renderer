@@ -16,7 +16,8 @@ package Renderer::Lane::Session;
 #     discarded: if it differs from the nested token it is stashed and its
 #     problem-SOURCE fields override the nested ones atomically after the
 #     body lane runs (apply_source_override, LTW-088). Source only —
-#     trust/routing/state claims never cross from a sidecar.
+#     trust/routing/state claims never cross from this source sidecar
+#     (reveal permission has its own sidecar, Renderer::RevealSidecar).
 #   * Hoist embedded challenge_jwt → challengeJWT so the body-lane
 #     dispatcher recognizes form-submit re-renders as challengeJWT-lane.
 #

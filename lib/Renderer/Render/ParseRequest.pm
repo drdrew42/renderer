@@ -147,7 +147,6 @@ sub _parse_envelope ($c, $params, $ctx) {
 			return $c->exception("verdict_signed: $err", 400);
 		}
 		$params->{sessionJWT} = $folded;
-		$c->stash(_verdict_folded => 1);
 		delete $params->{verdict_signed};
 	}
 

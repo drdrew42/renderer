@@ -63,8 +63,8 @@
 					% # JWTanswerURL).
 					% #
 					% # sessionJWT is the persistence channel — present when the caller
-					% # provided JWTanswerURL. Carries the reveal ratchet (answersRevealed /
-					% # solutionsRevealed) and the embedded problemJWT for restart. When
+					% # provided JWTanswerURL. Carries the answer state, the correct/incorrect
+					% # counts, and the embedded problemJWT for restart. When
 					% # both fields are emitted, sessionJWT wins via parseRequest's
 					% # claim-merge for security-sensitive fields.
 					% if ($rh_result->{inputs_ref}{problemJWT}) {

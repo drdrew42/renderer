@@ -16,7 +16,7 @@ package Renderer::Lane::Review;
 #     PG's native input-prefill path.
 #   * Force submitAnswers=1 so PG renders the graded view (per-answer
 #     feedback) the student saw at submit time.
-#   * Lock outputFormat to 'default' (iframe-only).
+#   * Lock outputFormat to 'static' (iframe-only, read-only replay).
 #   * Do NOT set _can_emit_answer_jwt, do NOT plumb JWTanswerURL — reView
 #     is read-only; the late emission gate naturally short-circuits because
 #     no JWTanswerURL is ever set.
@@ -25,35 +25,11 @@ package Renderer::Lane::Review;
 # as raw form params from the portal — display preferences, not security
 # claims.
 #
-# showCorrectAnswers is NOT a display preference, and the comment that used
-# to say so here was wrong (WW3-R46). Its reasoning was "the orchestrator
-# already gated whether to release the submissionJWT to the caller;
-# everything past that is presentation." That holds only if releasing the
-# submissionJWT is the decision that matters. On reView it is not — the
-# student is SUPPOSED to hold their own submissionJWT; that is the whole
-# feature. showCorrectAnswers is the only thing between them and the
-# answers, and it arrived in their own POST body.
-#
-# It is stripped with the other elevation params now, and restored here
-# from the pre-strip stash. That restore is a deliberate, bounded interim:
-#
-#   * WW3 genuinely needs it today. Instructor reView shows correct answers
-#     via this field (play/service.go sets it from `grade.read.all`), so
-#     stripping it outright regresses a live v1 feature.
-#   * The exposure it leaves is bounded. reView is post-finalization: the
-#     play is over and the score is locked, so a student flipping this
-#     cannot improve their own result. What they gain is early sight of
-#     answers — a fairness/parity problem (sharing with classmates who have
-#     not finished), not a self-scoring exploit. The severe case was the
-#     CHALLENGE lane, mid-play, live scoring, and that one is now closed
-#     outright.
-#   * WW3-117 deletes it. Once the reveal is minted server-side and fetched
-#     out of band, no in-render reveal flag exists on any lane and this
-#     restore goes with it.
-#
-# The alternative considered and rejected for now: a WW3-minted "reView
-# options" token carrying the flag as a claim. Correct, and thrown away by
-# WW3-117 a ticket later.
+# showCorrectAnswers is a security claim: on reView the student holds their
+# own submissionJWT, so a raw form field would be the only thing between them
+# and the answers. The lane hard-zeroes it, and the reveal arrives only
+# through the verified permission sidecar (_reveal_grant, WW3-117) — see
+# apply below.
 
 use strict;
 use warnings;
@@ -128,8 +104,8 @@ sub apply ($c, $params) {
 	# buttons (WW3-R21) and, critically, marks the render as "display, don't
 	# count" — Render.pm records no interaction telemetry for a static render,
 	# which is what stops a reView from logging a phantom submit (WW3-R49).
-	# (Genuinely non-interactive inputs — MathQuill as static divs — is a
-	# separate follow-up; static hides the buttons today.)
+	# A static render also swaps PG's editable MathQuill init for the read-only
+	# static-mathquill.js (WW3-121; see WeBWorK::FormatRenderedProblem).
 	$params->{outputFormat} = 'static';
 
 	# Elevation params (WW3-R46). isInstructor lands on the student default

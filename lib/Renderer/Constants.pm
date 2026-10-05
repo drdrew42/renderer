@@ -33,10 +33,6 @@ use constant SENSITIVE_PARAMS => qw(
 	numCorrect
 	numIncorrect
 	parent_origin
-	answersRequested
-	solutionsRequested
-	answersRevealed
-	solutionsRevealed
 	_reveal_grant
 );
 
@@ -71,18 +67,17 @@ use constant SENSITIVE_PARAMS => qw(
 #
 # showCorrectAnswers is deliberately NOT in this list. It is the "Show
 # Correct Answers" BUTTON's own mechanism — the rendered form posts it back
-# when a student presses the button the mode bundle chose to display. So
-# stripping it does not close a hole, it breaks the affordance; the tests
-# that exercise the reveal ratchet fail for exactly that reason.
+# when a student presses the button the mode bundle chose to display.
+# Stripping it would break that affordance.
 #
 # Each lane handles it according to what that lane is for:
 #
 #   Lane::Challenge — hard-zeroed, claim-or-nothing. Mid-play, live
-#     scoring; the severe case, and shut outright.
-#   Lane::Review    — still raw-form, a documented interim. WW3-117
-#     replaces it with a WW3-minted permission sidecar and the flag goes
-#     away entirely.
-#   Lane::Problem   — LibreTexts', and unchanged. There isInstructor is an
+#     scoring.
+#   Lane::Review    — hard-zeroed. The reveal arrives only through the
+#     verified permission sidecar (Renderer::RevealSidecar, WW3-117).
+#   Lane::Problem   — LibreTexts'. The raw flag is honoured only under an
+#     offering render mode (WW3-R51). There isInstructor is an
 #     AUTHORING AND BROWSING mode switch rather than a student-facing
 #     permission: reveal content reaches ADAPT out of band via
 #     /render-api/hint, /solution and /answer, so a student interaction
@@ -118,8 +113,9 @@ use constant RENDER_MODE_PARAMS => qw(
 
 # Problem-source fields a sidecar problemJWT may override on an in-flight
 # sessionJWT (LTW-088). Whitelist — trust/routing/state claims (JWTanswerURL,
-# parent_origin, isInstructor, the reveal/submit ratchet) never cross from a
-# sidecar; only "what content" does. Applied ATOMICALLY: any sidecar source
+# parent_origin, isInstructor, answersSubmitted) never cross from this source
+# sidecar; only "what content" does. Reveal permission arrives through the
+# separate permission sidecar (Renderer::RevealSidecar, WW3-117). Applied ATOMICALLY: any sidecar source
 # field triggers replacement of the entire nested source bundle, so a stale
 # pg_hash can never ride alongside a freshly-pointed problemSourceURL (the
 # SourceResolver serves cached content by hash, zero-network).
