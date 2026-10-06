@@ -23,14 +23,14 @@ use Crypt::JWT qw(encode_jwt);
 # outputFormat=debug is a deployment affordance gated on this env var
 # (WW3-R45). The test suite is its intended consumer.
 $ENV{RENDERER_DEBUG_FORMAT} //= 1;
-$ENV{problemJWTsecret} //= 'test-problem-secret';
-$ENV{webworkJWTsecret} //= 'test-session-secret';
-$ENV{SITE_HOST}        //= 'https://test.example.com';
+$ENV{problemJWTsecret}      //= 'test-problem-secret';
+$ENV{webworkJWTsecret}      //= 'test-session-secret';
+$ENV{SITE_HOST}             //= 'https://test.example.com';
 
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
 
-my $t = Test::Mojo->new('Renderer');
+my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
 make_path("$render_root/logs")    unless -d "$render_root/logs";
@@ -65,12 +65,14 @@ PG
 # ─── ungrounded lane (raw form) ────────────────────────────────────────────
 
 subtest 'ungrounded: renderMode echoed back in debug; empty overrides when caller agrees' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		problemSeed   => 1234,
-		outputFormat  => 'debug',
-		renderMode    => 'default',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			outputFormat  => 'debug',
+			renderMode    => 'default',
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
 	is($debug->{renderMode}, 'default', 'renderMode surfaced in debug');
@@ -78,14 +80,16 @@ subtest 'ungrounded: renderMode echoed back in debug; empty overrides when calle
 };
 
 subtest 'ungrounded: no-feedback overrides conflicting caller primitives' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource      => $pg_source,
-		problemSeed        => 1234,
-		outputFormat       => 'debug',
-		renderMode         => 'no-feedback',
-		hideFeedback       => 0,    # mode forces to 1
-		showCorrectAnswers => 1,    # mode forces to 0
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource      => $pg_source,
+			problemSeed        => 1234,
+			outputFormat       => 'debug',
+			renderMode         => 'no-feedback',
+			hideFeedback       => 0,               # mode forces to 1
+			showCorrectAnswers => 1,               # mode forces to 0
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
 	is($debug->{renderMode}, 'no-feedback', 'mode preserved');
@@ -95,18 +99,20 @@ subtest 'ungrounded: no-feedback overrides conflicting caller primitives' => sub
 		'both conflicting caller primitives recorded as overrides',
 	);
 	# Permission resolver downstream of mode: showCorrectAnswers should be 0.
-	is($debug->{permissions}{showCorrectAnswers}, 0,
-		'mode-forced showCorrectAnswers=0 visible to permission resolver');
+	is($debug->{permissions}{showCorrectAnswers},
+		0, 'mode-forced showCorrectAnswers=0 visible to permission resolver');
 };
 
 subtest 'ungrounded: custom mode is pure passthrough' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		problemSeed   => 1234,
-		outputFormat  => 'debug',
-		renderMode    => 'custom',
-		hideFeedback  => 1,    # caller value should survive
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			outputFormat  => 'debug',
+			renderMode    => 'custom',
+			hideFeedback  => 1,            # caller value should survive
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
 	is($debug->{renderMode}, 'custom', 'mode preserved');
@@ -114,11 +120,13 @@ subtest 'ungrounded: custom mode is pure passthrough' => sub {
 };
 
 subtest 'ungrounded: absent renderMode → custom (no overrides)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		problemSeed   => 1234,
-		outputFormat  => 'debug',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			outputFormat  => 'debug',
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
 	is($debug->{renderMode}, undef, 'no renderMode in inputs_ref');
@@ -126,13 +134,15 @@ subtest 'ungrounded: absent renderMode → custom (no overrides)' => sub {
 };
 
 subtest 'ungrounded: unknown mode treated as custom (forward-compat)' => sub {
-	$t->post_ok('/render-api' => form => {
-		problemSource => $pg_source,
-		problemSeed   => 1234,
-		outputFormat  => 'debug',
-		renderMode    => 'totally-fake-mode-name',
-		hideFeedback  => 1,
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			outputFormat  => 'debug',
+			renderMode    => 'totally-fake-mode-name',
+			hideFeedback  => 1,
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
 	is($debug->{renderMode}, 'totally-fake-mode-name', 'unknown mode echoed back unchanged');
@@ -148,15 +158,16 @@ subtest 'problemJWT: renderMode claim wins over raw form renderMode' => sub {
 		renderMode    => 'no-feedback',
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'debug',
-		renderMode   => 'default',    # raw form tries 'default'; claim should win
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'debug',
+			renderMode   => 'default',    # raw form tries 'default'; claim should win
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
-	is($debug->{renderMode}, 'no-feedback',
-		'JWT claim wins over raw form param (Lane::Problem bulk merge)');
+	is($debug->{renderMode}, 'no-feedback', 'JWT claim wins over raw form param (Lane::Problem bulk merge)');
 };
 
 subtest 'problemJWT: raw form renderMode is stripped on a grounded lane — no self-elevation (WW3-R51)' => sub {
@@ -171,18 +182,20 @@ subtest 'problemJWT: raw form renderMode is stripped on a grounded lane — no s
 		# deliberately no renderMode claim
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'debug',
-		renderMode   => 'preview',    # raw injection attempt
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'debug',
+			renderMode   => 'preview',    # raw injection attempt
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
-	is($debug->{renderMode}, undef, 'raw renderMode stripped on a grounded request');
-	is($debug->{permissions}{isInstructor},       0, 'no elevation to instructor');
-	is($debug->{permissions}{showCorrectAnswers}, 0, 'no answer reveal');
-	is($debug->{permissions}{showSolutions},      0, 'no solution reveal');
-	is($debug->{permissions}{showHints},          0, 'no hint reveal');
+	is($debug->{renderMode},                      undef, 'raw renderMode stripped on a grounded request');
+	is($debug->{permissions}{isInstructor},       0,     'no elevation to instructor');
+	is($debug->{permissions}{showCorrectAnswers}, 0,     'no answer reveal');
+	is($debug->{permissions}{showSolutions},      0,     'no solution reveal');
+	is($debug->{permissions}{showHints},          0,     'no hint reveal');
 };
 
 subtest 'problemJWT: preview claim overrides caller isInstructor=0 in form' => sub {
@@ -192,18 +205,19 @@ subtest 'problemJWT: preview claim overrides caller isInstructor=0 in form' => s
 		renderMode    => 'preview',
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'debug',
-	})->status_is(200);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'debug',
+		}
+	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
-	is($debug->{renderMode}, 'preview', 'preview mode applied');
-	is($debug->{permissions}{isInstructor}, 1,
-		'preview mode promoted to instructor → revealAll');
-	is($debug->{permissions}{showCorrectAnswers}, 1, 'showCorrectAnswers revealed');
-	is($debug->{permissions}{showHints},          1, 'showHints revealed');
-	is($debug->{permissions}{showSolutions},      1, 'showSolutions revealed');
+	is($debug->{renderMode},                      'preview', 'preview mode applied');
+	is($debug->{permissions}{isInstructor},       1,         'preview mode promoted to instructor → revealAll');
+	is($debug->{permissions}{showCorrectAnswers}, 1,         'showCorrectAnswers revealed');
+	is($debug->{permissions}{showHints},          1,         'showHints revealed');
+	is($debug->{permissions}{showSolutions},      1,         'showSolutions revealed');
 };
 
 # ─── Format-layer primitives must survive the subprocess fork ──────────────
@@ -222,11 +236,12 @@ subtest 'preview mode: Show Correct Answers button reaches the format layer' => 
 		renderMode    => 'preview',
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_like(
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)->content_like(
 		qr/Show Correct Answers/,
 		'preview-mode showCorrectAnswersButton=1 visible to template after fork',
 	);
@@ -239,14 +254,13 @@ subtest 'review mode: Check Answers button hidden in the format layer' => sub {
 		renderMode    => 'review',
 	);
 
-	$t->post_ok('/render-api' => form => {
-		problemJWT   => $jwt,
-		outputFormat => 'default',
-	})->status_is(200)
-	  ->content_unlike(
-		qr/Check Answers/,
-		'review-mode hideCheckAnswersButton=1 visible to template after fork',
-	);
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200)
+		->content_unlike(qr/Check Answers/, 'review-mode hideCheckAnswersButton=1 visible to template after fork',);
 };
 
 done_testing();

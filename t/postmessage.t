@@ -215,8 +215,7 @@ subtest 'clean render → no data-render-error attribute' => sub {
 			problemJWT   => $jwt,
 			outputFormat => 'default',
 		}
-	)->status_is(200)
-		->content_unlike(qr{data-render-error}, 'clean render omits data-render-error');
+	)->status_is(200)->content_unlike(qr{data-render-error}, 'clean render omits data-render-error');
 };
 
 done_testing();

@@ -367,7 +367,8 @@ sub formatRenderedProblem {
 			html => { text => $rh_result->{renderedHTML} },
 			json => {
 				json => jsonResponse(
-					$rh_result, $inputs_ref, @extra_css_files, @third_party_css, @extra_js_files, @third_party_js
+					$rh_result,       $inputs_ref,     @extra_css_files,
+					@third_party_css, @extra_js_files, @third_party_js
 				)
 			},
 		);

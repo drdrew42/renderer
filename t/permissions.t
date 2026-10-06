@@ -16,8 +16,8 @@ use Crypt::JWT qw(decode_jwt encode_jwt);
 # outputFormat=debug is a deployment affordance gated on this env var
 # (WW3-R45). The test suite is its intended consumer.
 $ENV{RENDERER_DEBUG_FORMAT} //= 1;
-$ENV{problemJWTsecret} //= 'test-problem-secret';
-$ENV{webworkJWTsecret} //= 'test-session-secret';
+$ENV{problemJWTsecret}      //= 'test-problem-secret';
+$ENV{webworkJWTsecret}      //= 'test-session-secret';
 
 # Helper: mint an upstream-style problemJWT carrying JWTanswerURL. Required
 # for any test that expects sessionJWT/answerJWT to be produced — sessionJWT
@@ -277,8 +277,8 @@ subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' 
 		}
 	)->status_is(200);
 
-	my $submit        = $t->tx->res->json;
-	my $answer1       = decode_jwt(token => $submit->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
+	my $submit  = $t->tx->res->json;
+	my $answer1 = decode_jwt(token => $submit->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
 	is($answer1->{answers_shown}, 1, 'answerJWT.answers_shown = 1 (this render showed answers)');
 
 	# Subsequent submit WITHOUT reveal → answers_shown = 0. There is no sticky

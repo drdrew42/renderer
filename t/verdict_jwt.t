@@ -106,8 +106,8 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
 	is($claims->{mint_sequence},        6, 'mint_sequence advanced by 1');
 	is($claims->{state}{current_focus}, 1, 'current_focus from verdict');
-	is_deeply($claims->{state}{next_available}, [ 1, 2 ], 'next_available from verdict');
-	is_deeply($claims->{state}{spent_on_record}, [0], 'spent_on_record from verdict (WW3-177b)');
+	is_deeply($claims->{state}{next_available},  [ 1, 2 ], 'next_available from verdict');
+	is_deeply($claims->{state}{spent_on_record}, [0],      'spent_on_record from verdict (WW3-177b)');
 	ok(!exists $claims->{state}{started_at}, 'started_at is not carried into the folded state (C5)');
 	is_deeply($claims->{state}{draws}, [], 'draws[] empty (closed mode, no draw_next)');
 	is($claims->{state}{finalization}, undef, 'finalization undef');
@@ -163,7 +163,7 @@ subtest 'finalization: terminal verdict folds finalization into state' => sub {
 	is($err, undef, 'no error');
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
 	is($claims->{state}{finalization}{reason}, 'student_finalized', 'finalization reason set');
-	is_deeply($claims->{state}{next_available}, [], 'next_available empty on terminal');
+	is_deeply($claims->{state}{next_available},  [], 'next_available empty on terminal');
 	is_deeply($claims->{state}{spent_on_record}, [], 'spent_on_record defaults to [] when the verdict omits it');
 };
 
@@ -305,8 +305,8 @@ subtest 'fold preserves base challenge_jwt verbatim' => sub {
 # Play-mode projection fold (WW3-042/041) -------------------------------------
 
 subtest 'fold carries verdict.progress and verdict.deadlines into state' => sub {
-	my $cjwt = make_challenge_jwt();
-	my $base = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 2);
+	my $cjwt    = make_challenge_jwt();
+	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 2);
 	my $vsigned = make_verdict_signed(
 		basis   => 2,
 		verdict => {
@@ -315,22 +315,22 @@ subtest 'fold carries verdict.progress and verdict.deadlines into state' => sub 
 			draw_next      => undef,
 			finalization   => undef,
 			progress       => { kind => 'classic', attempted => 2, total => 3, passed => 1 },
-			deadlines      => { 0 => '2026-08-24T09:05:00Z' },
+			deadlines      => { 0    => '2026-08-24T09:05:00Z' },
 		},
 	);
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
 	is($err, undef, 'fold succeeds');
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
-	is($claims->{state}{progress}{kind}, 'classic', 'progress.kind folded through');
-	is($claims->{state}{progress}{passed}, 1, 'progress body folded through');
-	is($claims->{state}{deadlines}{0}, '2026-08-24T09:05:00Z', 'deadlines folded through');
+	is($claims->{state}{progress}{kind},   'classic',              'progress.kind folded through');
+	is($claims->{state}{progress}{passed}, 1,                      'progress body folded through');
+	is($claims->{state}{deadlines}{0},     '2026-08-24T09:05:00Z', 'deadlines folded through');
 };
 
 subtest 'fold omits projection fields a verdict does not carry' => sub {
 	my $cjwt    = make_challenge_jwt();
 	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 1);
-	my $vsigned = make_verdict_signed(basis => 1);    # default verdict: no progress/deadlines
+	my $vsigned = make_verdict_signed(basis => 1);                              # default verdict: no progress/deadlines
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
 	is($err, undef, 'fold succeeds');
@@ -359,7 +359,7 @@ subtest 'launch fold: verdict into an empty base mints sessionJWT_0' => sub {
 			finalization    => undef,
 			spent_on_record => [],
 			progress        => { kind => 'classic', attempted => 0, total => 3 },
-			deadlines       => { 0 => '2026-10-06T13:00:00Z' },
+			deadlines       => { 0    => '2026-10-06T13:00:00Z' },
 		},
 	);
 

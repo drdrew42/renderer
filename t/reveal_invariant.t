@@ -89,8 +89,8 @@ END_PGML_SOLUTION
 ENDDOCUMENT();
 PG
 
-my $SOLUTION_MARK = qr/canonical solution text is forty-two/;   # only present when a solution renders
-my $ANSWER_MARK   = qr/correct_ans/;                            # only present when correct answers reveal
+my $SOLUTION_MARK = qr/canonical solution text is forty-two/;    # only present when a solution renders
+my $ANSWER_MARK   = qr/correct_ans/;                             # only present when correct answers reveal
 
 sub challenge_jwt {
 	my (%overrides) = @_;
@@ -112,7 +112,8 @@ sub challenge_jwt {
 			},
 			answer_url => 'http://127.0.0.1:9999/fake-answer-callback',
 			# Baseline: reveal fully off. Overridable to install a trusted claim.
-			render_permissions => { isInstructor => 0, showCorrectAnswers => 0, showHints => 0, showSolutions => 0 },
+			render_permissions =>
+				{ isInstructor => 0, showCorrectAnswers => 0, showHints => 0, showSolutions => 0 },
 			%overrides,
 		},
 		key => $ENV{problemJWTsecret},
@@ -184,14 +185,19 @@ sub body { return $t->tx->res->body }
 subtest 'Challenge lane: raw isInstructor=1 does not reveal (stripped)' => sub {
 	my $jwt  = challenge_jwt();
 	my %base = (
-		challengeJWT  => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
-		submitAnswers => 1,    'AnSwEr0001' => '0',    # a wrong submit, so feedback is identical either way
+		challengeJWT   => $jwt,
+		verdict_signed => launch_verdict(),
+		position       => 0,
+		problemSource  => $pg_source,
+		submitAnswers  => 1,
+		'AnSwEr0001'   => '0',                # a wrong submit, so feedback is identical either way
 	);
 
 	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
 	my $baseline = body();
 
-	$t->post_ok('/render-api', { Accept => 'application/json' }, form => { %base, isInstructor => 1 })->status_is(200);
+	$t->post_ok('/render-api', { Accept => 'application/json' }, form => { %base, isInstructor => 1 })
+		->status_is(200);
 	my $elevated = body();
 
 	unlike($elevated, $SOLUTION_MARK, 'no solution from a self-declared isInstructor');
@@ -202,8 +208,12 @@ subtest 'Challenge lane: raw isInstructor=1 does not reveal (stripped)' => sub {
 subtest 'Challenge lane: raw showCorrectAnswers=1 does not reveal (hard-zeroed)' => sub {
 	my $jwt  = challenge_jwt();
 	my %base = (
-		challengeJWT  => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
-		submitAnswers => 1,    'AnSwEr0001' => '0',
+		challengeJWT   => $jwt,
+		verdict_signed => launch_verdict(),
+		position       => 0,
+		problemSource  => $pg_source,
+		submitAnswers  => 1,
+		'AnSwEr0001'   => '0',
 	);
 
 	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
@@ -229,10 +239,15 @@ subtest 'Challenge lane: a TRUSTED isInstructor claim DOES reveal (the convenien
 	my $jwt = challenge_jwt(render_permissions => { isInstructor => 1 });
 
 	$t->post_ok(
-		'/render-api', { Accept => 'application/json' },
+		'/render-api',
+		{ Accept => 'application/json' },
 		form => {
-			challengeJWT => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
-			submitAnswers => 1, 'AnSwEr0001' => '0',
+			challengeJWT   => $jwt,
+			verdict_signed => launch_verdict(),
+			position       => 0,
+			problemSource  => $pg_source,
+			submitAnswers  => 1,
+			'AnSwEr0001'   => '0',
 		}
 	)->status_is(200);
 
@@ -344,8 +359,11 @@ subtest 'Problem lane: raw showCorrectAnswers does not reveal on the custom defa
 	# canonical answer. Now gated on the resolved mode offering the button. Same
 	# mode, with and without the flag, isolates the reveal from any chrome delta.
 	my %base = (
-		problemJWT    => problem_jwt(), problemSource => $pg_source, problemSeed => 1234,
-		submitAnswers => 1, 'AnSwEr0001' => '0',    # wrong submit
+		problemJWT    => problem_jwt(),
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+		submitAnswers => 1,
+		'AnSwEr0001'  => '0',             # wrong submit
 	);
 
 	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
@@ -365,10 +383,13 @@ subtest 'Problem lane: an offering-mode CLAIM keeps showCorrectAnswers working' 
 	# so the mode is trusted) offers the button, and a student pressing it
 	# reveals. Compared under the SAME mode so the delta is the reveal, not the
 	# no-stakes chrome.
-	my $jwt = problem_jwt(renderMode => 'no-stakes');
+	my $jwt  = problem_jwt(renderMode => 'no-stakes');
 	my %base = (
-		problemJWT    => $jwt, problemSource => $pg_source, problemSeed => 1234,
-		submitAnswers => 1, 'AnSwEr0001' => '0',
+		problemJWT    => $jwt,
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+		submitAnswers => 1,
+		'AnSwEr0001'  => '0',
 	);
 
 	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
@@ -382,7 +403,8 @@ subtest 'Problem lane: an offering-mode CLAIM keeps showCorrectAnswers working' 
 	# reveal, isolated. (reveal_reporting.t asserts the authoritative
 	# answerJWT.answers_shown=1 for the no-stakes case; here we pin that the
 	# affordance still lights on the render itself.)
-	cmp_ok(length($revealed), '>', length($ns_baseline), 'no-stakes honours showCorrectAnswers — the reveal renders');
+	cmp_ok(length($revealed), '>', length($ns_baseline),
+		'no-stakes honours showCorrectAnswers — the reveal renders');
 };
 
 # ─── Feedback flags are NOT reveal — do not over-retire them ─────────────────
@@ -395,11 +417,17 @@ subtest 'Feedback flags do not leak reveal content' => sub {
 	# direction that matters — accepted, and no reveal surface lit.
 	my $jwt = challenge_jwt();
 	$t->post_ok(
-		'/render-api', { Accept => 'application/json' },
+		'/render-api',
+		{ Accept => 'application/json' },
 		form => {
-			challengeJWT => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
-			submitAnswers => 1, 'AnSwEr0001' => '42',
-			showPartialCorrectAnswers => 1, showScoreSummary => 1,
+			challengeJWT              => $jwt,
+			verdict_signed            => launch_verdict(),
+			position                  => 0,
+			problemSource             => $pg_source,
+			submitAnswers             => 1,
+			'AnSwEr0001'              => '42',
+			showPartialCorrectAnswers => 1,
+			showScoreSummary          => 1,
 		}
 	)->status_is(200);
 

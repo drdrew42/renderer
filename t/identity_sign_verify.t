@@ -33,15 +33,11 @@ ok(
 
 # ASCII floor — the common case must keep round-tripping.
 my $ascii = 'plain-ascii-payload';
-ok(
-	Renderer::Identity::verify($ascii, Renderer::Identity::sign($ascii), Renderer::Identity::public_key()),
-	'ASCII payload round-trips'
-);
+ok(Renderer::Identity::verify($ascii, Renderer::Identity::sign($ascii), Renderer::Identity::public_key()),
+	'ASCII payload round-trips');
 
 # A tampered payload must NOT verify (guards against a verify that ignores its input).
-ok(
-	!Renderer::Identity::verify("$wide-tampered", $sig, Renderer::Identity::public_key()),
-	'a modified payload fails verification'
-);
+ok(!Renderer::Identity::verify("$wide-tampered", $sig, Renderer::Identity::public_key()),
+	'a modified payload fails verification');
 
 done_testing();

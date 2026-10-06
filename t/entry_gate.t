@@ -147,7 +147,8 @@ subtest 'Accept: application/json does not change the shape' => sub {
 		}
 	)->status_is(200);
 
-	like($t->tx->res->headers->content_type, qr{text/html}, 'still HTML despite an Accept: application/json header');
+	like($t->tx->res->headers->content_type, qr{text/html},
+		'still HTML despite an Accept: application/json header');
 	unlike($t->tx->res->body, qr/^\s*\{/, 'body is not a JSON document');
 };
 
@@ -202,8 +203,8 @@ subtest 'outputFormat=debug: HTML debug block does not leak the answer hash' => 
 		}
 	)->status_is(200);
 
-	unlike($t->tx->res->body, qr/correct_ans/,        'no correct_ans in the HTML debug block');
-	unlike($t->tx->res->body, qr/PG debug messages/,  'no PG-debug-messages block rendered');
+	unlike($t->tx->res->body, qr/correct_ans/,           'no correct_ans in the HTML debug block');
+	unlike($t->tx->res->body, qr/PG debug messages/,     'no PG-debug-messages block rendered');
 	unlike($t->tx->res->body, qr/Environment variables/, 'no show_pg_info envir dump');
 };
 
@@ -269,8 +270,11 @@ subtest 'ungrounded under STRICT_JWT=0: isInstructor still honoured (VPC editor)
 		}
 	)->status_is(200);
 
-	like($t->tx->res->body, qr/solution accordion/,
-		'a deployment that trusts its network keeps the editor preview working');
+	like(
+		$t->tx->res->body,
+		qr/solution accordion/,
+		'a deployment that trusts its network keeps the editor preview working'
+	);
 };
 
 done_testing();

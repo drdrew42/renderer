@@ -66,9 +66,15 @@ PG
 sub problem_jwt {
 	my (%claims) = @_;
 	return encode_jwt(
-		payload => { aud => $ENV{SITE_HOST}, iss => $ENV{SITE_HOST}, problemSource => $pg_source, problemSeed => 1234, %claims },
-		key     => $ENV{problemJWTsecret},
-		alg     => 'HS256',
+		payload => {
+			aud           => $ENV{SITE_HOST},
+			iss           => $ENV{SITE_HOST},
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			%claims
+		},
+		key => $ENV{problemJWTsecret},
+		alg => 'HS256',
 	);
 }
 
@@ -116,7 +122,7 @@ sub submission_jwt {
 }
 
 sub peer_post {
-	my (%fields) = @_;
+	my (%fields)  = @_;
 	my $body      = Mojo::Parameters->new(%fields)->to_string;
 	my $ts        = time;
 	my $canonical = "POST\n/render-api\n$ts\n$body";
@@ -140,10 +146,15 @@ sub form_post {
 }
 
 my %lane = (
-	problem    => sub { (problemJWT => problem_jwt()) },
-	challenge  => sub { (challengeJWT => challenge_jwt(), verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source) },
+	problem   => sub { (problemJWT => problem_jwt()) },
+	challenge => sub { (
+		challengeJWT   => challenge_jwt(),
+		verdict_signed => launch_verdict(),
+		position       => 0,
+		problemSource  => $pg_source
+	) },
 	review     => sub { (submissionJWT => submission_jwt(), problemSource => $pg_source) },
-	ungrounded => sub { (problemSource => $pg_source, problemSeed => 1234) },
+	ungrounded => sub { (problemSource => $pg_source,       problemSeed   => 1234) },
 );
 
 my $evil = 'https://example.invalid';
@@ -170,7 +181,8 @@ for my $name (sort keys %lane) {
 		$t->content_unlike(qr{action="\Q$evil\E}, 'raw formAction does not reach the form action');
 
 		form_post($lane{$name}->(), formAction => "$evil/post", formURL => "$evil/other");
-		$t->content_unlike(qr{action="\Q$evil\E}, 'raw formAction alongside formURL does not reach the form action');
+		$t->content_unlike(qr{action="\Q$evil\E},
+			'raw formAction alongside formURL does not reach the form action');
 	};
 }
 
@@ -178,9 +190,9 @@ for my $name (sort keys %lane) {
 
 subtest 'problem lane: integrator claims land' => sub {
 	form_post(problemJWT => problem_jwt(%raw));
-	$t->content_like(qr{<base href="\Q$evil\E/"},          'baseURL claim sets <base href>');
-	$t->content_like(qr{action="\Q$evil\E/post"},          'formURL claim sets the form action');
-	$t->content_like(qr{<script>/\*probe\*/</script>},     'extra_header_text claim reaches <head>');
+	$t->content_like(qr{<base href="\Q$evil\E/"},      'baseURL claim sets <base href>');
+	$t->content_like(qr{action="\Q$evil\E/post"},      'formURL claim sets the form action');
+	$t->content_like(qr{<script>/\*probe\*/</script>}, 'extra_header_text claim reaches <head>');
 	is($no_cache, 1, 'noCache claim bypasses the content cache');
 };
 
@@ -191,7 +203,12 @@ subtest 'peer lane: integrator settings in the signed body land' => sub {
 	$t->content_like(qr{<script>/\*probe\*/</script>}, 'extra_header_text reaches <head>');
 	is($no_cache, 1, 'noCache bypasses the content cache');
 
-	peer_post(problemSource => $pg_source, problemSeed => 1234, outputFormat => 'default', formAction => "$evil/peer");
+	peer_post(
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+		outputFormat  => 'default',
+		formAction    => "$evil/peer"
+	);
 	$t->content_like(qr{action="\Q$evil\E/peer"}, 'formAction is renamed to formURL and sets the form action');
 };
 

@@ -38,7 +38,7 @@ use Renderer::Lane::Challenge;
 use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
-use Renderer::Constants qw(SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS);
+use Renderer::Constants  qw(SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS);
 use Renderer::RenderMode qw(resolve_render_mode);
 
 use Exporter qw(import);

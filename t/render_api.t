@@ -141,8 +141,7 @@ subtest 'a bad-credential problemJWT is a 401, not a 500 (WW3-R50)' => sub {
 		auto_iat => 1,
 	);
 	$t->post_ok('/render-api' => \%as_json => form => { problemJWT => $wrong_aud, outputFormat => 'simple' })
-		->status_is(401)
-		->json_like('/message', qr/audience/i, 'wrong aud → 401, naming the audience failure');
+		->status_is(401)->json_like('/message', qr/audience/i, 'wrong aud → 401, naming the audience failure');
 
 	# Wrong signature: right aud, signed with a key the renderer does not hold.
 	my $bad_sig = encode_jwt(

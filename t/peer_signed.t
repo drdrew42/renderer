@@ -26,8 +26,8 @@ my ($peer_pub, $peer_sec) = Crypt::Ed25519::generate_keypair();
 # The debug/JSON introspection shapes are deployment-gated (WW3-R45);
 # the test suite is their intended consumer.
 $ENV{RENDERER_DEBUG_FORMAT} //= 1;
-$ENV{problemJWTsecret} //= 'test-problem-secret';
-$ENV{webworkJWTsecret} //= 'test-session-secret';
+$ENV{problemJWTsecret}      //= 'test-problem-secret';
+$ENV{webworkJWTsecret}      //= 'test-session-secret';
 
 # Pin the test peer at startup.
 $ENV{RENDERER_PEERS} = encode_json([ { name => 'test-editor', public_key => encode_base64($peer_pub, '') }, ]);

@@ -12,8 +12,7 @@ use Renderer::RenderMode qw(resolve_render_mode mode_bundle RENDER_MODES);
 
 subtest 'RENDER_MODES enumerates the documented modes' => sub {
 	my @expected = qw(default no-feedback review no-stakes preview custom);
-	is_deeply([ sort @{ RENDER_MODES() } ], [ sort @expected ],
-		'modes match design doc');
+	is_deeply([ sort @{ RENDER_MODES() } ], [ sort @expected ], 'modes match design doc');
 };
 
 # ─── Per-mode bundles ─────────────────────────────────────────────────────
@@ -117,7 +116,7 @@ subtest 'default and review lock showCorrectAnswers, not just the button (WW3-R4
 	# button; before R46 neither refused the flag, so a caller who was
 	# never offered the reveal could ask for it directly and be given it.
 	for my $mode (qw(default review)) {
-		my $i = { renderMode => $mode, showCorrectAnswers => 1 };
+		my $i         = { renderMode => $mode, showCorrectAnswers => 1 };
 		my $overrides = resolve_render_mode($i);
 		is($i->{showCorrectAnswers},       0, "$mode refuses a caller-supplied showCorrectAnswers");
 		is($i->{showCorrectAnswersButton}, 0, "$mode still hides the button");
@@ -141,22 +140,20 @@ subtest 'no-stakes and preview still offer the reveal' => sub {
 subtest 'return value records replaced caller values' => sub {
 	my $i = {
 		renderMode             => 'no-feedback',
-		hideFeedback           => 0,        # mode overrides to 1
-		hideCheckAnswersButton => 0,        # matches bundle, no override
-		showCorrectAnswers     => 1,        # mode overrides to 0
+		hideFeedback           => 0,               # mode overrides to 1
+		hideCheckAnswersButton => 0,               # matches bundle, no override
+		showCorrectAnswers     => 1,               # mode overrides to 0
 	};
 	my $overrides = resolve_render_mode($i);
 	is(ref($overrides), 'ARRAY', 'returns an arrayref');
-	is_deeply([ sort @$overrides ],
-		[ sort qw(hideFeedback showCorrectAnswers) ],
-		'only conflicting keys recorded');
+	is_deeply([ sort @$overrides ], [ sort qw(hideFeedback showCorrectAnswers) ], 'only conflicting keys recorded');
 };
 
 subtest 'empty override list when bundle and caller agree' => sub {
-	my $i = { renderMode => 'no-feedback' };
+	my $i         = { renderMode => 'no-feedback' };
 	my $overrides = resolve_render_mode($i);
-	is(ref($overrides), 'ARRAY', 'returns an arrayref');
-	is(scalar @$overrides, 0, 'no overrides recorded');
+	is(ref($overrides),    'ARRAY', 'returns an arrayref');
+	is(scalar @$overrides, 0,       'no overrides recorded');
 };
 
 subtest 'custom and unknown modes return empty arrayref' => sub {
@@ -173,21 +170,21 @@ subtest 'custom and unknown modes return empty arrayref' => sub {
 
 subtest 'mode resolution preserves unrelated keys' => sub {
 	my $i = {
-		renderMode     => 'no-feedback',
-		pg_hash        => 'sha256:abc',
-		problemSeed    => 42,
-		JWTanswerURL   => 'https://example.test/answers',
-		displayMode    => 'MathJax',
-		language       => 'en',
-		hideElements   => ['.foo'],
+		renderMode   => 'no-feedback',
+		pg_hash      => 'sha256:abc',
+		problemSeed  => 42,
+		JWTanswerURL => 'https://example.test/answers',
+		displayMode  => 'MathJax',
+		language     => 'en',
+		hideElements => ['.foo'],
 	};
 	resolve_render_mode($i);
-	is($i->{pg_hash},      'sha256:abc',                'pg_hash untouched');
-	is($i->{problemSeed},  42,                          'problemSeed untouched');
+	is($i->{pg_hash},      'sha256:abc',                   'pg_hash untouched');
+	is($i->{problemSeed},  42,                             'problemSeed untouched');
 	is($i->{JWTanswerURL}, 'https://example.test/answers', 'JWTanswerURL untouched');
-	is($i->{displayMode},  'MathJax',                   'displayMode untouched');
-	is($i->{language},     'en',                        'language untouched');
-	is_deeply($i->{hideElements}, ['.foo'],             'hideElements untouched');
+	is($i->{displayMode},  'MathJax',                      'displayMode untouched');
+	is($i->{language},     'en',                           'language untouched');
+	is_deeply($i->{hideElements}, ['.foo'], 'hideElements untouched');
 };
 
 done_testing();

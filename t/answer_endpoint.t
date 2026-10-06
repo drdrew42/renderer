@@ -100,9 +100,9 @@ subtest 'no HTML is produced or returned' => sub {
 	$t->post_ok('/render-api/answer' => form => { problemJWT => $jwt })->status_is(200);
 
 	my $body = $t->tx->res->body;
-	unlike($body, qr/<div/,           'no markup in the response');
-	unlike($body, qr/solution/i,      'the SOLUTION block is not along for the ride');
-	unlike($body, qr/renderedHTML/,   'no render envelope');
+	unlike($body, qr/<div/,         'no markup in the response');
+	unlike($body, qr/solution/i,    'the SOLUTION block is not along for the ride');
+	unlike($body, qr/renderedHTML/, 'no render envelope');
 };
 
 subtest 'typ is enforced — a solution token cannot fetch answers' => sub {
@@ -111,8 +111,8 @@ subtest 'typ is enforced — a solution token cannot fetch answers' => sub {
 };
 
 subtest 'an untyped problemJWT is refused' => sub {
-	my $jwt = mint_jwt($ENV{problemJWTsecret},
-		{ aud => $ENV{SITE_HOST}, problemSource => $pg_source, problemSeed => 1234 });
+	my $jwt =
+		mint_jwt($ENV{problemJWTsecret}, { aud => $ENV{SITE_HOST}, problemSource => $pg_source, problemSeed => 1234 });
 	$t->post_ok('/render-api/answer' => form => { problemJWT => $jwt })->status_is(401);
 };
 
@@ -136,8 +136,11 @@ subtest 'the token binds the source — form data cannot redirect it' => sub {
 };
 
 subtest 'a broken problem surfaces as 500, not as an empty answer set' => sub {
-	my $jwt = mint_typed('answer', problemSource => "DOCUMENT();\nthis is not perl(((\nENDDOCUMENT();",
-		problemSeed => 1234);
+	my $jwt = mint_typed(
+		'answer',
+		problemSource => "DOCUMENT();\nthis is not perl(((\nENDDOCUMENT();",
+		problemSeed   => 1234
+	);
 	$t->post_ok('/render-api/answer' => form => { problemJWT => $jwt })->status_is(500);
 };
 

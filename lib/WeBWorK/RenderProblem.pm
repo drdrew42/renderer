@@ -316,7 +316,7 @@ sub standaloneRenderer {
 					response_obj => unbless($pg->{pgcore}{PG_ANSWERS_HASH}{$_}->response_obj),
 					rh_ans       => $pg->{pgcore}{PG_ANSWERS_HASH}{$_}{ans_eval}{rh_ans}
 				}
-				}
+			}
 				keys %{ $pg->{pgcore}{PG_ANSWERS_HASH} }
 		};
 		# TODO: replace resources after PG merges #1046

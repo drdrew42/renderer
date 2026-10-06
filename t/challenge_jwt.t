@@ -20,8 +20,8 @@ use TestHelper qw(launch_verdict);
 # outputFormat=debug is a deployment affordance gated on this env var
 # (WW3-R45). The test suite is its intended consumer.
 $ENV{RENDERER_DEBUG_FORMAT} //= 1;
-$ENV{problemJWTsecret} //= 'test-problem-secret';
-$ENV{webworkJWTsecret} //= 'test-session-secret';
+$ENV{problemJWTsecret}      //= 'test-problem-secret';
+$ENV{webworkJWTsecret}      //= 'test-session-secret';
 
 my $t           = Test::Mojo->new('Renderer');
 my $render_root = $ENV{RENDER_ROOT};
@@ -475,8 +475,8 @@ subtest 'plain re-render preserves spent_on_record (render-mint path)' => sub {
 	my $resp     = decode_json($t->tx->res->body);
 	my $surfaced = $resp->{JWT}{session};
 	my $claims   = decode_jwt(token => $surfaced, key => $ENV{webworkJWTsecret});
-	is_deeply($claims->{state}{spent_on_record}, [0], 'spent_on_record carried across a plain re-render');
-	is_deeply($claims->{state}{next_available}, [ 1, 2 ], 'next_available carried across a plain re-render');
+	is_deeply($claims->{state}{spent_on_record}, [0],      'spent_on_record carried across a plain re-render');
+	is_deeply($claims->{state}{next_available},  [ 1, 2 ], 'next_available carried across a plain re-render');
 };
 
 subtest 'verdict_signed: invalid signature → 400' => sub {

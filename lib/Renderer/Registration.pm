@@ -114,10 +114,10 @@ sub _attempt_register {
 		renderer_version => renderer_version(),
 	});
 
-	my $sig       = Renderer::Identity::sign($payload);
-	my $pubkey    = Renderer::Identity::public_key_b64();
-	my $sig_b64   = encode_base64($sig, '');
-	my %headers   = ('Content-Type' => 'application/json');
+	my $sig     = Renderer::Identity::sign($payload);
+	my $pubkey  = Renderer::Identity::public_key_b64();
+	my $sig_b64 = encode_base64($sig, '');
+	my %headers = ('Content-Type' => 'application/json');
 	# Canonical X-OPL- names plus the legacy X-Telemetry- names, so an OPL on
 	# either side of the rename verifies this registration. Constant subs are
 	# called via () — a bareword before => would autoquote to a literal key.

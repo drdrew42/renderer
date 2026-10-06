@@ -119,7 +119,7 @@ sub mode_bundle ($mode) {
 
 sub resolve_render_mode ($inputs_ref) {
 	my $mode   = $inputs_ref->{renderMode} // 'custom';
-	my $bundle = $BUNDLES{$mode} // {};    # unknown mode → passthrough
+	my $bundle = $BUNDLES{$mode}           // {};         # unknown mode → passthrough
 	return [] unless %$bundle;
 
 	my @overrides;
