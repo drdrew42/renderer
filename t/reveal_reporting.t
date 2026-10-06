@@ -83,10 +83,12 @@ sub submit_and_decode {
 	my $render_mode = delete $form{renderMode};
 	$t->post_ok(
 		'/render-api' => form => {
-			problemJWT    => upstream_problem_jwt($render_mode ? (renderMode => $render_mode) : ()),
-			problemSource => $pg_source,
+			problemJWT => upstream_problem_jwt(
+				problemSource => $pg_source,
+				problemSeed   => 1234,
+				$render_mode ? (renderMode => $render_mode) : ()
+			),
 			outputFormat  => 'debug',
-			problemSeed   => 1234,
 			submitAnswers => 1,
 			%form,
 		}

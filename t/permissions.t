@@ -19,34 +19,6 @@ $ENV{RENDERER_DEBUG_FORMAT} //= 1;
 $ENV{problemJWTsecret}      //= 'test-problem-secret';
 $ENV{webworkJWTsecret}      //= 'test-session-secret';
 
-# Helper: mint an upstream-style problemJWT carrying JWTanswerURL. Required
-# for any test that expects sessionJWT/answerJWT to be produced — sessionJWT
-# minting is now gated on JWTanswerURL presence (caller asks for persistence).
-sub upstream_problem_jwt {
-	my %extra = @_;
-	return encode_jwt(
-		payload => {
-			aud          => $ENV{SITE_HOST},
-			iss          => $ENV{SITE_HOST},
-			JWTanswerURL => 'https://upstream.example.test/answer',
-			%extra,
-		},
-		key      => $ENV{problemJWTsecret},
-		alg      => 'HS256',
-		auto_iat => 1,
-	);
-}
-
-my $t           = Test::Mojo->new('Renderer');
-my $render_root = $ENV{RENDER_ROOT};
-
-make_path("$render_root/private") unless -d "$render_root/private";
-make_path("$render_root/logs")    unless -d "$render_root/logs";
-unless (-f "$render_root/logs/resource_usage.log") {
-	open my $fh, '>>', "$render_root/logs/resource_usage.log" or die $!;
-	close $fh;
-}
-
 # A problem with hints and solutions for permission testing.
 my $pg_source = <<'PG';
 DOCUMENT();
@@ -66,6 +38,37 @@ The answer is 42.
 END_PGML_SOLUTION
 ENDDOCUMENT();
 PG
+
+# Helper: mint an upstream-style problemJWT carrying JWTanswerURL. Required
+# for any test that expects sessionJWT/answerJWT to be produced — sessionJWT
+# minting is now gated on JWTanswerURL presence (caller asks for persistence).
+# The token names the content: problemSource and problemSeed ride as claims.
+sub upstream_problem_jwt {
+	my %extra = @_;
+	return encode_jwt(
+		payload => {
+			aud           => $ENV{SITE_HOST},
+			iss           => $ENV{SITE_HOST},
+			JWTanswerURL  => 'https://upstream.example.test/answer',
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			%extra,
+		},
+		key      => $ENV{problemJWTsecret},
+		alg      => 'HS256',
+		auto_iat => 1,
+	);
+}
+
+my $t           = Test::Mojo->new('Renderer');
+my $render_root = $ENV{RENDER_ROOT};
+
+make_path("$render_root/private") unless -d "$render_root/private";
+make_path("$render_root/logs")    unless -d "$render_root/logs";
+unless (-f "$render_root/logs/resource_usage.log") {
+	open my $fh, '>>', "$render_root/logs/resource_usage.log" or die $!;
+	close $fh;
+}
 
 # ─── Permission model ──────────────────────────────────────────────────────
 
@@ -205,10 +208,8 @@ subtest 'debug outputFormat: problem lane reports its lane identity' => sub {
 	my $jwt = upstream_problem_jwt();
 	$t->post_ok(
 		'/render-api' => form => {
-			problemJWT    => $jwt,
-			problemSource => $pg_source,
-			outputFormat  => 'debug',
-			problemSeed   => 1234,
+			problemJWT   => $jwt,
+			outputFormat => 'debug',
 		}
 	)->status_is(200)->json_is('/lane' => 'problem')
 		->json_hasnt('/permissions/isLocked', 'isLocked retired across all lanes (WW3-R31)');
@@ -227,9 +228,7 @@ subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' 
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT    => $problemJWT,
-			problemSource => $pg_source,
 			outputFormat  => 'debug',
-			problemSeed   => 1234,
 			submitAnswers => 1,
 			AnSwEr0001    => '42',
 		}
@@ -243,10 +242,8 @@ subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' 
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT    => $problemJWT,
-			problemSource => $pg_source,
 			sessionJWT    => $first->{tokens}{sessionJWT},
 			outputFormat  => 'debug',
-			problemSeed   => 1234,
 			submitAnswers => 1,
 			AnSwEr0001    => '42',
 		}
@@ -262,15 +259,13 @@ subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' 
 	# showCorrectAnswers. It rides the JWT claim because renderMode is stripped
 	# from raw form input on grounded lanes. Without it the flag is gated off on
 	# the `custom` default and answers_shown would stay 0.
-	my $problemJWT = upstream_problem_jwt(renderMode => 'no-stakes');
+	my $problemJWT = upstream_problem_jwt(renderMode => 'no-stakes', problemSeed => 9999);
 
 	# Wrong answer + reveal → this render showed the answer.
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT         => $problemJWT,
-			problemSource      => $pg_source,
 			outputFormat       => 'debug',
-			problemSeed        => 9999,
 			submitAnswers      => 1,
 			showCorrectAnswers => 1,
 			AnSwEr0001         => '41',
@@ -288,10 +283,8 @@ subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' 
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT    => $problemJWT,
-			problemSource => $pg_source,
 			sessionJWT    => $submit->{tokens}{sessionJWT},
 			outputFormat  => 'debug',
-			problemSeed   => 9999,
 			submitAnswers => 1,
 			AnSwEr0001    => '42',
 		}

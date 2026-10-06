@@ -14,6 +14,9 @@ use Test::Mojo;
 use Crypt::JWT qw(encode_jwt decode_jwt);
 use Mojo::JSON qw(decode_json encode_json);
 
+use lib 't/lib';
+use TestHelper qw(stage_fixture_problems);
+
 # outputFormat=debug is a deployment affordance gated on this env var
 # (WW3-R45). The test suite is its intended consumer.
 $ENV{RENDERER_DEBUG_FORMAT} //= 1;
@@ -55,10 +58,8 @@ sub make_submission_jwt {
 	return encode_jwt(payload => $payload, key => $ENV{problemJWTsecret}, alg => 'HS256');
 }
 
-# Tiny PGML problem — answer is 42. Passing problemSource alongside the
-# submissionJWT lets us bypass OPL fetch (the JWT carries pg_hash, but
-# raw source wins per the lane contract — Lane::Review.pm only synthesizes
-# problemSourceURL when problemSource is absent).
+# Tiny PGML problem — answer is 42. The submissionJWT names it by pg_hash; the
+# content cache holds it under that hash, so the lane resolves with no OPL.
 my $pg_source = <<'PG';
 DOCUMENT();
 loadMacros("PGstandard.pl", "PGML.pl", "MathObjects.pl");
@@ -71,6 +72,10 @@ END_PGML
 ENDDOCUMENT();
 PG
 
+$ENV{CONTENT_ADDRESSED} = 1;
+delete $ENV{OPL_API_URL};
+stage_fixture_problems('sha256:p0' => $pg_source);
+
 sub post_json {
 	my ($form) = @_;
 	return $t->post_ok('/render-api', { Accept => 'application/json' }, form => $form);
@@ -82,7 +87,6 @@ subtest 'submissionJWT renders the historical problem with prefilled answers' =>
 	my $jwt = make_submission_jwt();
 	post_json({
 		submissionJWT => $jwt,
-		problemSource => $pg_source,
 	})->status_is(200);
 
 	my $resp = decode_json($t->tx->res->body);
@@ -99,7 +103,6 @@ subtest 'submissionJWT triggers graded-view rendering (submitAnswers forced)' =>
 	my $jwt = make_submission_jwt();
 	post_json({
 		submissionJWT => $jwt,
-		problemSource => $pg_source,
 	})->status_is(200);
 
 	my $resp = decode_json($t->tx->res->body);
@@ -131,7 +134,6 @@ subtest 'a reView render records no interaction (WW3-R49)' => sub {
 
 	post_json({
 		submissionJWT => $jwt,
-		problemSource => $pg_source,
 	})->status_is(200);
 
 	# Non-vacuous by construction: the graded score data proves submitAnswers was
@@ -150,7 +152,6 @@ subtest 'submissionJWT path mints no continuation tokens' => sub {
 	my $jwt = make_submission_jwt();
 	post_json({
 		submissionJWT => $jwt,
-		problemSource => $pg_source,
 	})->status_is(200);
 
 	my $resp = decode_json($t->tx->res->body);
@@ -205,7 +206,6 @@ subtest 'submissionJWT missing pg_hash → 400' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
 			submissionJWT => $jwt,
-			problemSource => $pg_source,
 		}
 	)->status_is(400);
 	like($t->tx->res->body, qr/pg_hash/i, 'error names the missing claim');
@@ -216,7 +216,6 @@ subtest 'submissionJWT missing seed → 400' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
 			submissionJWT => $jwt,
-			problemSource => $pg_source,
 		}
 	)->status_is(400);
 	like($t->tx->res->body, qr/seed/i, 'error names the missing claim');
@@ -227,7 +226,6 @@ subtest 'submissionJWT missing position → 400' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
 			submissionJWT => $jwt,
-			problemSource => $pg_source,
 		}
 	)->status_is(400);
 	like($t->tx->res->body, qr/position/i, 'error names the missing claim');
@@ -240,7 +238,6 @@ subtest 'outputFormat hardcoded to default on submissionJWT path (URL ignored)' 
 	my $jwt = make_submission_jwt();
 	post_json({
 		submissionJWT => $jwt,
-		problemSource => $pg_source,
 		outputFormat  => 'debug',
 	})->status_is(200);
 	my $resp = decode_json($t->tx->res->body);
@@ -278,7 +275,6 @@ subtest 'submissionJWT with bad signature → croak' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
 			submissionJWT => $bogus,
-			problemSource => $pg_source,
 		}
 	);
 	# croak() returns the standard renderer error envelope; status is the

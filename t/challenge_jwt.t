@@ -15,7 +15,7 @@ use Crypt::JWT qw(encode_jwt decode_jwt);
 use Mojo::JSON qw(decode_json encode_json);
 
 use lib 't/lib';
-use TestHelper qw(launch_verdict);
+use TestHelper qw(launch_verdict stage_fixture_problems);
 
 # outputFormat=debug is a deployment affordance gated on this env var
 # (WW3-R45). The test suite is its intended consumer.
@@ -80,9 +80,9 @@ sub make_play_session_jwt {
 	return encode_jwt(payload => $payload, key => $ENV{webworkJWTsecret}, alg => 'HS256');
 }
 
-# Tiny PGML problem — echoes a known answer. Avoids OPL/content-cache infrastructure
-# in tests by passing problemSource alongside the challengeJWT (the JWT carries the
-# render context that the orchestrator cares about; the raw source bypasses fetch).
+# Tiny PGML problem — echoes a known answer. The challengeJWT names its problems
+# by pg_hash, so every hash the fixtures use is staged in the content cache and
+# the lane resolves it there, with no OPL.
 my $pg_source = <<'PG';
 DOCUMENT();
 loadMacros("PGstandard.pl", "PGML.pl", "MathObjects.pl");
@@ -94,6 +94,10 @@ What is the answer? [___]{$ans}
 END_PGML
 ENDDOCUMENT();
 PG
+
+$ENV{CONTENT_ADDRESSED} = 1;
+delete $ENV{OPL_API_URL};
+stage_fixture_problems(map { ("sha256:$_" => $pg_source) } qw(p0 p1 p2 legacy open0 open1));
 
 # ─── parseRequest behavior ──────────────────────────────────────────────────
 
@@ -110,7 +114,6 @@ subtest 'closed challengeJWT + position renders the requested problem' => sub {
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 1,
-		problemSource  => $pg_source,
 	})->status_is(200);
 	my $resp = decode_json($t->tx->res->body);
 	like($resp->{renderedHTML}, qr/What is the answer\?/, 'problem rendered');
@@ -131,10 +134,9 @@ subtest 'open challengeJWT resolves seed via sessionJWT.state.draws[]' => sub {
 		},
 	);
 	post_json({
-		challengeJWT  => $challengeJWT,
-		sessionJWT    => $sessionJWT,
-		position      => 0,
-		problemSource => $pg_source,
+		challengeJWT => $challengeJWT,
+		sessionJWT   => $sessionJWT,
+		position     => 0,
 	})->status_is(200);
 };
 
@@ -161,7 +163,6 @@ subtest 'challengeJWT without position → 400' => sub {
 		'/render-api' => form => {
 			challengeJWT   => $jwt,
 			verdict_signed => launch_verdict(),
-			problemSource  => $pg_source,
 		}
 	)->status_is(400);
 	like($t->tx->res->body, qr/position/i, 'error mentions position');
@@ -174,7 +175,6 @@ subtest 'challengeJWT with out-of-range position → 400' => sub {
 			challengeJWT   => $jwt,
 			verdict_signed => launch_verdict(),
 			position       => 99,
-			problemSource  => $pg_source,
 		}
 	)->status_is(400);
 	like($t->tx->res->body, qr/out of range/i, 'error mentions range');
@@ -188,7 +188,6 @@ subtest 'challengeJWT problems[] tolerates legacy seed_policy / weight fields' =
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(200);
 };
 
@@ -200,7 +199,6 @@ subtest 'play sessionJWT shape: embedded challenge_jwt + mint_sequence; no legac
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 		submitAnswers  => 1,
 		'AnSwEr0001'   => '42',
 	})->status_is(200);
@@ -224,7 +222,6 @@ subtest 'submissionJWT shape per Artifact Shape spec' => sub {
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 1,
-		problemSource  => $pg_source,
 		submitAnswers  => 1,
 		'AnSwEr0001'   => '42',
 	})->status_is(200);
@@ -254,7 +251,6 @@ subtest 'no submissionJWT on first render (no submitAnswers)' => sub {
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(200);
 	my $resp = decode_json($t->tx->res->body);
 	ok($resp->{JWT}{session},     'sessionJWT minted on every render');
@@ -265,10 +261,9 @@ subtest 'mint_sequence increments from inbound sessionJWT' => sub {
 	my $jwt        = make_challenge_jwt();
 	my $session_in = make_play_session_jwt(challenge_jwt => $jwt, mint_sequence => 5);
 	post_json({
-		challengeJWT  => $jwt,
-		sessionJWT    => $session_in,
-		position      => 0,
-		problemSource => $pg_source,
+		challengeJWT => $jwt,
+		sessionJWT   => $session_in,
+		position     => 0,
 	})->status_is(200);
 	my $resp   = decode_json($t->tx->res->body);
 	my $claims = decode_jwt(token => $resp->{JWT}{session}, key => $ENV{webworkJWTsecret});
@@ -287,7 +282,6 @@ subtest 'outputFormat hardcoded to default on challengeJWT path (URL ignored)' =
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 		outputFormat   => 'debug',
 	})->status_is(200);
 	my $resp = decode_json($t->tx->res->body);
@@ -308,7 +302,6 @@ subtest 'render_permissions.showCorrectAnswers from challengeJWT reaches the ren
 		challengeJWT   => $jwt_with,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 		submitAnswers  => 1,
 		'AnSwEr0001'   => '0',
 	})->status_is(200);
@@ -323,19 +316,19 @@ subtest 'render_permissions.showCorrectAnswers from challengeJWT reaches the ren
 subtest 'legacy problemJWT path still works (regression)' => sub {
 	my $problemJWT = encode_jwt(
 		payload => {
-			aud          => $ENV{SITE_HOST},
-			iss          => $ENV{SITE_HOST},
-			problemSeed  => 1234,
-			isInstructor => 0,
+			aud           => $ENV{SITE_HOST},
+			iss           => $ENV{SITE_HOST},
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			isInstructor  => 0,
 		},
 		key => $ENV{problemJWTsecret},
 		alg => 'HS256',
 	);
 	$t->post_ok(
 		'/render-api' => form => {
-			problemJWT    => $problemJWT,
-			problemSource => $pg_source,
-			outputFormat  => 'default',
+			problemJWT   => $problemJWT,
+			outputFormat => 'default',
 		}
 	)->status_is(200);
 	my $body = $t->tx->res->body;
@@ -391,7 +384,6 @@ subtest 'verdict_signed: render-time fold replaces sessionJWT with verdict-appli
 		sessionJWT     => $base,
 		verdict_signed => $vsigned,
 		position       => 1,
-		problemSource  => $pg_source,
 	})->status_is(200);
 
 	my $resp     = decode_json($t->tx->res->body);
@@ -435,7 +427,6 @@ subtest 'verdict_signed: open-mode draw_next appends to draws[]' => sub {
 		sessionJWT     => $base,
 		verdict_signed => $vsigned,
 		position       => 1,
-		problemSource  => $pg_source,
 	})->status_is(200);
 
 	my $resp     = decode_json($t->tx->res->body);
@@ -466,10 +457,9 @@ subtest 'plain re-render preserves spent_on_record (render-mint path)' => sub {
 
 	# No verdict_signed and no submitAnswers → a plain re-render.
 	post_json({
-		challengeJWT  => $challengeJWT,
-		sessionJWT    => $base,
-		position      => 1,
-		problemSource => $pg_source,
+		challengeJWT => $challengeJWT,
+		sessionJWT   => $base,
+		position     => 1,
 	})->status_is(200);
 
 	my $resp     = decode_json($t->tx->res->body);
@@ -497,7 +487,6 @@ subtest 'verdict_signed: invalid signature → 400' => sub {
 		sessionJWT     => $base,
 		verdict_signed => $bogus,
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(400);
 };
 
@@ -514,7 +503,6 @@ subtest 'verdict_signed: mismatched play_id → 400' => sub {
 		sessionJWT     => $base,
 		verdict_signed => $vsigned,
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(400);
 };
 
@@ -528,7 +516,6 @@ subtest 'verdict_signed: stale mint_sequence_basis → 400' => sub {
 		sessionJWT     => $base,
 		verdict_signed => $vsigned,
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(400);
 };
 
@@ -541,7 +528,6 @@ subtest 'verdict_signed without challengeJWT → 400' => sub {
 		sessionJWT     => $base,
 		verdict_signed => $vsigned,
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(400);
 };
 
@@ -611,7 +597,6 @@ subtest 'post-answer-URL fold: orchestrator verdict_signed in response folds int
 		challengeJWT  => $jwt,
 		sessionJWT    => $inbound_session,
 		position      => 0,
-		problemSource => $pg_source,
 		submitAnswers => 1,
 		'AnSwEr0001'  => '42',
 	})->status_is(200);
@@ -659,7 +644,6 @@ subtest 'post-answer-URL fold: missing verdict_signed leaves pre-POST mint intac
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 		submitAnswers  => 1,
 		'AnSwEr0001'   => '42',
 	})->status_is(200);
@@ -683,7 +667,6 @@ subtest 'empty-string verdict_signed treated as not-present' => sub {
 		sessionJWT     => make_play_session_jwt(challenge_jwt => $jwt),
 		verdict_signed => '',
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(200);
 };
 
@@ -715,8 +698,7 @@ subtest 'C4 first render: challengeJWT + launch verdict mints the session from t
 				deadlines       => { 0 => '2026-10-06T13:00:00Z' },
 			}
 		),
-		position      => 0,
-		problemSource => $pg_source,
+		position => 0,
 	})->status_is(200);
 
 	my $claims = session_claims_of_response();
@@ -746,7 +728,6 @@ subtest 'C4 first render: an open challenge renders the launch verdict draw' => 
 			}
 		),
 		position      => 0,
-		problemSource => $pg_source,
 		submitAnswers => 1,
 		AnSwEr0001    => '42',
 	})->status_is(200);
@@ -761,7 +742,6 @@ subtest 'C4 first render: a launch verdict for another play → 400' => sub {
 		challengeJWT   => make_challenge_jwt(),
 		verdict_signed => launch_verdict(play_id => '99999999-9999-9999-9999-999999999999'),
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(400);
 	like($t->tx->res->body, qr/play_id mismatch/, 'error names the play_id gate');
 };
@@ -776,7 +756,6 @@ subtest 'C4 first render: a challengeJWT with a bad signature → 401' => sub {
 		challengeJWT   => $forged,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 	})->status_is(401);
 };
 
@@ -784,27 +763,24 @@ subtest 'C4: a challengeJWT that is not the session\'s own → 400' => sub {
 	my $jwt   = make_challenge_jwt();
 	my $other = make_challenge_jwt(play_id => '33333333-3333-3333-3333-333333333333');
 	post_json({
-		challengeJWT  => $other,
-		sessionJWT    => make_play_session_jwt(challenge_jwt => $jwt),
-		position      => 0,
-		problemSource => $pg_source,
+		challengeJWT => $other,
+		sessionJWT   => make_play_session_jwt(challenge_jwt => $jwt),
+		position     => 0,
 	})->status_is(400);
 	like($t->tx->res->body, qr/does not match the session/, 'error names the binding');
 
 	# Same play, different bytes (a re-mint): still not the session's own.
 	post_json({
-		challengeJWT  => make_challenge_jwt(iss => 'https://other.example.edu'),
-		sessionJWT    => make_play_session_jwt(challenge_jwt => $jwt),
-		position      => 0,
-		problemSource => $pg_source,
+		challengeJWT => make_challenge_jwt(iss => 'https://other.example.edu'),
+		sessionJWT   => make_play_session_jwt(challenge_jwt => $jwt),
+		position     => 0,
 	})->status_is(400);
 };
 
 subtest 'C4: a bare challengeJWT (no session, no verdict) → 400' => sub {
 	post_json({
-		challengeJWT  => make_challenge_jwt(),
-		position      => 0,
-		problemSource => $pg_source,
+		challengeJWT => make_challenge_jwt(),
+		position     => 0,
 	})->status_is(400);
 	like($t->tx->res->body, qr/challengeJWT requires sessionJWT or verdict_signed\./, 'contract message');
 };
@@ -812,9 +788,8 @@ subtest 'C4: a bare challengeJWT (no session, no verdict) → 400' => sub {
 subtest 'C4: sessionJWT alone hoists the embedded challenge_jwt' => sub {
 	my $jwt = make_challenge_jwt();
 	post_json({
-		sessionJWT    => make_play_session_jwt(challenge_jwt => $jwt, mint_sequence => 2),
-		position      => 0,
-		problemSource => $pg_source,
+		sessionJWT => make_play_session_jwt(challenge_jwt => $jwt, mint_sequence => 2),
+		position   => 0,
 	})->status_is(200);
 	is(session_claims_of_response()->{challenge_jwt}, $jwt, 'the session\'s challenge definition rendered');
 };
@@ -831,8 +806,7 @@ subtest 'raw initial_state is inert' => sub {
 			finalization   => undef,
 			started_at     => '2020-01-01T00:00:00Z',
 		}),
-		position      => 0,
-		problemSource => $pg_source,
+		position => 0,
 	})->status_is(200);
 	my $claims = session_claims_of_response();
 	is_deeply($claims->{state}{next_available}, [ 0, 1, 2 ], 'state follows the verdict, not initial_state');
@@ -844,7 +818,6 @@ subtest 'raw initial_state is inert' => sub {
 		challengeJWT  => $jwt,
 		initial_state => encode_json({ next_available => [0] }),
 		position      => 0,
-		problemSource => $pg_source,
 	})->status_is(400);
 };
 
@@ -855,7 +828,6 @@ subtest 'raw challenge_jwt is stripped' => sub {
 		sessionJWT    => make_play_session_jwt(challenge_jwt => $jwt),
 		challenge_jwt => $other,
 		position      => 0,
-		problemSource => $pg_source,
 	})->status_is(200);
 	is(session_claims_of_response()->{challenge_jwt},
 		$jwt, 'the session\'s embedded challenge_jwt, not the raw one');
@@ -882,7 +854,6 @@ subtest 'session state beats a raw state and mint_sequence' => sub {
 		state         => '{"draws":[]}',
 		mint_sequence => 99,
 		position      => 0,
-		problemSource => $pg_source,
 	})->status_is(200);
 	my $claims = session_claims_of_response();
 	is($claims->{mint_sequence},         4,     'mint_sequence advanced from the session, not the raw value');

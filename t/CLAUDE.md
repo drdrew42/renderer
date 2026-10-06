@@ -12,9 +12,10 @@ pgperl prove -lr -It/lib t/
 Files that load the async runtime guard on it and `skip_all` with *"Future::AsyncAwait not
 available (Docker-only)"* where it is missing. On a host with it installed they run; a run
 that reports skips is a partial signal — install the module rather than discounting them.
-**None of the suite needs an OPL:** the hash-resolving files mint a tiny inline PGML problem
-with no `pg_hash` fetch (see the `challenge_jwt.t` fixture — *"Avoids OPL/content-cache
-infrastructure"*), which is what WW3-R48 changed.
+**None of the suite needs an OPL.** The challenge and reView lanes name their problem only by
+`pg_hash`, so the files that render on them stage a tiny inline PGML problem in the content
+cache under each fixture hash (`TestHelper::stage_fixture_problems`, with `CONTENT_ADDRESSED`
+on) and the lane resolves it there. Problem-lane fixtures carry their source as a token claim.
 
 ## Where the gate lives
 

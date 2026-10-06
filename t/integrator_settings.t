@@ -25,7 +25,7 @@ use Mojo::JSON   qw(encode_json);
 use Mojo::Parameters;
 
 use lib 't/lib';
-use TestHelper qw(launch_verdict);
+use TestHelper qw(launch_verdict stage_fixture_problems);
 
 my ($peer_pub, $peer_sec) = Crypt::Ed25519::generate_keypair();
 
@@ -62,6 +62,11 @@ What is the answer? [___]{$ans}
 END_PGML
 ENDDOCUMENT();
 PG
+
+# The challenge and review lanes name their problem by pg_hash; the content
+# cache holds the fixture under each.
+$ENV{CONTENT_ADDRESSED} = 1;
+stage_fixture_problems('sha256:p0' => $pg_source, 'sha256:rev' => $pg_source);
 
 sub problem_jwt {
 	my (%claims) = @_;
@@ -151,10 +156,9 @@ my %lane = (
 		challengeJWT   => challenge_jwt(),
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source
 	) },
-	review     => sub { (submissionJWT => submission_jwt(), problemSource => $pg_source) },
-	ungrounded => sub { (problemSource => $pg_source,       problemSeed   => 1234) },
+	review     => sub { (submissionJWT => submission_jwt()) },
+	ungrounded => sub { (problemSource => $pg_source, problemSeed => 1234) },
 );
 
 my $evil = 'https://example.invalid';
@@ -232,7 +236,6 @@ subtest 'hideElements: claim and peer values land' => sub {
 		challengeJWT   => challenge_jwt(@hide),
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source
 	);
 	$t->content_like($hide_probe, 'challenge-lane claim');
 

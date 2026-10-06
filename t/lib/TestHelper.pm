@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Exporter 'import';
-our @EXPORT_OK = qw(test_app temp_render_root launch_verdict);
+our @EXPORT_OK = qw(test_app temp_render_root launch_verdict stage_fixture_problems);
 
 use File::Temp qw(tempdir);
 use File::Path qw(make_path);
@@ -77,6 +77,32 @@ sub launch_verdict {
 		alg      => 'HS256',
 		auto_iat => 1,
 	);
+}
+
+# Seed the content cache with problem source keyed by pg_hash, so a lane that
+# names its content by hash (challenge, review) resolves without an OPL. Takes
+# pg_hash => source pairs. Resolution by hash reads the cache only under
+# CONTENT_ADDRESSED, so the calling file sets it. Call after the app is built:
+# the cache root comes from RENDER_ROOT, which Renderer.pm defaults at load.
+# The staged entries are removed when the test file's own process exits.
+my @STAGED;
+my $STAGING_PID = $$;
+
+sub stage_fixture_problems {
+	my (%by_hash) = @_;
+	require Renderer::ContentCache;
+	for my $pg_hash (sort keys %by_hash) {
+		Renderer::ContentCache::stage_problem($pg_hash, $by_hash{$pg_hash}, [])
+			or die "Cannot stage fixture problem $pg_hash";
+		push @STAGED, $pg_hash;
+	}
+	return;
+}
+
+END {
+	if ($$ == $STAGING_PID) {
+		Renderer::ContentCache::invalidate($_) for @STAGED;
+	}
 }
 
 1;

@@ -14,7 +14,7 @@ use Test::Mojo;
 use Crypt::JWT qw(encode_jwt);
 
 use lib 't/lib';
-use TestHelper qw(launch_verdict);
+use TestHelper qw(launch_verdict stage_fixture_problems);
 
 # ─── The reveal invariant ────────────────────────────────────────────────────
 #
@@ -34,15 +34,9 @@ use TestHelper qw(launch_verdict);
 # are what strip / hard-zero / claim-gate before the resolver ever runs. "Care
 # does not generalize; structure does."
 #
-# Runs without a live OPL or a content-cache fixture because it feeds raw
-# problemSource — but only because SourceResolver was fixed to honor that. The
-# challenge/reView lanes carry a pg_hash on every render, and WW3-089's
-# pg_hash-alone resolver branch used to fetch over any provided source, so the
-# lanes' "use this verbatim" bypass silently did not work (raw problemSource
-# 404'd on those lanes — the entry_gate.t TODO was correct, not stale). The
-# guard now sits on that branch (SourceResolver: pg_hash-alone fires only when
-# no problemSource is in hand), which restored the standalone raw-source path
-# and un-broke challenge_jwt.t's render subtests at the same time.
+# Runs without a live OPL: the challenge and reView lanes name their problem by
+# pg_hash, and the fixture source is staged in the content cache under each
+# hash. The problem lane carries its source as a claim.
 #
 # Docker-only, like every render-pipeline test. Byte-LENGTH is the reveal signal:
 # a re-mint changes a JWT's iat but not its length, so a length delta means
@@ -53,11 +47,12 @@ use TestHelper qw(launch_verdict);
 # Control the environment like entry_gate.t. These tests assert lane-level flag
 # handling, which is env-independent — so neutralize the deployment env and the
 # test runs identically in a CI container or the live one. Without this,
-# STRICT_JWT=1 would gate admission, and CONTENT_ADDRESSED=1 + a real OPL would
-# 404 the fixture's fake pg_hash before the lane's problemSource bypass fires.
+# STRICT_JWT=1 would gate admission and a real OPL would be asked for the
+# fixture's fake pg_hash. CONTENT_ADDRESSED is on so the hash resolves from the
+# staged cache.
 delete $ENV{STRICT_JWT};
 delete $ENV{OPL_API_URL};
-delete $ENV{CONTENT_ADDRESSED};
+$ENV{CONTENT_ADDRESSED} = 1;
 
 $ENV{problemJWTsecret} //= 'test-problem-secret';
 $ENV{webworkJWTsecret} //= 'test-session-secret';
@@ -88,6 +83,8 @@ The canonical solution text is forty-two.
 END_PGML_SOLUTION
 ENDDOCUMENT();
 PG
+
+stage_fixture_problems('sha256:p0' => $pg_source, 'sha256:rev' => $pg_source);
 
 my $SOLUTION_MARK = qr/canonical solution text is forty-two/;    # only present when a solution renders
 my $ANSWER_MARK   = qr/correct_ans/;                             # only present when correct answers reveal
@@ -146,9 +143,11 @@ sub problem_jwt {
 	my (%extra) = @_;
 	return encode_jwt(
 		payload => {
-			aud          => $ENV{SITE_HOST},
-			iss          => $ENV{SITE_HOST},
-			JWTanswerURL => 'http://127.0.0.1:9999/fake-answer-callback',
+			aud           => $ENV{SITE_HOST},
+			iss           => $ENV{SITE_HOST},
+			JWTanswerURL  => 'http://127.0.0.1:9999/fake-answer-callback',
+			problemSource => $pg_source,
+			problemSeed   => 1234,
 			%extra,
 		},
 		key      => $ENV{problemJWTsecret},
@@ -188,7 +187,6 @@ subtest 'Challenge lane: raw isInstructor=1 does not reveal (stripped)' => sub {
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 		submitAnswers  => 1,
 		'AnSwEr0001'   => '0',                # a wrong submit, so feedback is identical either way
 	);
@@ -211,7 +209,6 @@ subtest 'Challenge lane: raw showCorrectAnswers=1 does not reveal (hard-zeroed)'
 		challengeJWT   => $jwt,
 		verdict_signed => launch_verdict(),
 		position       => 0,
-		problemSource  => $pg_source,
 		submitAnswers  => 1,
 		'AnSwEr0001'   => '0',
 	);
@@ -245,7 +242,6 @@ subtest 'Challenge lane: a TRUSTED isInstructor claim DOES reveal (the convenien
 			challengeJWT   => $jwt,
 			verdict_signed => launch_verdict(),
 			position       => 0,
-			problemSource  => $pg_source,
 			submitAnswers  => 1,
 			'AnSwEr0001'   => '0',
 		}
@@ -258,7 +254,7 @@ subtest 'Challenge lane: a TRUSTED isInstructor claim DOES reveal (the convenien
 
 subtest 'Review lane: raw isInstructor=1 is hard-zeroed (no reveal)' => sub {
 	my $sub  = submission_jwt();
-	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+	my %base = (submissionJWT => $sub);
 
 	$t->post_ok('/render-api', form => {%base})->status_is(200);
 	my $baseline = body();
@@ -275,7 +271,7 @@ subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-stat
 	# student's own POST reveals nothing — the permission sidecar is the sole
 	# reveal path now.
 	my $sub  = submission_jwt();
-	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+	my %base = (submissionJWT => $sub);
 
 	$t->post_ok('/render-api', form => {%base})->status_is(200);
 	my $baseline = length(body());
@@ -296,7 +292,7 @@ subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-stat
 
 subtest 'Review lane: a play-bound reveal sidecar reveals answers + solutions (WW3-117)' => sub {
 	my $sub  = submission_jwt();
-	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+	my %base = (submissionJWT => $sub);
 
 	$t->post_ok('/render-api', form => {%base})->status_is(200);
 	my $baseline = length(body());
@@ -310,7 +306,7 @@ subtest 'Review lane: a play-bound reveal sidecar reveals answers + solutions (W
 
 subtest 'Review lane: a sidecar bound to a DIFFERENT play does not reveal' => sub {
 	my $sub  = submission_jwt();
-	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+	my %base = (submissionJWT => $sub);
 
 	$t->post_ok('/render-api', form => {%base})->status_is(200);
 	my $baseline = length(body());
@@ -326,7 +322,7 @@ subtest 'Review lane: a sidecar bound to a DIFFERENT play does not reveal' => su
 
 subtest 'Review lane: an expired sidecar does not reveal' => sub {
 	my $sub  = submission_jwt();
-	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+	my %base = (submissionJWT => $sub);
 
 	$t->post_ok('/render-api', form => {%base})->status_is(200);
 	my $baseline = length(body());
@@ -341,7 +337,7 @@ subtest 'Review lane: a raw _reveal_grant injection does not reveal (stripped)' 
 	# The grant flag is un-self-declarable: SENSITIVE_PARAMS strips it from raw
 	# input, so only a lane that verified a sidecar can set it.
 	my $sub  = submission_jwt();
-	my %base = (submissionJWT => $sub, problemSource => $pg_source);
+	my %base = (submissionJWT => $sub);
 
 	$t->post_ok('/render-api', form => {%base})->status_is(200);
 	my $baseline = length(body());
@@ -360,8 +356,6 @@ subtest 'Problem lane: raw showCorrectAnswers does not reveal on the custom defa
 	# mode, with and without the flag, isolates the reveal from any chrome delta.
 	my %base = (
 		problemJWT    => problem_jwt(),
-		problemSource => $pg_source,
-		problemSeed   => 1234,
 		submitAnswers => 1,
 		'AnSwEr0001'  => '0',             # wrong submit
 	);
@@ -386,8 +380,6 @@ subtest 'Problem lane: an offering-mode CLAIM keeps showCorrectAnswers working' 
 	my $jwt  = problem_jwt(renderMode => 'no-stakes');
 	my %base = (
 		problemJWT    => $jwt,
-		problemSource => $pg_source,
-		problemSeed   => 1234,
 		submitAnswers => 1,
 		'AnSwEr0001'  => '0',
 	);
@@ -423,7 +415,6 @@ subtest 'Feedback flags do not leak reveal content' => sub {
 			challengeJWT              => $jwt,
 			verdict_signed            => launch_verdict(),
 			position                  => 0,
-			problemSource             => $pg_source,
 			submitAnswers             => 1,
 			'AnSwEr0001'              => '42',
 			showPartialCorrectAnswers => 1,

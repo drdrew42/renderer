@@ -281,22 +281,22 @@ subtest 'HTML emits sessionJWT when caller provided JWTanswerURL (instructor)' =
 	# isInstructor=1 and a JWTanswerURL, signed with problemJWTsecret.
 	my $problemJWT = encode_jwt(
 		payload => {
-			aud          => $ENV{SITE_HOST},
-			iss          => $ENV{SITE_HOST},
-			isInstructor => 1,
-			JWTanswerURL => 'https://upstream.example.test/answer',
-			pg_hash      => 'sha256:probe',
-			problemUUID  => 'probe-uuid',
+			aud           => $ENV{SITE_HOST},
+			iss           => $ENV{SITE_HOST},
+			isInstructor  => 1,
+			JWTanswerURL  => 'https://upstream.example.test/answer',
+			pg_hash       => 'sha256:probe',
+			problemUUID   => 'probe-uuid',
+			problemSource => $pg_source,
+			problemSeed   => 1234,
 		},
 		key      => $ENV{problemJWTsecret},
 		alg      => 'HS256',
 		auto_iat => 1,
 	);
 	my $body = form_body(
-		problemSource => $pg_source,
-		problemJWT    => $problemJWT,
-		outputFormat  => 'simple',
-		problemSeed   => 1234,
+		problemJWT   => $problemJWT,
+		outputFormat => 'simple',
 	);
 	$t->post_ok('/render-api', { 'Content-Type' => 'application/x-www-form-urlencoded' }, $body,)->status_is(200);
 	my $html = $t->tx->res->body;
