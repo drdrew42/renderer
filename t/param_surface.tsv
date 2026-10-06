@@ -89,7 +89,9 @@ submitAnswers	grade	problem,challenge	raw	honored
 submitAnswers	grade	review	raw	overridden		lane sets 1	
 answersSubmitted	grade	*	raw	honored		OR'd with submitAnswers; session claim wins	
 processAnswers	grade	*	raw	honored		0 skips grading of the caller's own render	
-answers_submitted	grade	*	raw	stripped	honored	spread after grade_problem's own args (PG.pm:156), so it overrides answers_submitted=>1; stock graders then score 0 — the requester can only zero their own submission	WW3-R69
+answers_submitted	grade	*	raw	stripped		deleted after the lanes, every source; PG spreads the params after grade_problem's own answers_submitted=>1 (PG.pm:156), where 0 makes the stock graders score 0	WW3-R69
+answers_submitted	grade	problem	claim	stripped		the same post-lane delete	WW3-R69
+answers_submitted	grade	peer	peer	stripped		the same post-lane delete, applied to the signed body too	WW3-R69
 numCorrect	grade	*	raw	stripped		SENSITIVE_PARAMS	
 numIncorrect	grade	*	raw	stripped		SENSITIVE_PARAMS	
 essay	grade	*	raw	honored			
@@ -97,14 +99,14 @@ JWTanswerURL	routing	*	raw	stripped		SENSITIVE_PARAMS; challenge sets it from an
 parent_origin	routing	*	raw	stripped		SENSITIVE_PARAMS	
 parent_origin	routing	peer	peer	honored			
 sessionID	routing	*	raw	stripped		SENSITIVE_PARAMS	
-formAction	routing	*	raw	stripped	honored	renamed to formURL before the strip; where the form posts	WW3-R69
-formURL	routing	*	raw	stripped	honored	where the form posts	WW3-R69
+formAction	routing	*	raw	stripped		SENSITIVE_PARAMS; renamed to formURL before the strip, so both names are listed	WW3-R69
+formURL	routing	*	raw	stripped		SENSITIVE_PARAMS; where the form posts	WW3-R69
 formURL	routing	problem,peer	claim	honored		integrator setting (proxying LMS)	WW3-R69
-baseURL	presentation	*	raw	stripped	honored	sets SITE_URL, which becomes <base href>: every relative asset resolves against the requested host	WW3-R69
+baseURL	presentation	*	raw	stripped		SENSITIVE_PARAMS; sets SITE_URL, which becomes <base href>	WW3-R69
 baseURL	presentation	problem,peer	claim	honored		integrator setting (proxying LMS)	WW3-R69
-extra_header_text	presentation	*	raw	stripped	honored	unescaped (%==) into <head>	WW3-R69
+extra_header_text	presentation	*	raw	stripped		SENSITIVE_PARAMS; unescaped (%==) into <head>	WW3-R69
 extra_header_text	presentation	problem,peer	claim	honored		integrator setting; unescaped by design	WW3-R69
-hideElements	presentation	*	raw	stripped	honored	repeated keys arrive as an array; selectors are xml-escaped, not CSS-escaped	WW3-R69
+hideElements	presentation	*	raw	stripped	honored	repeated keys arrive as an array; selectors are CSS-escaped, so one cannot open a new rule	WW3-R69
 hideElements	presentation	problem,challenge	claim	honored		inline <style> in <head>	WW3-R01
 outputFormat	presentation	challenge	raw	overridden		lane sets default	
 outputFormat	presentation	review	raw	overridden		lane sets static	
@@ -134,6 +136,6 @@ show_answer_group_info	diagnostic	*	raw	overridden		resolver sets it from isInst
 show_resource_info	diagnostic	*	raw	overridden		resolver sets it from isInstructor	WW3-R56
 clientDebug	diagnostic	*	raw	honored		debug template only	
 originIP	telemetry	*	raw	overridden		re-applied after the lane	
-noCache	telemetry	*	raw	stripped	honored	skips the content cache, forcing an OPL fetch; no sender in ww3, portal, stack or OPLv3	WW3-R69
+noCache	telemetry	*	raw	stripped		SENSITIVE_PARAMS; read into _no_cache after the lanes	WW3-R69
 noCache	telemetry	problem,peer	claim	honored		integrator setting	WW3-R69
 *	grade	*	raw	honored		any key not stripped reaches PG's inputs_ref and the grader's form options; PG names answer fields at run time, so no allowlist is possible (decided 2026-10-06: no filter)	

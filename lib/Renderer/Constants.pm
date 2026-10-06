@@ -35,7 +35,20 @@ use constant SENSITIVE_PARAMS => qw(
 	numIncorrect
 	parent_origin
 	_reveal_grant
+	baseURL
+	formURL
+	formAction
+	extra_header_text
+	noCache
 );
+
+# baseURL, formURL (formAction, its peer-facing name), extra_header_text and
+# noCache are INTEGRATOR settings: a proxying LMS routes form posts and assets
+# through itself, adds head markup, or forces a fresh fetch. They arrive in a
+# token claim or a peer body. From raw input they would let whoever built the
+# URL set the page's <base href>, its form target, unescaped <head> markup, or
+# an OPL fetch on every render (WW3-R69). Both formURL and formAction are
+# listed because _parse_envelope renames formAction before the strip.
 
 # _reveal_grant is the internal "a verified reveal sidecar granted this" flag
 # (WW3-117). It must arrive only from a lane that verified a revealJWT, never

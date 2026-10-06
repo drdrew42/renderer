@@ -108,10 +108,10 @@ subtest 'problemJWT: empty hideElements array → no <style> block' => sub {
 
 # ─── XSS defense ───────────────────────────────────────────────────────────
 
-subtest 'problemJWT: selectors are xml_escaped' => sub {
-	# A pathological "selector" carrying an HTML break-out attempt. xml_escape
-	# defangs the special chars; the raw `<script>` substring must not appear
-	# inside the rendered <style> block.
+subtest 'problemJWT: selectors cannot leave the <style> block' => sub {
+	# A pathological "selector" carrying an HTML break-out attempt. The `<`
+	# is CSS-escaped; the raw `<script>` substring must not appear inside the
+	# rendered <style> block.
 	my $jwt = make_problem_jwt(
 		problemSource => $pg_source,
 		problemSeed   => 1234,
@@ -125,6 +125,27 @@ subtest 'problemJWT: selectors are xml_escaped' => sub {
 		}
 	)->status_is(200)
 		->content_unlike(qr{<script>alert\(1\)</script>}, 'malicious selector cannot break out of the <style> block',);
+};
+
+subtest 'problemJWT: a selector containing } cannot open a new rule (WW3-R69)' => sub {
+	my $jwt = make_problem_jwt(
+		problemSource => $pg_source,
+		problemSeed   => 1234,
+		hideElements  => [ '.a } body { background: red; } .b', '.c > [data-x="y"]' ],
+	);
+
+	$t->post_ok(
+		'/render-api' => form => {
+			problemJWT   => $jwt,
+			outputFormat => 'default',
+		}
+	)->status_is(200);
+	my ($css) = $t->tx->res->body =~ m{<style>([^<]*display:\s*none\s*!important[^<]*)</style>};
+	ok(defined $css, 'hide-style block emitted');
+	is(($css =~ tr/{//), 1, 'one opening brace — the rule the renderer wrote');
+	is(($css =~ tr/}//), 1, 'one closing brace — the rule the renderer wrote');
+	unlike($css, qr/;.*;/, 'no declaration besides display: none');
+	like($css, qr{\.c > \[data-x="y"\]}, 'combinators and attribute selectors pass through');
 };
 
 # ─── Raw-param rejection ───────────────────────────────────────────────────

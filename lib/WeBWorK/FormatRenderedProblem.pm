@@ -286,10 +286,10 @@ sub formatRenderedProblem {
 	# block into <head> so target elements are never present in the initial
 	# paint — closes the flash window between PG render and css-message.js
 	# postMessage styling. Selectors arrive via JWT (trusted-but-not-trustworthy);
-	# xml_escape defends the splice against caller-controlled markup.
+	# css_escape_selector keeps each one inside the selector list of this one rule.
 	my $hideElementsCSS = '';
 	if (ref $inputs_ref->{hideElements} eq 'ARRAY' && @{ $inputs_ref->{hideElements} }) {
-		my $selectors = join(', ', map { xml_escape($_) } @{ $inputs_ref->{hideElements} });
+		my $selectors = join(', ', map { css_escape_selector($_) } @{ $inputs_ref->{hideElements} });
 		$hideElementsCSS = "<style>$selectors { display: none !important; }</style>";
 	}
 
@@ -378,6 +378,16 @@ sub formatRenderedProblem {
 	# mattering, because nothing consults them.
 	$c->stash(format => 'html');
 	return $c->render(text => $rh_result->{renderedHTML}, format => 'html');
+}
+
+# CSS hex-escapes the characters that would let a selector end its rule or
+# its <style> element: braces and semicolons (a new rule or declaration), `<`
+# (`</style>`), `@` (an at-rule), `/` (a comment), backslash (an escape of
+# its own) and line breaks (an unterminated string). Every other selector
+# character — combinators, attribute selectors, quotes — passes through.
+sub css_escape_selector {
+	my ($selector) = @_;
+	return ($selector // '') =~ s{([\\{};<@/\n\r\f])}{sprintf('\\%x ', ord $1)}ger;
 }
 
 sub jsonResponse {

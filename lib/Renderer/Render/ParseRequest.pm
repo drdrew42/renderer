@@ -51,6 +51,15 @@ sub dispatch ($c) {
 	_parse_envelope($c, \%params, \%ctx) or return;
 	_apply_lanes($c, \%params, \%ctx)    or return;
 
+	# noCache is an integrator setting: read after the lanes, so a claim or a
+	# peer body sets it and the strip has removed any raw value.
+	$c->stash(_no_cache => $params{noCache} ? 1 : 0);
+
+	# answers_submitted is an argument PG passes its grader; PG spreads the
+	# params after its own `answers_submitted => 1`, so a value from any source
+	# would replace it and the stock graders would score the submission 0.
+	delete $params{answers_submitted};
+
 	# Mode resolution runs HERE — parent process, post-claim-merge, pre-fork.
 	# Flattens the renderMode intent claim into the primitive flag bundle so
 	# the resolved primitives are visible to both the rendering subprocess
@@ -189,8 +198,7 @@ sub _parse_envelope ($c, $params, $ctx) {
 	$params->{problemSeed}  //= delete $params->{problemseed}  if exists $params->{problemseed};
 
 	# Stash flags consumed by downstream phases.
-	$c->stash(_is_first_render => $is_first_render   ? 1 : 0);
-	$c->stash(_no_cache        => $params->{noCache} ? 1 : 0);
+	$c->stash(_is_first_render => $is_first_render ? 1 : 0);
 
 	# Strip security-sensitive params from untrusted inputs. Peer-signed
 	# bodies are exempt — a verified peer signature IS the trust gate, and
