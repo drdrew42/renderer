@@ -36,7 +36,8 @@ $t->ua->on(
 
 # Mint a problemJWT carrying a `typ` claim. Per Content Fetch Token Model,
 # the /solution and /hint endpoints accept a problemJWT (same secret, same
-# aud) with typ='solution' or typ='hint'.
+# aud) with typ='solution' or typ='hint'. The token names the content: tests
+# pass problemSource and problemSeed as claims.
 use Renderer::Util::JWT qw(mint_jwt);
 
 sub mint_typed {
@@ -50,8 +51,6 @@ sub mint_typed {
 		}
 	);
 }
-my $jwt_solution = mint_typed('solution');
-my $jwt_hint     = mint_typed('hint');
 
 my $render_root = $ENV{RENDER_ROOT};
 make_path("$render_root/private") unless -d "$render_root/private";
@@ -139,9 +138,7 @@ PG
 subtest 'POST /render-api/solution returns solution body in message' => sub {
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(200)->json_is('/status' => 200);
 	my $body = $t->tx->res->json->{message};
@@ -152,9 +149,7 @@ subtest 'POST /render-api/solution returns solution body in message' => sub {
 subtest 'POST /render-api/solution: no solution block → empty message' => sub {
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_hints_only,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_hints_only, problemSeed => 1234),
 		}
 	)->status_is(200)->json_is('/status' => 200)->json_is('/message' => '');
 };
@@ -162,9 +157,7 @@ subtest 'POST /render-api/solution: no solution block → empty message' => sub 
 subtest 'POST /render-api/solution: bare problem → empty message' => sub {
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_bare,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_bare, problemSeed => 1234),
 		}
 	)->status_is(200)->json_is('/status' => 200)->json_is('/message' => '');
 };
@@ -174,9 +167,7 @@ subtest 'POST /render-api/solution: bare problem → empty message' => sub {
 subtest 'POST /render-api/hint returns hint body in message' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT    => $jwt_hint,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('hint', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(200)->json_is('/status' => 200);
 	like($t->tx->res->json->{message}, qr/small even number/, 'message contains expected hint content');
@@ -185,9 +176,7 @@ subtest 'POST /render-api/hint returns hint body in message' => sub {
 subtest 'POST /render-api/hint: multiple hints concatenated' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT    => $jwt_hint,
-			problemSource => $pg_multi_hints,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('hint', problemSource => $pg_multi_hints, problemSeed => 1234),
 		}
 	)->status_is(200);
 	my $message = $t->tx->res->json->{message};
@@ -198,9 +187,7 @@ subtest 'POST /render-api/hint: multiple hints concatenated' => sub {
 subtest 'POST /render-api/hint: no hints → empty message' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT    => $jwt_hint,
-			problemSource => $pg_bare,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('hint', problemSource => $pg_bare, problemSeed => 1234),
 		}
 	)->status_is(200)->json_is('/status' => 200)->json_is('/message' => '');
 };
@@ -225,16 +212,12 @@ subtest 'missing problemJWT → 401' => sub {
 subtest 'wrong typ → 401 (hint token at /solution and vice versa)' => sub {
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_hint,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('hint', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(401);
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(401);
 };
@@ -295,14 +278,12 @@ subtest 'wrong aud → 401' => sub {
 subtest 'missing problemSource → 400' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT  => $jwt_hint,
-			problemSeed => 1234,
+			problemJWT => mint_typed('hint', problemSeed => 1234),
 		}
 	)->status_is(400);
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT  => $jwt_solution,
-			problemSeed => 1234,
+			problemJWT => mint_typed('solution', problemSeed => 1234),
 		}
 	)->status_is(400);
 };
@@ -310,14 +291,12 @@ subtest 'missing problemSource → 400' => sub {
 subtest 'missing problemSeed → 400' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT    => $jwt_hint,
-			problemSource => $pg_with_both,
+			problemJWT => mint_typed('hint', problemSource => $pg_with_both),
 		}
 	)->status_is(400);
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_with_both,
+			problemJWT => mint_typed('solution', problemSource => $pg_with_both),
 		}
 	)->status_is(400);
 };
@@ -327,9 +306,7 @@ subtest 'missing problemSeed → 400' => sub {
 subtest 'solution endpoint mints no JWTs' => sub {
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(200);
 	# Response shape is { status, message } only — no JWT block, no
@@ -342,9 +319,7 @@ subtest 'solution endpoint mints no JWTs' => sub {
 subtest 'hint endpoint mints no JWTs' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
-			problemJWT    => $jwt_hint,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('hint', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(200);
 	my @keys = sort keys %{ $t->tx->res->json };
@@ -463,9 +438,7 @@ subtest 'endpoints bypass parseRequest (STRICT_JWT does not apply)' => sub {
 	local $ENV{STRICT_JWT} = 1;
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_with_both,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_with_both, problemSeed => 1234),
 		}
 	)->status_is(200, 'STRICT_JWT does not block content-fetch endpoints');
 };
@@ -545,9 +518,7 @@ PG
 
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT    => $jwt_solution,
-			problemSource => $pg_broken,
-			problemSeed   => 1234,
+			problemJWT => mint_typed('solution', problemSource => $pg_broken, problemSeed => 1234),
 		}
 	)->status_is(500)->json_is('/status' => 500);
 	ok($t->tx->res->json->{message}, 'error message present on 500 (not empty body)');
@@ -569,8 +540,7 @@ subtest 'error responses follow { status, message } shape' => sub {
 
 	$t->post_ok(
 		'/render-api/solution' => form => {
-			problemJWT  => $jwt_solution,
-			problemSeed => 1234,
+			problemJWT => mint_typed('solution', problemSeed => 1234),
 		}
 	)->status_is(400)->json_is('/status' => 400);
 	ok($t->tx->res->json->{message}, '400 carries message field');
