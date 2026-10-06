@@ -101,9 +101,8 @@ subtest 'instructor: debug permission flags are all on' => sub {
 	is($p->{show_resource_info},     1, 'show_resource_info on for instructor');
 };
 
-# view_problem_debugging_info is intentionally NOT a resolver key — it is
-# caller-controlled in RenderProblem (WW3-R56 carve-out), so the resolver
-# never sees it and must not grow one.
+# view_problem_debugging_info is outside the resolver: RenderProblem defaults
+# it to isInstructor and a signed source sets it (WW3-R58; see debug_signed.t).
 
 # ─── Output shape ─────────────────────────────────────────────────────────
 

@@ -286,8 +286,9 @@ sub standaloneRenderer {
 			show_pg_info           => $perms->{show_pg_info},
 			show_answer_hash_info  => $perms->{show_answer_hash_info},
 			show_answer_group_info => $perms->{show_answer_group_info},
-			# Carve-out: error verbosity, not answer disclosure. Caller-controlled
-			# (defaults to isInstructor); a stable ADAPT request contract. See WW3-R56.
+			# The debugging view, which on an errored problem prints its source.
+			# Defaults to isInstructor; set by a signed source only — the
+			# problemJWT claim or the reveal sidecar's `debug` grant (WW3-R58).
 			view_problem_debugging_info => $inputs_ref->{view_problem_debugging_info} // $isInstructor,
 		}
 	);

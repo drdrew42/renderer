@@ -39,7 +39,7 @@ use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
 use Renderer::Constants qw(
-	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS
+	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS DEBUG_PARAMS
 );
 use Renderer::Seed       qw(resolve_seed MALFORMED_SEED_MESSAGE);
 use Renderer::RenderMode qw(resolve_render_mode RATCHET);
@@ -291,6 +291,12 @@ sub _parse_envelope ($c, $params, $ctx) {
 			# The token names the content and the seed (WW3-R68). A lane
 			# recovers each from its claim; see TOKEN_CONTENT_PARAMS.
 			for (TOKEN_CONTENT_PARAMS) {
+				delete $params->{$_};
+			}
+
+			# The debugging view comes only from a signed source (WW3-R58); see
+			# DEBUG_PARAMS.
+			for (DEBUG_PARAMS) {
 				delete $params->{$_};
 			}
 

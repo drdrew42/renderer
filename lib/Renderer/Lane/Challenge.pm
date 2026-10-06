@@ -15,6 +15,7 @@ package Renderer::Lane::Challenge;
 #     address and seed are stripped before the lane (WW3-R68); only a
 #     verified peer body can carry its own problemSource here.
 #   * Apply render_permissions and identity claims.
+#   * Apply a verified permission sidecar's grants (reveal, debug).
 #   * Lock outputFormat to 'default' (challengeJWT path is iframe-only).
 #   * Set _can_emit_answer_jwt — upstream-grounded.
 #
@@ -28,7 +29,8 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
-use Renderer::Util::JWT qw(verify_problem_jwt);
+use Renderer::RevealSidecar ();
+use Renderer::Util::JWT     qw(verify_problem_jwt);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply);
@@ -111,6 +113,14 @@ sub apply ($c, $params) {
 	for my $k (qw(play_id challenge_id chain_student_id assignment_id)) {
 		$params->{$k} = $claims->{$k} if defined $claims->{$k};
 	}
+
+	# The permission sidecar (Renderer::RevealSidecar), bound to this play.
+	# `reveal` sets _reveal_grant, which resolve_permissions expands to answers
+	# + solutions; `debug` turns on PG's debugging view (WW3-R58), whose raw
+	# value ParseRequest strips. Absent or invalid ⇒ no grant.
+	my $grants = Renderer::RevealSidecar::verify($c, $params, $claims->{play_id});
+	$params->{_reveal_grant}               = 1 if $grants->{reveal};
+	$params->{view_problem_debugging_info} = 1 if $grants->{debug};
 
 	# Declarative UI hide-list (WW3-R01). No bulk merge happens on this
 	# lane, so propagate explicitly.

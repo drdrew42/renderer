@@ -88,9 +88,12 @@ sub resolve_permissions ($inputs_ref) {
 	# isInstructor so a student cannot self-grant the answer hash or the internals
 	# dump by declaring both halves themselves.
 	#
-	# view_problem_debugging_info is deliberately NOT here: it is error verbosity
-	# (caught error text, backend warnings — never the answer), an ADAPT request
-	# contract, and stays caller-controlled in RenderProblem.
+	# view_problem_debugging_info sits outside this sweep: it defaults to
+	# isInstructor in RenderProblem, and a signed source sets it — the problemJWT
+	# claim (ADAPT's contract) or the reveal sidecar's `debug` grant. On a
+	# problem that errors it prints the caught error text, backend warnings, and
+	# the problem's full source, which carries the answer computation, so
+	# ParseRequest strips its raw value on grounded requests (WW3-R58).
 	my $debugPermission = $isInstructor;
 
 	return {

@@ -10,7 +10,8 @@
 #         grounded   = problem, challenge, review
 #         *          = every /render-api lane
 # source: raw (form/query) | claim (body JWT) | session (sessionJWT claim)
-#         | peer (signed body) | envelope (a combination of params)
+#         | peer (signed body) | sidecar (a verified revealJWT's grant)
+#         | envelope (a combination of params)
 # should/is:
 #         honored    the value reaches the render and has its effect
 #         overridden a claim or the lane sets it; the raw value is replaced
@@ -51,12 +52,12 @@ renderMode	reveal	grounded	raw	stripped		response length vs baseline	WW3-R51 (me
 renderMode	reveal	ungrounded	raw	honored			WW3-R51
 renderMode+hideFeedback	reveal	*	claim	honored		the hideFeedback claim overrides the mode default, in either direction	WW3-R70
 showCorrectAnswers	reveal	problem	raw	stripped		honored only under an offering renderMode claim (no-stakes, preview)	WW3-R51
-showCorrectAnswers	reveal	challenge	raw	overridden		hard-zeroed; render_permissions claim only	t/reveal_invariant.t
+showCorrectAnswers	reveal	challenge	raw	overridden		hard-zeroed; render_permissions claim, or reveal arrives through revealJWT	t/reveal_invariant.t, WW3-R58
 showCorrectAnswers	reveal	review	raw	overridden		hard-zeroed; reveal arrives through revealJWT	WW3-117
 showCorrectAnswers	reveal	session	session	overridden		session claim wins over raw	WW3-R67 (retire)
 _reveal_grant	reveal	*	raw	stripped		SENSITIVE_PARAMS	WW3-117
-revealJWT	reveal	review	raw	honored		verified and play-bound; expired or wrong play reveals nothing	WW3-117
-revealJWT	reveal	problem,challenge	raw	inert			
+revealJWT	reveal	challenge,review	raw	honored		verified and play-bound; grants: reveal (answers + solutions) and/or debug; no grants claim is reveal; expired, wrong play, empty or unknown grants: nothing	WW3-117, WW3-R58
+revealJWT	reveal	problem	raw	inert			
 showHints	reveal	*	raw	inert		resolver hardwires from isInstructor	
 showSolutions	reveal	*	raw	inert		resolver hardwires from isInstructor	
 showCorrectAnswersButton	reveal	*	raw	tighten-only	honored	raw may hide it, never show it; the click still meets the showCorrectAnswers rules	WW3-R67
@@ -133,8 +134,12 @@ showScoreSummary	presentation	*	raw	honored
 showFooter	presentation	*	raw	honored			
 showComments	presentation	*	raw	honored			
 includeTags	presentation	*	raw	honored			
-view_problem_debugging_info	diagnostic	problem	raw	honored		ADAPT lever; error verbosity only	WW3-R56
-view_problem_debugging_info	diagnostic	challenge,review	raw	stripped	honored		WW3-R58
+view_problem_debugging_info	diagnostic	grounded	raw	stripped		DEBUG_PARAMS; on an errored problem: no 'Input Read', no source	WW3-R58
+view_problem_debugging_info	diagnostic	problem	claim	honored		ADAPT lever (webwork envelope); the error dump and source render	WW3-R56, WW3-R58
+view_problem_debugging_info	diagnostic	challenge,review	sidecar	honored		the revealJWT's debug grant; the error dump and source render, no reveal	WW3-R58
+view_problem_debugging_info	diagnostic	peer	peer	honored		signed body is the trust gate	WW3-R58
+view_problem_debugging_info	diagnostic	ungrounded	raw	honored		STRICT_JWT=0 editor posture; the caller sent the source	WW3-R58
+view_problem_debugging_info	diagnostic	content_fetch	raw	inert		the content-fetch render builds its own PG environment	WW3-R58
 showPGInfo	diagnostic	*	raw	honored		request half; needs the show_pg_info permission	WW3-R56
 showAnsHashInfo	diagnostic	*	raw	honored		request half; needs the permission twin	WW3-R56
 showAnsGroupInfo	diagnostic	*	raw	honored		request half; needs the permission twin	WW3-R56

@@ -31,6 +31,9 @@ package Renderer::Lane::Review;
 # and the answers. The lane hard-zeroes it, and the reveal arrives only
 # through the verified permission sidecar (_reveal_grant, WW3-117) — see
 # apply below.
+#
+# view_problem_debugging_info likewise arrives only through the sidecar's
+# `debug` grant (WW3-R58).
 
 use strict;
 use warnings;
@@ -69,16 +72,15 @@ sub apply ($c, $params) {
 		$params->{$k} = $claims->{$k} if defined $claims->{$k};
 	}
 
-	# WW3-117: a WW3-minted reveal sidecar (revealJWT) may ride alongside the
-	# submissionJWT to deliver the answer reveal out of band — verified by
-	# signature, aud, play-binding, and TTL, so it is a trusted grant rather
-	# than a form field the student controls. On a valid, play-bound sidecar,
-	# _reveal_grant is set and resolve_permissions expands it to answers +
-	# solutions. Absent/invalid ⇒ no grant, and the raw showCorrectAnswers
-	# interim below still applies until the portal migrates (slices 3-4).
-	if (Renderer::RevealSidecar::verify($c, $params, $claims->{play_id})) {
-		$params->{_reveal_grant} = 1;
-	}
+	# WW3-117: a WW3-minted permission sidecar (revealJWT) may ride alongside
+	# the submissionJWT — verified by signature, aud, play-binding, and TTL, so
+	# its grants are trusted rather than form fields the student controls.
+	# `reveal` sets _reveal_grant, which resolve_permissions expands to answers +
+	# solutions; `debug` turns on PG's debugging view (WW3-R58), whose raw value
+	# ParseRequest strips. Absent or invalid ⇒ no grant.
+	my $grants = Renderer::RevealSidecar::verify($c, $params, $claims->{play_id});
+	$params->{_reveal_grant}               = 1 if $grants->{reveal};
+	$params->{view_problem_debugging_info} = 1 if $grants->{debug};
 
 	# Synthesize problemSourceURL from pg_hash. A raw problemSource never
 	# reaches this lane (TOKEN_CONTENT_PARAMS, WW3-R68); a verified peer body's

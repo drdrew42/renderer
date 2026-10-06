@@ -9,6 +9,7 @@ our @EXPORT_OK = qw(
 	ELEVATION_PARAMS
 	RENDER_MODE_PARAMS
 	TOKEN_CONTENT_PARAMS
+	DEBUG_PARAMS
 	DEFAULT_SEED
 	SEED_DEFAULTED_WARNING
 	SOURCE_OVERRIDE_FIELDS
@@ -154,6 +155,22 @@ use constant TOKEN_CONTENT_PARAMS => qw(
 	sourceFilePath
 	pg_hash
 	problemSeed
+);
+
+# PG's debugging view: on a problem that errors, view_problem_debugging_info
+# prints the caught error text, backend warnings, and the problem's full source
+# (Translator.pm "Input Read"), which carries the answer computation. Stripped
+# from raw input on grounded requests (ParseRequest), with the same
+# verified-peer exemption as the lists above. A lane recovers it from a signed
+# source: Lane::Problem's bulk merge of the problemJWT claim, and on
+# Lane::Challenge and Lane::Review the reveal sidecar's `debug` grant
+# (Renderer::RevealSidecar). Absent, it defaults to isInstructor in
+# WeBWorK::RenderProblem.
+#
+# Ungrounded requests (STRICT_JWT=0) keep the raw flag: the caller sent the
+# source.
+use constant DEBUG_PARAMS => qw(
+	view_problem_debugging_info
 );
 
 # The seed a render uses when its request names none, absent or empty, on every
