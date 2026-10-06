@@ -40,6 +40,7 @@ initial_state	envelope	challenge	raw	stripped	honored	unsigned JSON is signed in
 initial_state	envelope	session	raw	inert		ignored when a sessionJWT is present	
 challengeJWT	envelope	session	raw	rejected:400	honored	no play_id cross-check against the session's embedded challenge_jwt outside the verdict fold	WW3-205
 challenge_jwt	envelope	session	raw	stripped	honored	raw wins the session //= merge, then is hoisted to challengeJWT	WW3-205
+*	envelope	session	session	overridden	honored	every signed session claim beats a raw param of the same name; today only isInstructor, showCorrectAnswers, answersSubmitted do	WW3-205
 problemJWT	envelope	session	raw	honored		sidecar: replaces only SOURCE_OVERRIDE_FIELDS, atomically	LTW-088
 isInstructor	reveal	grounded	raw	stripped		response length vs baseline; no correct_ans / solution	WW3-R46 (measured 2026-08-05)
 isInstructor	reveal	ungrounded	raw	honored		STRICT_JWT=0 editor posture	WW3-R46
@@ -87,6 +88,7 @@ submitAnswers	grade	problem,challenge	raw	honored
 submitAnswers	grade	review	raw	overridden		lane sets 1	
 answersSubmitted	grade	*	raw	honored		OR'd with submitAnswers; session claim wins	
 processAnswers	grade	*	raw	honored		0 skips grading of the caller's own render	
+answers_submitted	grade	*	raw	stripped	honored	spread after grade_problem's own args (PG.pm:156), so it overrides answers_submitted=>1; stock graders then score 0 — the requester can only zero their own submission	WW3-R69
 numCorrect	grade	*	raw	stripped		SENSITIVE_PARAMS	
 numIncorrect	grade	*	raw	stripped		SENSITIVE_PARAMS	
 essay	grade	*	raw	honored			
@@ -133,4 +135,4 @@ clientDebug	diagnostic	*	raw	honored		debug template only
 originIP	telemetry	*	raw	overridden		re-applied after the lane	
 noCache	telemetry	*	raw	stripped	honored	skips the content cache, forcing an OPL fetch; no sender in ww3, portal, stack or OPLv3	WW3-R69
 noCache	telemetry	problem,peer	claim	honored		integrator setting	WW3-R69
-*	grade	*	raw	honored		any key not stripped reaches PG's inputs_ref; problem macros may read it	
+*	grade	*	raw	honored		any key not stripped reaches PG's inputs_ref and the grader's form options; PG names answer fields at run time, so no allowlist is possible (decided 2026-10-06: no filter)	
