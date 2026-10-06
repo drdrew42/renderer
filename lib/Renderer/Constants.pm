@@ -154,13 +154,14 @@ use constant TOKEN_CONTENT_PARAMS => qw(
 	problemSeed
 );
 
-# The seed a render uses when nothing supplies one: a grounded token with an
-# absent or empty seed, and the content-fetch and PreTeXt paths.
+# The seed a render uses when its request names none, absent or empty, on every
+# lane (Renderer::Seed).
 use constant DEFAULT_SEED => 1234;
 
-# The `warnings` entry an outbound answerJWT / submissionJWT carries when the
-# token named no seed and the render used DEFAULT_SEED (WW3-R68). Integrators
-# can send an empty seed, so this warns rather than refuses.
+# The `warnings` entry a render carries when its request named no seed and it
+# used DEFAULT_SEED (WW3-R68, WW3-R73): on the outbound answerJWT /
+# submissionJWT, and on the content-fetch JSON response. Integrators can send
+# an empty seed, so this warns rather than refuses.
 use constant SEED_DEFAULTED_WARNING => 'seed_defaulted';
 
 # Problem-source fields a sidecar problemJWT may override on an in-flight

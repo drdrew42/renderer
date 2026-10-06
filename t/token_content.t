@@ -203,7 +203,7 @@ subtest 'challenge lane: an empty seed renders at the default seed and warns' =>
 	my $sub = claims_of($resp->{JWT}{submission});
 	is($sub->{seed}, 1234, 'submissionJWT seed is the default seed');
 	is_deeply($sub->{warnings}, ['seed_defaulted'], 'submissionJWT carries the warning');
-	ok((grep {/^warn: .*challenge token carries no seed/} @log), 'and it is logged');
+	ok((grep {/^warn: .*challenge request carries no seed/} @log), 'and it is logged');
 };
 
 # ─── Review lane ─────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ subtest 'review lane: an empty seed renders at the default seed and logs it' => 
 	@log = ();
 	my $resp = render_json(submissionJWT => submission_jwt(seed => ''));
 	like($resp->{renderedHTML}, qr/NAMED CONTENT/, 'renders');
-	ok((grep {/^warn: .*review token carries no seed/} @log), 'logged');
+	ok((grep {/^warn: .*review request carries no seed/} @log), 'logged');
 };
 
 # ─── Problem lane ────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ subtest 'problem lane: an absent or empty seed renders at the default seed and w
 		my $answer = claims_of($resp->{JWT}{answer});
 		like($resp->{renderedHTML}, qr/NAMED CONTENT/, "$label seed: renders (a raw seed does not fill it)");
 		is_deeply($answer->{warnings}, ['seed_defaulted'], "$label seed: answerJWT carries the warning");
-		ok((grep {/^warn: .*problem token carries no seed/} @log), "$label seed: logged");
+		ok((grep {/^warn: .*problem request carries no seed/} @log), "$label seed: logged");
 	}
 
 	$t->post_ok('/render-api' => form =>
@@ -291,7 +291,8 @@ subtest 'content-fetch lane: raw content fields are inert' => sub {
 
 	$t->post_ok('/render-api/solution' => form =>
 			{ problemJWT => typed_jwt('solution', problemSource => $named), problemSeed => 777 })
-		->status_is(400, 'a token naming no seed does not fall back to the raw one');
+		->status_is(200, 'a token naming no seed renders')
+		->json_is('/warnings' => ['seed_defaulted'], 'at the default seed, not the raw one');
 };
 
 done_testing;

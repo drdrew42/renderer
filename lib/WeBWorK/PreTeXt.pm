@@ -9,7 +9,6 @@ use Data::Structure::Util qw(unbless);
 
 use lib "$ENV{PG_ROOT}/lib";
 use WeBWorK::PG;
-use Renderer::Constants qw(DEFAULT_SEED);
 
 sub render_ptx {
 	my $p      = shift;
@@ -21,7 +20,7 @@ sub render_ptx {
 			showHints      => 1,
 			processAnswers => 1,
 			displayMode    => 'PTX',
-			problemSeed    => $p->{problemSeed} // DEFAULT_SEED,
+			problemSeed    => $p->{problemSeed},
 			$p->{problemUUID}    ? (problemUUID    => $p->{problemUUID})    : (),
 			$p->{sourceFilePath} ? (sourceFilePath => $p->{sourceFilePath}) : (),
 			$source              ? (r_source       => \$source)             : ()

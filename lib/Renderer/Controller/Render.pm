@@ -25,6 +25,7 @@ use Renderer::Render::SourceResolver;
 use Renderer::Render::AnswerURL;
 use Renderer::Lane::ContentFetch;
 use Renderer::Util::JWT qw(mint_jwt);
+use Renderer::Seed      qw(resolve_seed MALFORMED_SEED_MESSAGE);
 
 async sub problem ($c) {
 	my $render_start = time;
@@ -38,13 +39,9 @@ async sub problem ($c) {
 
 	my $problem_contents = $inputs_ref->{problemSource};
 	my $file_path        = $inputs_ref->{sourceFilePath};
-	my $random_seed      = $inputs_ref->{problemSeed};
 
 	unless (defined $problem_contents && $problem_contents =~ /\S/) {
 		return $c->exception('Cannot render without problem source.', 400);
-	}
-	unless (defined $random_seed && $random_seed =~ /^\d+$/) {
-		return $c->exception('You must provide a positive integer for the random seed.', 400);
 	}
 
 	# Inject cached custom macro source into envir for PG's loadMacros().
@@ -191,7 +188,9 @@ async sub problem ($c) {
 async sub render_ptx ($c) {
 
 	$c->render_later;
-	my $res = eval { await WeBWorK::PreTeXt::render_ptx($c->req->params->to_hash) };
+	my $params = $c->req->params->to_hash;
+	resolve_seed($c, $params, 'ptx') or return $c->exception(MALFORMED_SEED_MESSAGE, 400);
+	my $res = eval { await WeBWorK::PreTeXt::render_ptx($params) };
 	my $err = $@;
 
 	# Client disconnect during the PreTeXt await tears down the tx; subsequent
@@ -234,8 +233,8 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 
 	return $c->exception('Cannot render without problem source.', 400)
 		unless defined $params->{problemSource} && length $params->{problemSource};
-	return $c->exception('Missing required parameter: problemSeed', 400)
-		unless defined $params->{problemSeed};
+	my $warnings = resolve_seed($c, $params, 'content_fetch');
+	return $c->exception(MALFORMED_SEED_MESSAGE, 400) unless $warnings;
 
 	# Custom/override macro injection — the source we just resolved may
 	# loadMacros() files that live only in the content cache (e.g. ADAPT
@@ -271,15 +270,19 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 	# per-blank structured data, not a body of HTML. It keeps `status` so
 	# the error contract is still uniform — check `status`, then read
 	# whichever payload key this endpoint documents.
+	#
+	# `warnings` (WW3-R73) sits beside them when the render has any — today
+	# seed_defaulted, when the token named no seed.
+	my @warnings = @$warnings ? (warnings => $warnings) : ();
 	if ($expected_typ eq 'answer') {
 		return unless $c->tx;
-		return $c->render(json => { status => 200, answers => $res->{answers} // {} });
+		return $c->render(json => { status => 200, answers => $res->{answers} // {}, @warnings });
 	}
 
 	my $message = $expected_typ eq 'solution' ? ($res->{solution} // '') : join('', @{ $res->{hints} // [] });
 	# Client disconnect during the renderer await tears down the tx; drop.
 	return unless $c->tx;
-	return $c->render(json => { status => 200, message => $message });
+	return $c->render(json => { status => 200, message => $message, @warnings });
 }
 
 async sub hint ($c) {

@@ -72,7 +72,8 @@ problemSource	grade	content_fetch	raw	stripped		the token's source; a token nami
 problemSourceURL	grade	content_fetch	raw	stripped		identical to omitting it	WW3-R68
 sourceFilePath	grade	content_fetch	raw	stripped		identical to omitting it	WW3-R68
 pg_hash	grade	content_fetch	raw	stripped		identical to omitting it	WW3-R68
-problemSeed	grade	content_fetch	raw	stripped		a token naming no seed is 400, not the raw value	WW3-R68
+problemSeed	grade	content_fetch	raw	stripped		a token naming no seed renders the default seed, not the raw value	WW3-R68
+problemSeed	grade	content_fetch	claim	honored		absent or empty: the default seed's content AND warnings: ["seed_defaulted"] beside status / message; not a non-negative integer: 400	WW3-R73
 problemSource	grade	ungrounded	raw	honored		STRICT_JWT=0 editor posture	
 problemSourceURL	grade	problem	raw	stripped		identical to omitting it	WW3-R68
 problemSourceURL	grade	challenge,review	raw	stripped		the lane derives it from the claim's pg_hash	WW3-R68
@@ -82,7 +83,9 @@ pg_hash	grade	challenge,review	raw	stripped		the lane sets it from the claim	WW3
 pg_hash	grade	problem	raw	stripped		identical to omitting it	WW3-R68
 problemSeed	grade	challenge,review	raw	stripped		the lane sets it from the claim or the draw	WW3-R68
 problemSeed	grade	problem	raw	stripped		identical to omitting it; a token naming none renders the default seed	WW3-R68
-problemSeed	grade	grounded	claim	honored		absent or empty: renders the default seed AND carries a warnings entry on the outbound answerJWT / submissionJWT (ADAPT can send an empty string)	WW3-R68
+problemSeed	grade	grounded	claim	honored		absent or empty: renders the default seed AND carries a warnings entry on the outbound answerJWT / submissionJWT (ADAPT can send an empty string); not a non-negative integer: 400	WW3-R73
+problemSeed	grade	ungrounded	raw	honored		absent or empty: renders the default seed, identical to seed 1234, and logs it; not a non-negative integer: 400	WW3-R73
+problemSeed	grade	peer	peer	honored		absent or empty: renders the default seed, identical to seed 1234, and logs it; not a non-negative integer: 400	WW3-R73
 position	grade	challenge	raw	honored		selects a slot inside the signed problems[]	
 position	grade	review	raw	overridden		lane sets it from the claim	
 state	grade	*	raw	inert		a form value is a string; the lane reads a hash, and a session's state claim replaces it	

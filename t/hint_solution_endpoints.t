@@ -288,17 +288,17 @@ subtest 'missing problemSource → 400' => sub {
 	)->status_is(400);
 };
 
-subtest 'missing problemSeed → 400' => sub {
+subtest 'missing problemSeed renders at the default seed and warns (WW3-R73)' => sub {
 	$t->post_ok(
 		'/render-api/hint' => form => {
 			problemJWT => mint_typed('hint', problemSource => $pg_with_both),
 		}
-	)->status_is(400);
+	)->status_is(200)->json_is('/warnings' => ['seed_defaulted']);
 	$t->post_ok(
 		'/render-api/solution' => form => {
 			problemJWT => mint_typed('solution', problemSource => $pg_with_both),
 		}
-	)->status_is(400);
+	)->status_is(200)->json_is('/warnings' => ['seed_defaulted']);
 };
 
 # ─── Dumb-fetch contract: no minting, no answerURL POST ───────────────────

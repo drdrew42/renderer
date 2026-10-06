@@ -39,8 +39,9 @@ use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
 use Renderer::Constants qw(
-	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS DEFAULT_SEED SEED_DEFAULTED_WARNING
+	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS
 );
+use Renderer::Seed       qw(resolve_seed MALFORMED_SEED_MESSAGE);
 use Renderer::RenderMode qw(resolve_render_mode);
 
 use Exporter qw(import);
@@ -53,7 +54,12 @@ sub dispatch ($c) {
 	_parse_envelope($c, \%params, \%ctx) or return;
 	_apply_lanes($c, \%params, \%ctx)    or return;
 
-	_default_token_seed($c, \%params);
+	# The seed rule (Renderer::Seed) on every lane. _render_warnings is set
+	# here on every request, replacing any value that arrived in the params;
+	# the outbound answerJWT / submissionJWT reports it.
+	my $warnings = resolve_seed($c, \%params, $c->stash('_trust_lane') // 'ungrounded');
+	return $c->exception(MALFORMED_SEED_MESSAGE, 400) unless $warnings;
+	$params{_render_warnings} = $warnings;
 
 	# noCache is an integrator setting: read after the lanes, so a claim or a
 	# peer body sets it and the strip has removed any raw value.
@@ -77,24 +83,6 @@ sub dispatch ($c) {
 	}
 
 	return \%params;
-}
-
-# A grounded render's seed comes from its token. A token whose seed is absent
-# or empty renders at DEFAULT_SEED, and the render carries a warning the
-# outbound answerJWT / submissionJWT reports (WW3-R68). _render_warnings is set
-# here on every request, replacing any value that arrived in the params.
-sub _default_token_seed ($c, $params) {
-	my @warnings;
-	my $lane = $c->stash('_trust_lane') // '';
-	if (($lane eq 'problem' || $lane eq 'challenge' || $lane eq 'review')
-		&& !(defined $params->{problemSeed} && length $params->{problemSeed}))
-	{
-		$params->{problemSeed} = DEFAULT_SEED;
-		push @warnings, SEED_DEFAULTED_WARNING;
-		$c->log->warn("$lane token carries no seed; rendering at the default seed " . DEFAULT_SEED);
-	}
-	$params->{_render_warnings} = \@warnings;
-	return;
 }
 
 # First client IP from a (possibly multi-value) X-Forwarded-For header
