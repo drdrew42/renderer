@@ -28,6 +28,7 @@ use Mojo::DOM;
 use Mojo::IOLoop;
 use lib "$ENV{PG_ROOT}/lib";
 use WeBWorK::PG;
+use Renderer::Constants qw(DEFAULT_SEED);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(render_hint render_solution render_answer);
@@ -85,7 +86,7 @@ sub render_answer ($p) {
 			processAnswers => 1,
 
 			displayMode => 'MathJax',
-			problemSeed => $p->{problemSeed} // 1234,
+			problemSeed => $p->{problemSeed} // DEFAULT_SEED,
 			r_source    => \$source,
 			($p->{injectedMacros} ? (injectedMacros => $p->{injectedMacros}) : ()),
 			inputs_ref => {},
@@ -132,7 +133,7 @@ sub _render_and_filter ($p, %opts) {
 			# wrappers for TeX/PTX modes; we always want the .hint/.solution
 			# accordion divs that DOM filtering targets.
 			displayMode => 'MathJax',
-			problemSeed => $p->{problemSeed} // 1234,
+			problemSeed => $p->{problemSeed} // DEFAULT_SEED,
 			r_source    => \$source,
 			# Content-addressed custom macros: source bytes for custom/override
 			# macros live only in the content cache, not on disk. Without this

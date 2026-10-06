@@ -74,8 +74,10 @@ async sub resolve_source ($c, $inputs_ref) {
 			(defined $inputs_ref->{problemSource} ? (editor_preview => 1)                      : ()),
 		);
 		if ($inputs_ref->{problemSource}) {
-			# Editor preview: use the editor's source but resolve the path
+			# Editor preview: render the source in hand but resolve the path
 			# for macro dependencies (pg_hash → injectedMacros at render time).
+			# On a token-bearing request the source is a signed one (a claim or
+			# a peer body) — raw source is stripped there (WW3-R68).
 			my (undef, $pg_hash) =
 				await resolve_source_file_path_p($c, $inputs_ref->{sourceFilePath}, $inputs_ref->{pg_hash});
 			if ($pg_hash) {
@@ -114,14 +116,10 @@ async sub resolve_source ($c, $inputs_ref) {
 	# (LibreTexts/ADAPT) that legitimately point us at content, so this does
 	# not by itself close that surface — it removes WW3's reason to need it.
 	#
-	# Skipped when problemSource is already in hand. The challenge and reView
-	# lanes carry a pg_hash on EVERY render but also honor a caller-supplied raw
-	# source ("use this verbatim" — editor preview and tests): they set pg_hash
-	# for the submissionJWT and macro injection, not to force a re-fetch over
-	# source they were handed. Without this guard the hash fetch overrode
-	# provided source, contradicting those lanes' own bypass and leaving the
-	# challenge/reView render-test layer unable to resolve without a live OPL.
-	# pg_hash stays set for its other uses; only the source fetch is skipped.
+	# Skipped when problemSource is already in hand: a signed source (a claim
+	# or a peer body) that also names a pg_hash renders as given, and the
+	# pg_hash stays set for macro injection and the outbound token. Raw source
+	# never reaches this point on a token-bearing request (WW3-R68).
 	if ($inputs_ref->{pg_hash} && !defined $inputs_ref->{problemSource}) {
 		my $pg_hash = $inputs_ref->{pg_hash};
 		my $opl_url = $c->opl_client->problem_url_by_hash($pg_hash);

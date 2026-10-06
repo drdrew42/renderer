@@ -11,7 +11,8 @@ package Renderer::Lane::Review;
 #   * Decode + verify_aud against $SITE_HOST under problemJWTsecret
 #     (matches the mint key in WeBWorK::RenderProblem::generateSubmissionJWT).
 #   * Extract pg_hash / seed / position / identity claims.
-#   * Synthesize problemSourceURL from pg_hash (skip if caller supplied raw source).
+#   * Synthesize problemSourceURL from pg_hash. Raw source, address and seed
+#     are stripped before the lane (WW3-R68).
 #   * Merge submitted_answers (AnSwEr* + MaThQuIlL_AnSwEr*) into %params for
 #     PG's native input-prefill path.
 #   * Force submitAnswers=1 so PG renders the graded view (per-answer
@@ -79,8 +80,9 @@ sub apply ($c, $params) {
 		$params->{_reveal_grant} = 1;
 	}
 
-	# Synthesize problemSourceURL from pg_hash unless caller supplied raw
-	# source (editor preview / test bypass — "use this verbatim").
+	# Synthesize problemSourceURL from pg_hash. A raw problemSource never
+	# reaches this lane (TOKEN_CONTENT_PARAMS, WW3-R68); a verified peer body's
+	# signed source renders as sent.
 	unless (defined $params->{problemSource}) {
 		$params->{problemSourceURL} = $c->opl_client->problem_url_by_hash($claims->{pg_hash});
 	}

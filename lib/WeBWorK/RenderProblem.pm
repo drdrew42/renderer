@@ -423,6 +423,7 @@ sub generateJWTs {
 		answers_shown   => $reveal->{answers_shown},
 		solutions_shown => $reveal->{solutions_shown},
 		platform        => PLATFORM_NAME,
+		_warnings_claim($inputs_ref),
 	};
 
 	my $answerJWT = mint_jwt($ENV{problemJWTsecret}, $responseHash);
@@ -569,9 +570,19 @@ sub generateSubmissionJWT {
 		solutions_shown => $reveal->{solutions_shown},
 
 		submitted_at => $submitted_at,
+		_warnings_claim($inputs_ref),
 	};
 
 	return mint_jwt($ENV{problemJWTsecret}, $payload);
+}
+
+# The `warnings` claim of an outbound answerJWT / submissionJWT: what the
+# renderer had to assume to render this request (Renderer::Constants
+# SEED_DEFAULTED_WARNING), set by ParseRequest. Present only when non-empty.
+sub _warnings_claim {
+	my ($inputs_ref) = @_;
+	my $warnings = $inputs_ref->{_render_warnings};
+	return (ref $warnings eq 'ARRAY' && @$warnings) ? (warnings => [@$warnings]) : ();
 }
 
 # Resource-usage log line: timing + memory + source path, with the error

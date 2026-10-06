@@ -24,6 +24,7 @@ use warnings;
 use feature 'signatures';
 no warnings qw(experimental::signatures);
 
+use Renderer::Constants qw(TOKEN_CONTENT_PARAMS);
 use Renderer::Util::JWT qw(verify_problem_jwt);
 
 use Exporter qw(import);
@@ -58,6 +59,11 @@ sub apply ($c, $params, $expected_typ) {
 		$c->exception("Wrong typ: expected '$expected_typ', got '$actual_typ'", 401);
 		return;
 	}
+
+	# The token names the content and the seed (WW3-R68): raw values are
+	# dropped first, so a value the token does not carry stays absent rather
+	# than falling back to the caller's.
+	delete $params->{$_} for TOKEN_CONTENT_PARAMS;
 
 	# Claims-always-win merge — same precedence as Lane::Problem. The token
 	# binds the caller to a specific problem; a valid hint/solution token

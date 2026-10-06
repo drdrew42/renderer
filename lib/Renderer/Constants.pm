@@ -8,6 +8,9 @@ our @EXPORT_OK = qw(
 	SENSITIVE_PARAMS
 	ELEVATION_PARAMS
 	RENDER_MODE_PARAMS
+	TOKEN_CONTENT_PARAMS
+	DEFAULT_SEED
+	SEED_DEFAULTED_WARNING
 	SOURCE_OVERRIDE_FIELDS
 	SESSION_STATE_CLAIMS
 	ANSWER_RESPONSE_SUBJECT
@@ -126,6 +129,39 @@ use constant ELEVATION_PARAMS => qw(
 use constant RENDER_MODE_PARAMS => qw(
 	renderMode
 );
+
+# What is rendered and at which seed: on a token-bearing request these come
+# only from the token (WW3-R68). Stripped from raw input on grounded requests
+# (ParseRequest) and on the content-fetch lane (Lane::ContentFetch), with the
+# same verified-peer exemption as the lists above. A lane recovers each from its
+# claim — Lane::Problem's bulk merge, Lane::Session's pg_hash and nested
+# problemJWT, Lane::Challenge's problems[] entry, Lane::Review's claims.
+#
+# Raw input here would let a student holding their own token render a source of
+# their choosing — or the same content at a seed of their choosing — while the
+# outbound answerJWT / submissionJWT reports that score against the content the
+# token named. Measured 2026-10-06 on the homelab: a student challengeJWT plus a
+# raw problemSource whose answer is 1 recorded score 1, counted, under the
+# claim's pg_hash and seed; the same submit without it scored 0.
+#
+# Ungrounded requests (STRICT_JWT=0) keep raw source: that deployment admitted
+# them on network position, the editor-preview posture.
+use constant TOKEN_CONTENT_PARAMS => qw(
+	problemSource
+	problemSourceURL
+	sourceFilePath
+	pg_hash
+	problemSeed
+);
+
+# The seed a render uses when nothing supplies one: a grounded token with an
+# absent or empty seed, and the content-fetch and PreTeXt paths.
+use constant DEFAULT_SEED => 1234;
+
+# The `warnings` entry an outbound answerJWT / submissionJWT carries when the
+# token named no seed and the render used DEFAULT_SEED (WW3-R68). Integrators
+# can send an empty seed, so this warns rather than refuses.
+use constant SEED_DEFAULTED_WARNING => 'seed_defaulted';
 
 # Problem-source fields a sidecar problemJWT may override on an in-flight
 # sessionJWT (LTW-088). Whitelist — trust/routing/state claims (JWTanswerURL,

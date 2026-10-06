@@ -38,7 +38,9 @@ use Renderer::Lane::Challenge;
 use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
-use Renderer::Constants  qw(SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS);
+use Renderer::Constants qw(
+	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS DEFAULT_SEED SEED_DEFAULTED_WARNING
+);
 use Renderer::RenderMode qw(resolve_render_mode);
 
 use Exporter qw(import);
@@ -50,6 +52,8 @@ sub dispatch ($c) {
 
 	_parse_envelope($c, \%params, \%ctx) or return;
 	_apply_lanes($c, \%params, \%ctx)    or return;
+
+	_default_token_seed($c, \%params);
 
 	# noCache is an integrator setting: read after the lanes, so a claim or a
 	# peer body sets it and the strip has removed any raw value.
@@ -73,6 +77,24 @@ sub dispatch ($c) {
 	}
 
 	return \%params;
+}
+
+# A grounded render's seed comes from its token. A token whose seed is absent
+# or empty renders at DEFAULT_SEED, and the render carries a warning the
+# outbound answerJWT / submissionJWT reports (WW3-R68). _render_warnings is set
+# here on every request, replacing any value that arrived in the params.
+sub _default_token_seed ($c, $params) {
+	my @warnings;
+	my $lane = $c->stash('_trust_lane') // '';
+	if (($lane eq 'problem' || $lane eq 'challenge' || $lane eq 'review')
+		&& !(defined $params->{problemSeed} && length $params->{problemSeed}))
+	{
+		$params->{problemSeed} = DEFAULT_SEED;
+		push @warnings, SEED_DEFAULTED_WARNING;
+		$c->log->warn("$lane token carries no seed; rendering at the default seed " . DEFAULT_SEED);
+	}
+	$params->{_render_warnings} = \@warnings;
+	return;
 }
 
 # First client IP from a (possibly multi-value) X-Forwarded-For header
@@ -168,13 +190,13 @@ sub _parse_envelope ($c, $params, $ctx) {
 		return $c->exception('challengeJWT requires sessionJWT or verdict_signed.', 400);
 	}
 
-	# Reject raw-param pg_hash + problemSource without an upstream JWT —
+	# Reject raw-param pg_hash + problemSource without a token —
 	# legitimate callers carry pg_hash inside the JWT; the bare combo is
-	# attacker-shaped (rendering chosen source under a cached identity).
+	# attacker-shaped (rendering chosen source under a cached identity). On a
+	# token-bearing request both are stripped below (TOKEN_CONTENT_PARAMS).
 	if (defined $params->{pg_hash}
 		&& defined $params->{problemSource}
-		&& !defined $params->{problemJWT}
-		&& !defined $params->{sessionJWT})
+		&& !grep { defined $params->{$_} } qw(problemJWT challengeJWT submissionJWT sessionJWT))
 	{
 		$c->log->error('pg_hash + problemSource without JWT — rejecting.');
 		return $c->exception('Malformed request.', 400);
@@ -255,6 +277,12 @@ sub _parse_envelope ($c, $params, $ctx) {
 			# stashed: a lane recovers it from its claim, and absence resolves
 			# to 'custom' (the student passthrough).
 			for (RENDER_MODE_PARAMS) {
+				delete $params->{$_};
+			}
+
+			# The token names the content and the seed (WW3-R68). A lane
+			# recovers each from its claim; see TOKEN_CONTENT_PARAMS.
+			for (TOKEN_CONTENT_PARAMS) {
 				delete $params->{$_};
 			}
 		}

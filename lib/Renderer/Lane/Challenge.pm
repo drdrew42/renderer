@@ -11,8 +11,9 @@ package Renderer::Lane::Challenge;
 #   * Resolve seed and pg_hash — closed-mode reads from the JWT entry,
 #     open-mode reads from the inbound sessionJWT's state.draws[] (already
 #     merged into $params by Lane::Session).
-#   * Synthesize problemSourceURL from pg_hash via OPLClient (skip if
-#     caller supplied raw problemSource).
+#   * Synthesize problemSourceURL from pg_hash via OPLClient. Raw source,
+#     address and seed are stripped before the lane (WW3-R68); only a
+#     verified peer body can carry its own problemSource here.
 #   * Apply render_permissions and identity claims.
 #   * Lock outputFormat to 'default' (challengeJWT path is iframe-only).
 #   * Set _can_emit_answer_jwt — upstream-grounded.
@@ -72,8 +73,9 @@ sub apply ($c, $params) {
 	$params->{pg_hash}     = $pg_hash;
 	$params->{problemSeed} = $seed;
 
-	# Synthesize problemSourceURL from pg_hash unless caller supplied raw
-	# source (editor preview / test bypass — "use this verbatim").
+	# Synthesize problemSourceURL from pg_hash. A raw problemSource never
+	# reaches this lane (TOKEN_CONTENT_PARAMS, WW3-R68); a verified peer body's
+	# signed source renders as sent.
 	unless (defined $params->{problemSource}) {
 		$params->{problemSourceURL} = $c->opl_client->problem_url_by_hash($pg_hash);
 	}

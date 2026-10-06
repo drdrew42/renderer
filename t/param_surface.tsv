@@ -64,20 +64,24 @@ hideCheckAnswersButton	presentation	*	raw	tighten-only	honored	raw may hide it, 
 hideFeedback	presentation	problem	raw	tighten-only		raw may raise it, never lower a claim or mode	WW3-R70
 hideFeedback	presentation	challenge	raw	tighten-only		raw may raise it, never lower a claim or mode	WW3-R70
 hideFeedback	presentation	review	raw	tighten-only		raw may raise it	WW3-R70
-problemSource	grade	challenge	raw	stripped	honored	renders the caller's source; the submissionJWT carries the claim's pg_hash + seed with that score	WW3-R68
-problemSource	grade	review	raw	stripped	honored	renders the caller's source as the record of the play	WW3-R68
-problemSource	grade	problem	raw	stripped	honored	beside a claimed sourceFilePath it renders (editor_preview) and the answerJWT reports its score	WW3-R68
+problemSource	grade	challenge	raw	stripped		submissionJWT pg_hash, seed and score identical to omitting it	WW3-R68
+problemSource	grade	review	raw	stripped		the token's pg_hash is replayed	WW3-R68
+problemSource	grade	problem	raw	stripped		beside a claimed sourceFilePath the claim's content renders and the answerJWT reports its score	WW3-R68
 problemSource	grade	problem	claim	honored		renders and emits; the integrator signed this content (ADAPT signs sourceFilePath, never problemSource)	WW3-R68
-problemSource	grade	content_fetch	raw	stripped	honored	hint / solution / answer of the caller's own source	WW3-R68
+problemSource	grade	content_fetch	raw	stripped		the token's source; a token naming none is 400	WW3-R68
+problemSourceURL	grade	content_fetch	raw	stripped		identical to omitting it	WW3-R68
+sourceFilePath	grade	content_fetch	raw	stripped		identical to omitting it	WW3-R68
+pg_hash	grade	content_fetch	raw	stripped		identical to omitting it	WW3-R68
+problemSeed	grade	content_fetch	raw	stripped		a token naming no seed is 400, not the raw value	WW3-R68
 problemSource	grade	ungrounded	raw	honored		STRICT_JWT=0 editor posture	
-problemSourceURL	grade	problem	raw	stripped	honored	claim wins when present; else a caller-chosen server-side fetch	WW3-R68
-problemSourceURL	grade	challenge,review	raw	overridden		lane derives it from the claim's pg_hash	
-sourceFilePath	grade	challenge,review	raw	inert		problemSourceURL resolves first	
-sourceFilePath	grade	problem	raw	stripped	honored	claim wins when present	WW3-R68
-pg_hash	grade	challenge,review	raw	overridden		lane sets it from the claim	
-pg_hash	grade	problem	raw	stripped	honored	used as a cache hint for a claim's sourceFilePath and for macro injection	WW3-R68
-problemSeed	grade	challenge,review	raw	overridden		lane sets it from the claim or the draw	
-problemSeed	grade	problem	raw	stripped	honored	claim wins when present; else the caller picks the variant	WW3-R68
+problemSourceURL	grade	problem	raw	stripped		identical to omitting it	WW3-R68
+problemSourceURL	grade	challenge,review	raw	stripped		the lane derives it from the claim's pg_hash	WW3-R68
+sourceFilePath	grade	challenge,review	raw	stripped		identical to omitting it	WW3-R68
+sourceFilePath	grade	problem	raw	stripped		identical to omitting it	WW3-R68
+pg_hash	grade	challenge,review	raw	stripped		the lane sets it from the claim	WW3-R68
+pg_hash	grade	problem	raw	stripped		identical to omitting it	WW3-R68
+problemSeed	grade	challenge,review	raw	stripped		the lane sets it from the claim or the draw	WW3-R68
+problemSeed	grade	problem	raw	stripped		identical to omitting it; a token naming none renders the default seed	WW3-R68
 problemSeed	grade	grounded	claim	honored		absent or empty: renders the default seed AND carries a warnings entry on the outbound answerJWT / submissionJWT (ADAPT can send an empty string)	WW3-R68
 position	grade	challenge	raw	honored		selects a slot inside the signed problems[]	
 position	grade	review	raw	overridden		lane sets it from the claim	
