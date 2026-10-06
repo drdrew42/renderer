@@ -118,7 +118,7 @@
 					% if ($any_button) {
 						<div class="submit-buttons-container col-12 mb-2">
 							% if ($showCheckAnswersButton) {
-								<%= submit_button $lh->maketext('Submit Answers'),
+								<%= submit_button $interactLabel,
 									name => 'submitAnswers', class => 'btn btn-primary mb-1' %>
 							% }
 							% if ($showCorrectAnswersButton) {

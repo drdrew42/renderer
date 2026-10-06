@@ -103,12 +103,9 @@ sub apply ($c, $params) {
 		}
 	}
 
-	# Elevation defaults (WW3-R46). These were `//= 0`, which assigns only
-	# when the key is UNDEF — so a form-supplied `isInstructor=1` sailed
-	# through untouched and resolved to revealAll on a live scored attempt.
-	# The raw values are stripped in ParseRequest now; this lane is
-	# claim-or-default, with no raw-form path at all.
-	$params->{isInstructor} //= 0;
+	# Elevation (WW3-R46): the raw isInstructor is stripped in ParseRequest,
+	# so this lane is claim-or-default. The default — the render mode's, then
+	# 0 — lands in ParseRequest::dispatch after the mode resolves (WW3-R70).
 
 	# Identity claims propagate into the submissionJWT.
 	for my $k (qw(play_id challenge_id chain_student_id assignment_id)) {

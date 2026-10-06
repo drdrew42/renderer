@@ -237,14 +237,14 @@ subtest 'mode bundles: default and review refuse the reveal, not just the button
 	require Renderer::RenderMode;
 
 	for my $mode (qw(default review)) {
-		my $i = { renderMode => $mode, showCorrectAnswers => 1 };
-		Renderer::RenderMode::resolve_render_mode($i);
+		my $i = { renderMode => $mode };
+		Renderer::RenderMode::resolve_render_mode($i, { showCorrectAnswers => 1 });
 		is($i->{showCorrectAnswers}, 0, "$mode bundle refuses a caller-supplied reveal");
 	}
 
 	for my $mode (qw(no-stakes preview)) {
-		my $i = { renderMode => $mode, showCorrectAnswers => 1 };
-		Renderer::RenderMode::resolve_render_mode($i);
+		my $i = { renderMode => $mode };
+		Renderer::RenderMode::resolve_render_mode($i, { showCorrectAnswers => 1 });
 		is($i->{showCorrectAnswers}, 1, "$mode still offers it");
 	}
 };

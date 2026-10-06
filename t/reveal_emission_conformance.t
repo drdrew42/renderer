@@ -165,9 +165,15 @@ subtest 'ParseRequest strips raw isInstructor + renderMode from a grounded reque
 	ok(!exists $params{renderMode},   'raw renderMode stripped (RENDER_MODE_PARAMS)');
 	is($c->stash('_stripped_elevation')->{isInstructor},
 		1, 'stripped isInstructor stashed for a lane that legitimately restores it');
-	# showCorrectAnswers is deliberately NOT stripped — it is the reveal
-	# BUTTON's own mechanism (see Constants). Each lane defends it instead.
-	is($params{showCorrectAnswers}, 1, 'showCorrectAnswers survives the strip (button mechanism)');
+	# showCorrectAnswers is set aside for the ratchet (WW3-R70): the lanes see
+	# only claims, and dispatch re-applies the raw value where it tightens or
+	# where an offering mode leaves the flag to the reveal button.
+	ok(!exists $params{showCorrectAnswers}, 'raw showCorrectAnswers set aside before the lanes');
+	is_deeply(
+		$c->stash('_raw_ratchet'),
+		{ showCorrectAnswers => 1, isInstructor => 1 },
+		'the raw ratchet values ride the stash to mode resolution'
+	);
 };
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -176,8 +182,8 @@ subtest 'ParseRequest strips raw isInstructor + renderMode from a grounded reque
 
 subtest 'Lane::Problem: raw showCorrectAnswers is mode-gated off (custom → no reveal)' => sub {
 	my $c = MockController->new;
-	# Post-strip reality: showCorrectAnswers is NOT stripped, so it reaches the
-	# lane. No renderMode claim ⇒ resolves to `custom`, whose bundle offers no
+	# A showCorrectAnswers that reaches the lane is zeroed by the lane's own
+	# gate. No renderMode claim ⇒ resolves to `custom`, whose bundle offers no
 	# reveal button — so the mode-gate zeros the flag.
 	my %params = (
 		problemJWT         => problem_jwt(problemSource => 'S', pg_hash => 'sha256:p0'),

@@ -42,7 +42,7 @@ use Renderer::Constants qw(
 	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS
 );
 use Renderer::Seed       qw(resolve_seed MALFORMED_SEED_MESSAGE);
-use Renderer::RenderMode qw(resolve_render_mode);
+use Renderer::RenderMode qw(resolve_render_mode RATCHET);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(dispatch);
@@ -78,9 +78,29 @@ sub dispatch ($c) {
 	# inside the subprocess would lose the format-layer flags across the
 	# fork boundary — Storable serialization only carries return values back,
 	# not mutated inputs_ref.
-	if (my $overrides = resolve_render_mode(\%params)) {
-		$c->stash(_mode_overrides => $overrides) if @$overrides;
+	#
+	# The ratchet (WW3-R70): the bundle supplies defaults, the values the
+	# lanes left in %params are claims and replace them, and the raw values
+	# set aside below may only tighten. A grounded request's raw values were
+	# set aside in _parse_envelope, before its lanes; an ungrounded request's
+	# are set aside here, after the self-mint has carried them forward. The
+	# ungrounded lane honours raw isInstructor (the STRICT_JWT=0 posture), so
+	# that one stays in %params.
+	my $raw = $c->stash('_raw_ratchet') // {};
+	if (($c->stash('_trust_lane') // '') eq 'ungrounded') {
+		$raw = {
+			map  { $_ => delete $params{$_} }
+			grep { $_ ne 'isInstructor' && exists $params{$_} } keys %{ +RATCHET }
+		};
 	}
+	my $ignored = resolve_render_mode(\%params, $raw);
+	$c->stash(_mode_overrides => $ignored) if @$ignored;
+
+	# Every request that renders under a token — upstream or self-minted —
+	# lands isInstructor on a defined value once the mode has supplied its
+	# default (WW3-R46).
+	$params{isInstructor} //= 0
+		if grep { defined $params{$_} } qw(problemJWT challengeJWT submissionJWT);
 
 	return \%params;
 }
@@ -273,6 +293,14 @@ sub _parse_envelope ($c, $params, $ctx) {
 			for (TOKEN_CONTENT_PARAMS) {
 				delete $params->{$_};
 			}
+
+			# Raw ratchet primitives (WW3-R70) are set aside so the lanes see
+			# only claims; dispatch re-applies them after the mode resolves,
+			# where they may only tighten. The stripped isInstructor joins
+			# them: a raw isInstructor=0 tightens, a raw 1 is ignored.
+			my %raw = map { $_ => delete $params->{$_} } grep { exists $params->{$_} } keys %{ +RATCHET };
+			$raw{isInstructor} = $elevation{isInstructor} if exists $elevation{isInstructor};
+			$c->stash(_raw_ratchet => \%raw);
 		}
 	}
 

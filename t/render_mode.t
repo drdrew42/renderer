@@ -89,81 +89,142 @@ subtest 'unknown mode treated as custom' => sub {
 	is($i->{hideFeedback}, 1, 'unknown mode → passthrough (forward-compat)');
 };
 
-# ─── Override posture: mode wins over caller-supplied primitives ──────
+# ─── The ratchet (WW3-R70): bundle, then claims, then raw tightens ─────
+#
+# $inputs_ref carries the claims (whatever the lanes left); the second
+# argument carries the raw values ParseRequest set aside before the lanes.
 
-subtest 'mode wins over caller-supplied conflicting primitive' => sub {
-	my $i = { renderMode => 'no-feedback', hideFeedback => 0 };
-	resolve_render_mode($i);
-	is($i->{hideFeedback}, 1, 'no-feedback bundle wins over caller hideFeedback=0');
+subtest 'order 1: the bundle supplies the default' => sub {
+	my $i = { renderMode => 'no-feedback' };
+	resolve_render_mode($i, {});
+	is($i->{hideFeedback}, 1, 'no claim, no raw → the bundle value');
 };
 
-subtest 'mode passes through caller value when bundle does not lock that primitive' => sub {
-	# The principle under test is the passthrough contract: a bundle locks
-	# only the primitives it owns and leaves everything else alone.
-	#
-	# This used to demonstrate that with `showCorrectAnswers` on `default`,
-	# which WW3-R46 now locks — so the example moved to a primitive the
-	# bundle genuinely does not own. The contract is unchanged; only which
-	# key illustrates it.
+subtest 'order 2: a claim overrides the bundle in either direction' => sub {
+	my $i = { renderMode => 'default', hideFeedback => 1 };
+	resolve_render_mode($i, {});
+	is($i->{hideFeedback}, 1, 'claim hideFeedback=1 tightens default');
+
+	$i = { renderMode => 'no-feedback', hideFeedback => 0 };
+	resolve_render_mode($i, {});
+	is($i->{hideFeedback}, 0, 'claim hideFeedback=0 loosens no-feedback');
+
+	$i = { renderMode => 'review', hideCheckAnswersButton => 0 };
+	resolve_render_mode($i, {});
+	is($i->{hideCheckAnswersButton}, 0, 'claim re-shows the button review hides');
+
+	$i = { renderMode => 'preview', isInstructor => 0 };
+	resolve_render_mode($i, {});
+	is($i->{isInstructor}, 0, 'claim isInstructor=0 overrides the preview bundle');
+};
+
+subtest 'order 3: raw tightens, never loosens' => sub {
+	my $i       = { renderMode => 'no-feedback' };
+	my $ignored = resolve_render_mode($i, { hideFeedback => 0 });
+	is($i->{hideFeedback}, 1, 'raw hideFeedback=0 cannot loosen the mode');
+	is_deeply($ignored, ['hideFeedback'], 'the ignored raw key is reported');
+
+	$i = { renderMode => 'default' };
+	resolve_render_mode($i, { hideFeedback => 1 });
+	is($i->{hideFeedback}, 1, 'raw hideFeedback=1 tightens the mode');
+
+	$i = { renderMode => 'default', hideFeedback => 0 };
+	resolve_render_mode($i, { hideFeedback => 1 });
+	is($i->{hideFeedback}, 1, 'raw hideFeedback=1 tightens a claim');
+
+	$i = { renderMode => 'default', hideFeedback => 1 };
+	resolve_render_mode($i, { hideFeedback => 0 });
+	is($i->{hideFeedback}, 1, 'raw hideFeedback=0 cannot loosen a claim');
+
+	$i = { renderMode => 'review' };
+	resolve_render_mode($i, { hideCheckAnswersButton => 0 });
+	is($i->{hideCheckAnswersButton}, 1, 'raw cannot re-show the button review hides');
+
+	$i = {};
+	resolve_render_mode($i, { hideCheckAnswersButton => 1 });
+	is($i->{hideCheckAnswersButton}, 1, 'raw may hide the button with no mode');
+
+	$i = { renderMode => 'preview' };
+	resolve_render_mode($i, { isInstructor => 0 });
+	is($i->{isInstructor}, 0, 'raw isInstructor=0 tightens preview');
+
+	$i = { renderMode => 'default' };
+	resolve_render_mode($i, { isInstructor => 1 });
+	ok(!$i->{isInstructor}, 'raw isInstructor=1 is ignored');
+
+	$i = {};
+	resolve_render_mode($i, { showCorrectAnswers => 1 });
+	ok(!$i->{showCorrectAnswers}, 'raw showCorrectAnswers=1 is ignored with no mode');
+};
+
+subtest 'mode leaves primitives it does not own alone' => sub {
 	my $i = { renderMode => 'default', showFooter => 1 };
-	resolve_render_mode($i);
+	resolve_render_mode($i, {});
 	is($i->{showFooter},   1, 'default mode does not lock showFooter');
 	is($i->{hideFeedback}, 0, 'default bundle still applies hideFeedback');
 };
 
-subtest 'default and review lock showCorrectAnswers, not just the button (WW3-R46)' => sub {
+subtest 'showCorrectAnswersButton is set by the bundle outright' => sub {
+	my $i = { renderMode => 'default', showCorrectAnswersButton => 1 };
+	resolve_render_mode($i, {});
+	is($i->{showCorrectAnswersButton}, 0, 'the bundle value replaces a supplied one');
+};
+
+subtest 'default and review refuse a raw showCorrectAnswers (WW3-R46)' => sub {
 	# Offering is not the same as permitting. Both bundles hide the reveal
 	# button; before R46 neither refused the flag, so a caller who was
 	# never offered the reveal could ask for it directly and be given it.
 	for my $mode (qw(default review)) {
-		my $i         = { renderMode => $mode, showCorrectAnswers => 1 };
-		my $overrides = resolve_render_mode($i);
-		is($i->{showCorrectAnswers},       0, "$mode refuses a caller-supplied showCorrectAnswers");
+		my $i       = { renderMode => $mode };
+		my $ignored = resolve_render_mode($i, { showCorrectAnswers => 1 });
+		is($i->{showCorrectAnswers},       0, "$mode refuses a raw showCorrectAnswers");
 		is($i->{showCorrectAnswersButton}, 0, "$mode still hides the button");
-		ok((grep { $_ eq 'showCorrectAnswers' } @$overrides), "$mode reports the override it applied");
+		ok((grep { $_ eq 'showCorrectAnswers' } @$ignored), "$mode reports the raw value it ignored");
 	}
 };
 
 subtest 'no-stakes and preview still offer the reveal' => sub {
-	# The bundles where revealing costs nothing must keep working — R46
-	# closed a door, it did not brick the affordance.
+	# The bundles where revealing costs nothing keep the button's click
+	# working until WW3-R67 retires it.
 	for my $mode (qw(no-stakes preview)) {
-		my $i = { renderMode => $mode, showCorrectAnswers => 1 };
-		resolve_render_mode($i);
-		is($i->{showCorrectAnswers},       1, "$mode leaves a caller-supplied showCorrectAnswers alone");
+		my $i = { renderMode => $mode };
+		resolve_render_mode($i, { showCorrectAnswers => 1 });
+		is($i->{showCorrectAnswers},       1, "$mode honours the button's raw showCorrectAnswers");
 		is($i->{showCorrectAnswersButton}, 1, "$mode offers the button");
+
+		$i = { renderMode => $mode, showCorrectAnswers => 0 };
+		resolve_render_mode($i, { showCorrectAnswers => 1 });
+		is($i->{showCorrectAnswers}, 0, "$mode: a lane or claim that set the flag holds");
 	}
 };
 
-# ─── Override tracking via return value ────────────────────────────────
+# ─── Ignored-raw tracking via return value ─────────────────────────────
 
-subtest 'return value records replaced caller values' => sub {
-	my $i = {
-		renderMode             => 'no-feedback',
-		hideFeedback           => 0,               # mode overrides to 1
-		hideCheckAnswersButton => 0,               # matches bundle, no override
-		showCorrectAnswers     => 1,               # mode overrides to 0
-	};
-	my $overrides = resolve_render_mode($i);
-	is(ref($overrides), 'ARRAY', 'returns an arrayref');
-	is_deeply([ sort @$overrides ], [ sort qw(hideFeedback showCorrectAnswers) ], 'only conflicting keys recorded');
+subtest 'return value records the raw values the ratchet ignored' => sub {
+	my $i       = { renderMode => 'no-feedback' };
+	my $ignored = resolve_render_mode(
+		$i,
+		{
+			hideFeedback           => 0,    # loosens → ignored
+			hideCheckAnswersButton => 0,    # matches the bundle → nothing to ignore
+			showCorrectAnswers     => 1,    # loosens → ignored
+		}
+	);
+	is(ref($ignored), 'ARRAY', 'returns an arrayref');
+	is_deeply([ sort @$ignored ], [ sort qw(hideFeedback showCorrectAnswers) ], 'only loosening keys recorded');
 };
 
-subtest 'empty override list when bundle and caller agree' => sub {
-	my $i         = { renderMode => 'no-feedback' };
-	my $overrides = resolve_render_mode($i);
-	is(ref($overrides),    'ARRAY', 'returns an arrayref');
-	is(scalar @$overrides, 0,       'no overrides recorded');
-};
+subtest 'empty list when nothing is ignored' => sub {
+	my $ignored = resolve_render_mode({ renderMode => 'no-feedback' });
+	is(ref($ignored),    'ARRAY', 'returns an arrayref');
+	is(scalar @$ignored, 0,       'nothing ignored');
 
-subtest 'custom and unknown modes return empty arrayref' => sub {
-	my $overrides;
-	$overrides = resolve_render_mode({ renderMode => 'custom', hideFeedback => 1 });
-	is(scalar @$overrides, 0, 'custom: no overrides (passthrough)');
-	$overrides = resolve_render_mode({ renderMode => 'garbage', hideFeedback => 1 });
-	is(scalar @$overrides, 0, 'unknown: no overrides (forward-compat)');
-	$overrides = resolve_render_mode({});
-	is(scalar @$overrides, 0, 'absent: no overrides');
+	$ignored = resolve_render_mode({ renderMode => 'custom' }, { hideFeedback => 1 });
+	is(scalar @$ignored, 0, 'custom: a tightening raw value applies');
+	$ignored = resolve_render_mode({ renderMode => 'garbage' }, { hideFeedback => 1 });
+	is(scalar @$ignored, 0, 'unknown: a tightening raw value applies');
+	$ignored = resolve_render_mode({});
+	is(scalar @$ignored, 0, 'absent: nothing ignored');
 };
 
 # ─── Side effects: only touches keys the bundle owns ──────────────────

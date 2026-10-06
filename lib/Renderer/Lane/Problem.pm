@@ -7,10 +7,11 @@ package Renderer::Lane::Problem;
 #   * Decode + verify_aud against $SITE_HOST under problemJWTsecret.
 #   * LibreTexts wraps claims under a `webwork` provider key; hoist if present.
 #   * `isInstructor` reads ONLY from claims — never from raw form params.
-#     If the LMS omits the claim, defaults to 0 (student). This closes the
-#     "LMS mints incomplete claims, raw form `isInstructor=1` wins" edge
-#     case. Stable across renders; an LMS that wants instructor preview
-#     mints with `isInstructor=1` once.
+#     If the LMS omits the claim, the render mode's default applies and then
+#     0 (student), both in ParseRequest::dispatch after this lane. This
+#     closes the "LMS mints incomplete claims, raw form `isInstructor=1`
+#     wins" edge case. Stable across renders; an LMS that wants instructor
+#     preview mints with `isInstructor=1` once.
 #   * Bulk merge for everything else: claims override raw params — the whole
 #     point of carrying an upstream JWT is that the upstream's view of the
 #     problem context wins.
@@ -65,12 +66,6 @@ sub apply ($c, $params) {
 	# the whole point of carrying an upstream JWT is the upstream's view of
 	# the problem context wins).
 	@{$params}{ keys %$claims } = values %$claims;
-
-	# Defensive default for the permission family — fires when the claim
-	# was silent on isInstructor. Without it, an LMS that mints an
-	# incomplete JWT would leave $params->{isInstructor} undef (resolved to
-	# 0 downstream anyway, but setting it explicitly documents intent).
-	$params->{isInstructor} //= 0;
 
 	# WW3-R51: a showCorrectAnswers reveals only when the resolved mode offers
 	# the button (no-stakes / preview). On the `custom` default it does not —

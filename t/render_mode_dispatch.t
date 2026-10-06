@@ -263,4 +263,121 @@ subtest 'review mode: Check Answers button hidden in the format layer' => sub {
 		->content_unlike(qr/Check Answers/, 'review-mode hideCheckAnswersButton=1 visible to template after fork',);
 };
 
+# ─── The ratchet (WW3-R70): bundle defaults, then claims, then raw tightens ──
+#
+# The interact button's default label reads the resolved hideFeedback —
+# "Check Answers" when feedback shows, "Save Answers" when it is hidden — so
+# the label is a direct readout of the resolution. Submitting a correct answer
+# adds the feedback markup (ww-feedback-*) only when feedback is shown.
+
+my $FEEDBACK_MARK = qr/ww-feedback-btn/;
+my $INTERACT      = qr/<input[^>]*name="submitAnswers"[^>]*>/;
+
+sub interact_button {
+	my ($html)   = @_;
+	my ($button) = $html =~ /($INTERACT)/;
+	return $button;
+}
+
+sub render_problem_lane {
+	my (%args) = @_;
+	my $jwt = make_problem_jwt(problemSource => $pg_source, problemSeed => 1234, %{ $args{claims} // {} });
+	$t->post_ok('/render-api' => form => { problemJWT => $jwt, %{ $args{raw} // {} } })->status_is(200);
+	return $t->tx->res->body;
+}
+
+subtest 'claim renderMode default + claim hideFeedback 1 → feedback hidden' => sub {
+	my $html = render_problem_lane(
+		claims => { renderMode    => 'default', hideFeedback => 1 },
+		raw    => { submitAnswers => 1,         AnSwEr0001   => '2' },
+	);
+	unlike($html, $FEEDBACK_MARK, 'the hideFeedback claim overrides the mode default');
+	like(interact_button($html), qr/value="Save Answers"/, 'the interact button reads "Save Answers"');
+};
+
+subtest 'claim renderMode no-feedback + raw hideFeedback=0 → feedback hidden' => sub {
+	my $html = render_problem_lane(
+		claims => { renderMode    => 'no-feedback' },
+		raw    => { submitAnswers => 1, AnSwEr0001 => '2', hideFeedback => 0 },
+	);
+	unlike($html, $FEEDBACK_MARK, 'a raw value cannot loosen the mode');
+	like(interact_button($html), qr/value="Save Answers"/, 'the interact button reads "Save Answers"');
+};
+
+subtest 'claim renderMode default + raw hideFeedback=1 → feedback hidden (tightening honored)' => sub {
+	my $html = render_problem_lane(
+		claims => { renderMode    => 'default' },
+		raw    => { submitAnswers => 1, AnSwEr0001 => '2', hideFeedback => 1 },
+	);
+	unlike($html, $FEEDBACK_MARK, 'a raw value may tighten the mode');
+	like(interact_button($html), qr/value="Save Answers"/, 'the interact button reads "Save Answers"');
+};
+
+subtest 'claim renderMode default, no hideFeedback anywhere → feedback shown' => sub {
+	my $html = render_problem_lane(
+		claims => { renderMode    => 'default' },
+		raw    => { submitAnswers => 1, AnSwEr0001 => '2' },
+	);
+	like($html,                  $FEEDBACK_MARK,            'the mode default shows feedback');
+	like(interact_button($html), qr/value="Check Answers"/, 'the interact button reads "Check Answers"');
+};
+
+subtest 'claim renderMode review + raw hideCheckAnswersButton=0 → no interact button' => sub {
+	my $html = render_problem_lane(
+		claims => { renderMode             => 'review' },
+		raw    => { hideCheckAnswersButton => 0 },
+	);
+	ok(!defined interact_button($html), 'raw input cannot re-show the button a mode hides');
+};
+
+subtest 'raw hideCheckAnswersButton=1 hides the interact button' => sub {
+	my $html = render_problem_lane(raw => { hideCheckAnswersButton => 1 });
+	ok(!defined interact_button($html), 'raw input may hide the button');
+};
+
+subtest 'claim hideCheckAnswersButton 0 overrides the review default' => sub {
+	my $html = render_problem_lane(claims => { renderMode => 'review', hideCheckAnswersButton => 0 });
+	ok(defined interact_button($html), 'a claim moves the mode default in either direction');
+};
+
+subtest 'interactLabel: a claim names the button; raw is stripped; markup is escaped' => sub {
+	my $html = render_problem_lane(claims => { interactLabel => 'Submit' });
+	like(interact_button($html), qr/value="Submit"/, 'the claim label is used');
+
+	$html = render_problem_lane(claims => { hideFeedback => 1, interactLabel => 'Submit' });
+	like(interact_button($html), qr/value="Submit"/, 'the claim label wins over the feedback default');
+
+	$html = render_problem_lane(raw => { interactLabel => 'Hijacked' });
+	like(interact_button($html), qr/value="Check Answers"/, 'a raw label is ignored');
+	unlike($html, qr/Hijacked/, 'the raw label does not reach the page');
+
+	$html = render_problem_lane(claims => { interactLabel => '"><b>bold</b>' });
+	unlike($html, qr/<b>bold<\/b>/, 'markup in a label does not render');
+	like(interact_button($html), qr/value="&quot;&gt;&lt;b&gt;bold&lt;\/b&gt;"/, 'the label is HTML-escaped');
+};
+
+subtest 'raw isInstructor=0 tightens a preview claim; raw isInstructor=1 is ignored' => sub {
+	my $jwt = make_problem_jwt(problemSource => $pg_source, problemSeed => 1234, renderMode => 'preview');
+	$t->post_ok('/render-api' => form => { problemJWT => $jwt, outputFormat => 'debug', isInstructor => 0 })
+		->status_is(200);
+	is($t->tx->res->json->{permissions}{isInstructor}, 0, 'the raw value lowers the mode default');
+
+	$jwt = make_problem_jwt(problemSource => $pg_source, problemSeed => 1234, renderMode => 'default');
+	$t->post_ok('/render-api' => form => { problemJWT => $jwt, outputFormat => 'debug', isInstructor => 1 })
+		->status_is(200);
+	is($t->tx->res->json->{permissions}{isInstructor}, 0, 'the raw value cannot raise it');
+	is_deeply($t->tx->res->json->{mode_overrides}, ['isInstructor'], 'the ignored raw value is reported');
+};
+
+subtest 'session: a signed hideFeedback claim beats a raw hideFeedback=0' => sub {
+	my $problemJWT = make_problem_jwt(problemSource => $pg_source, problemSeed => 1234);
+	my $sessionJWT = encode_jwt(
+		payload => { problemJWT => $problemJWT, hideFeedback => 1 },
+		key     => $ENV{webworkJWTsecret},
+		alg     => 'HS256',
+	);
+	$t->post_ok('/render-api' => form => { sessionJWT => $sessionJWT, hideFeedback => 0 })->status_is(200);
+	like(interact_button($t->tx->res->body), qr/value="Save Answers"/, 'the session claim is in force');
+};
+
 done_testing();

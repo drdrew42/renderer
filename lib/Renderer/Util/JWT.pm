@@ -63,14 +63,13 @@ sub mint_jwt ($secret, $payload, %opts) {
 
 # self_mint_problem_jwt($params) — wrap the (already-trusted) %$params in a JWE
 # problemJWT so the rendered HTML can carry continuation without the consumer
-# re-mailing every parameter. Sets the baseline mint claims (aud, isInstructor
-# default, sessionID) on $params in place, then stores the token under
+# re-mailing every parameter. Sets the baseline mint claims (aud, sessionID)
+# on $params in place, then stores the token under
 # $params->{problemJWT} and returns it. Shared by the ungrounded self-mint UX
 # (Lane::Ungrounded) and the peer-verified body lane (Lane::Peer), which mint
 # identically.
 sub self_mint_problem_jwt ($params) {
 	$params->{aud} = $ENV{SITE_HOST};
-	$params->{isInstructor} //= 0;
 	$params->{sessionID} ||= time;
 	$params->{problemJWT} = mint_jwt(
 		$ENV{problemJWTsecret}, $params,

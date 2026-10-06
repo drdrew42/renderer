@@ -303,11 +303,23 @@ sub formatRenderedProblem {
 	# WeBWorK::PreTeXt::render_ptx. Serving it from here meant a student holding
 	# their own problemJWT could spell `outputFormat=ptx` and receive
 	# correct_ans for their assigned problem, before submitting anything.
+	my $lh = WeBWorK::Localize::getLangHandle($inputs_ref->{language} // 'en');
+
+	# The interact button submits the student's answers (WW3-R70). Its label is
+	# the interactLabel claim when one is set, else it follows feedback:
+	# "Check Answers" when the render shows feedback, "Save Answers" under
+	# hideFeedback. The template escapes it.
+	my $claimedLabel = $inputs_ref->{interactLabel};
+	my $interactLabel =
+		defined $claimedLabel && !ref $claimedLabel && length $claimedLabel
+		? $claimedLabel
+		: $lh->maketext($inputs_ref->{hideFeedback} ? 'Save Answers' : 'Check Answers');
+
 	my %template_params = (
 		template => 'RPCRenderFormats/default',
 		$formatName eq 'json' ? (format => 'json') : (),
 		formatName               => $formatName,
-		lh                       => WeBWorK::Localize::getLangHandle($inputs_ref->{language} // 'en'),
+		lh                       => $lh,
 		rh_result                => $rh_result,
 		SITE_URL                 => $SITE_URL,
 		FORM_ACTION_URL          => $FORM_ACTION_URL,
@@ -327,6 +339,7 @@ sub formatRenderedProblem {
 		showSummary              => $showSummary,
 		showScoreSummary         => $showScoreSummary,
 		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? 0 : 1,
+		interactLabel            => $interactLabel,
 		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton}
 			// ($inputs_ref->{isInstructor} ? 1 : 0),
 		showFooter   => $inputs_ref->{showFooter} // 0,

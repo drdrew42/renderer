@@ -43,13 +43,13 @@ challengeJWT	envelope	challenge	envelope	rejected:400		status with neither sessi
 challenge_jwt	envelope	session	raw	stripped		deleted before the session prefix; only the session's embedded claim is hoisted to challengeJWT	WW3-205
 *	envelope	session	session	overridden		every signed session claim beats a raw param of the same name except the student's answer fields (raw is always lowest priority; answer submission cannot be signed). SESSION_STATE_CLAIMS names the state claims; t/session_precedence.t pins it to the minters	WW3-205
 problemJWT	envelope	session	raw	honored		sidecar: replaces only SOURCE_OVERRIDE_FIELDS, atomically	LTW-088
-isInstructor	reveal	grounded	raw	stripped		response length vs baseline; no correct_ans / solution	WW3-R46 (measured 2026-08-05)
+isInstructor	reveal	grounded	raw	tighten-only		raw 1: response length vs baseline, no correct_ans / solution; raw 0 lowers a preview mode	WW3-R46 (measured 2026-08-05), WW3-R70
 isInstructor	reveal	ungrounded	raw	honored		STRICT_JWT=0 editor posture	WW3-R46
 isInstructor	reveal	peer	peer	honored		signed body is the trust gate	
 isInstructor	reveal	session	session	overridden		session claim wins over raw	
 renderMode	reveal	grounded	raw	stripped		response length vs baseline	WW3-R51 (measured 2026-08-12)
 renderMode	reveal	ungrounded	raw	honored			WW3-R51
-renderMode+hideFeedback	reveal	*	claim	honored	overridden	the hideFeedback claim overrides the mode default; today the bundle resets it. WW3 mints no renderMode	WW3-R70
+renderMode+hideFeedback	reveal	*	claim	honored		the hideFeedback claim overrides the mode default, in either direction	WW3-R70
 showCorrectAnswers	reveal	problem	raw	stripped		honored only under an offering renderMode claim (no-stakes, preview)	WW3-R51
 showCorrectAnswers	reveal	challenge	raw	overridden		hard-zeroed; render_permissions claim only	t/reveal_invariant.t
 showCorrectAnswers	reveal	review	raw	overridden		hard-zeroed; reveal arrives through revealJWT	WW3-117
@@ -59,8 +59,10 @@ revealJWT	reveal	review	raw	honored		verified and play-bound; expired or wrong p
 revealJWT	reveal	problem,challenge	raw	inert			
 showHints	reveal	*	raw	inert		resolver hardwires from isInstructor	
 showSolutions	reveal	*	raw	inert		resolver hardwires from isInstructor	
-showCorrectAnswersButton	reveal	*	raw	tighten-only	honored	raw may hide it, never show it; the click still meets the showCorrectAnswers rules	WW3-R70
-hideCheckAnswersButton	presentation	*	raw	tighten-only	honored	raw may hide it, never show it against a mode	WW3-R70
+showCorrectAnswersButton	reveal	*	raw	tighten-only	honored	raw may hide it, never show it; the click still meets the showCorrectAnswers rules	WW3-R67
+hideCheckAnswersButton	presentation	*	raw	tighten-only		raw may hide it, never show it against a mode or claim; review and static hide it	WW3-R70
+interactLabel	presentation	*	raw	stripped		SENSITIVE_PARAMS; the label defaults to "Check Answers", or "Save Answers" under hideFeedback	WW3-R70
+interactLabel	presentation	problem,peer	claim	honored		integrator setting; HTML-escaped into the interact button	WW3-R70
 hideFeedback	presentation	problem	raw	tighten-only		raw may raise it, never lower a claim or mode	WW3-R70
 hideFeedback	presentation	challenge	raw	tighten-only		raw may raise it, never lower a claim or mode	WW3-R70
 hideFeedback	presentation	review	raw	tighten-only		raw may raise it	WW3-R70

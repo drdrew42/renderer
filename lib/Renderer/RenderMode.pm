@@ -1,8 +1,8 @@
 package Renderer::RenderMode;
 
-# resolve_render_mode($inputs_ref) → mutates $inputs_ref in place + returns
-#                                     the list of caller-supplied primitive
-#                                     keys the mode bundle replaced.
+# resolve_render_mode($inputs_ref, $raw_ref) → mutates $inputs_ref in place
+#                                              + returns the list of raw
+#                                              keys the resolution ignored.
 #
 # Translates the $inputs_ref->{renderMode} intent claim into the primitive
 # flag bundle that mode owns. Downstream code (RenderProblem,
@@ -35,20 +35,27 @@ package Renderer::RenderMode;
 #   custom       — passthrough. No primitives locked.
 #
 # Unknown / absent renderMode → treated as 'custom' (forward-compat).
-# Existing callers that don't send renderMode get no behavior change.
 #
-# Override posture: mode wins over caller-supplied primitives, silently.
-# Picking a mode is opting into its bundle. The set of overridden keys is
-# returned as an arrayref so the caller can surface it on the render
-# return-object (mirrors the existing $pg->{_reveal_state} pattern — info
-# that needs to bubble from inside standaloneRenderer back to the controller
-# without plumbing $c through the call chain).
+# The ratchet (WW3-R70). The RATCHET primitives resolve in three layers:
+#   1. the bundle supplies the default;
+#   2. a claim — any value in $inputs_ref after the lanes — replaces it, in
+#      either direction;
+#   3. a raw value — set aside in $raw_ref before the lanes — applies only
+#      when it moves the value toward the stricter setting.
+# One interim exception: under a mode that offers the reveal (no-stakes,
+# preview), a raw showCorrectAnswers is the Show Correct Answers button's
+# click, and applies when no claim or lane has set the flag (WW3-R67 retires
+# the button and this exception with it).
 #
-# Sensitivity: renderMode is policy. A student must not be able to override
-# the orchestrator's mode from the rendered form. Lane::Problem's bulk
-# merge gives claim-wins for free; Lane::Challenge propagates renderMode
-# explicitly alongside hideElements / hideFeedback. Not in SENSITIVE_PARAMS
-# — the claim-wins precedence is sufficient.
+# The remaining bundle primitive, showCorrectAnswersButton, is set by the
+# bundle outright.
+#
+# renderMode itself is policy: claim-only on grounded lanes
+# (RENDER_MODE_PARAMS, WW3-R51), so a student cannot pick the bundle.
+#
+# The raw keys the ratchet ignored are returned as an arrayref so the caller
+# can surface them on the render return-object (`mode_overrides` in the debug
+# envelope).
 #
 # See vault://WeBWorK/Renderer/Render Modes for the full design.
 
@@ -58,9 +65,17 @@ use feature 'signatures';
 no warnings qw(experimental::signatures);
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(resolve_render_mode mode_bundle RENDER_MODES);
+our @EXPORT_OK = qw(resolve_render_mode mode_bundle RENDER_MODES RATCHET);
 
 use constant RENDER_MODES => [qw(default no-feedback review no-stakes preview custom)];
+
+# Ratchet primitive → its stricter value.
+use constant RATCHET => {
+	hideFeedback           => 1,
+	hideCheckAnswersButton => 1,
+	showCorrectAnswers     => 0,
+	isInstructor           => 0,
+};
 
 # Mode → primitive bundle. Only the keys the mode owns are present; anything
 # not listed flows through from $inputs_ref unchanged. 'custom' has an empty
@@ -117,25 +132,28 @@ sub mode_bundle ($mode) {
 	return $BUNDLES{$mode} // $BUNDLES{custom};
 }
 
-sub resolve_render_mode ($inputs_ref) {
-	my $mode   = $inputs_ref->{renderMode} // 'custom';
-	my $bundle = $BUNDLES{$mode}           // {};         # unknown mode → passthrough
-	return [] unless %$bundle;
+sub resolve_render_mode ($inputs_ref, $raw_ref = {}) {
+	my $bundle  = mode_bundle($inputs_ref->{renderMode} // 'custom');
+	my $ratchet = RATCHET;
 
-	my @overrides;
 	for my $k (sort keys %$bundle) {
-		my $bundle_val = $bundle->{$k};
-		# Caller supplied a value that the bundle is changing → record it.
-		# Truthy compare — all bundle values are 0/1, caller-supplied values
-		# already coerced to bool at the inputs_ref boundary upstream.
-		if (defined $inputs_ref->{$k}
-			&& (!!$inputs_ref->{$k}) != (!!$bundle_val))
-		{
-			push @overrides, $k;
-		}
-		$inputs_ref->{$k} = $bundle_val;
+		if (exists $ratchet->{$k}) { $inputs_ref->{$k} //= $bundle->{$k} }
+		else                       { $inputs_ref->{$k} = $bundle->{$k} }
 	}
-	return \@overrides;
+
+	my @ignored;
+	for my $k (sort grep { exists $ratchet->{$_} && defined $raw_ref->{$_} } keys %$raw_ref) {
+		my $raw    = $raw_ref->{$k} ? 1 : 0;
+		my $strict = $ratchet->{$k};
+		if ($raw == $strict) {
+			$inputs_ref->{$k} = $raw;
+		} elsif ($k eq 'showCorrectAnswers' && $bundle->{showCorrectAnswersButton} && !defined $inputs_ref->{$k}) {
+			$inputs_ref->{$k} = $raw;
+		} elsif (($inputs_ref->{$k} ? 1 : 0) != $raw) {
+			push @ignored, $k;
+		}
+	}
+	return \@ignored;
 }
 
 1;
