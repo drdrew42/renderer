@@ -1,0 +1,136 @@
+# Request-parameter surface for /render-api and the content-fetch endpoints.
+#
+# One row per (param, lane, source): what the renderer SHOULD do with it, and,
+# where the code differs, what it IS doing. A blank `is` means the code matches
+# `should`. `is` values are read from the code (2026-10-06) unless `ref` says
+# measured.
+#
+# lane:   problem | challenge | review | peer | ungrounded | content_fetch
+#         session    = a request carrying a sessionJWT (prefix; combines with a body lane)
+#         grounded   = problem, challenge, review
+#         *          = every /render-api lane
+# source: raw (form/query) | claim (body JWT) | session (sessionJWT claim)
+#         | peer (signed body) | envelope (a combination of params)
+# should/is:
+#         honored    the value reaches the render and has its effect
+#         overridden a claim or the lane sets it; the raw value is replaced
+#         stripped   deleted before the lane; the default applies
+#         inert      accepted, nothing reads it
+#         tighten-only raw input may move it only toward the stricter value; ignored otherwise
+#         rejected:N the request fails with HTTP N
+#         ?          undecided
+#
+# group:  envelope | reveal | grade | routing | diagnostic | presentation | telemetry
+param	group	lane	source	should	is	check	ref
+problemJWT+challengeJWT+submissionJWT	envelope	*	envelope	rejected:400		status; 'Ambiguous envelope'	
+problemJWT	envelope	problem	raw	rejected:401		status on a bad signature	
+challengeJWT	envelope	challenge	raw	rejected:401		status on a bad signature	
+submissionJWT	envelope	review	raw	rejected:401		status on a bad signature	
+sessionJWT	envelope	session	raw	rejected:401		status on a bad signature	
+X-Peer-Signature	envelope	peer	raw	rejected:401		status; 'Peer signature rejected'	
+STRICT_JWT=1+no credential	envelope	ungrounded	envelope	rejected:401		status; 'requires a problemJWT'	WW3-R44
+pg_hash+problemSource	envelope	ungrounded	envelope	rejected:400		status; 'Malformed request.'	
+verdict_signed	envelope	session	raw	rejected:400		status without sessionJWT, without challengeJWT, or on a failed fold	WW3-053
+position	envelope	challenge	raw	rejected:400		status when missing, non-integer, or out of range	
+answer_url	envelope	challenge	claim	rejected:400		status when the claim is absent	
+pg_hash+seed+position	envelope	review	claim	rejected:400		status when any is absent	
+seed=*	envelope	challenge	claim	rejected:400		status when the open slot has no recorded draw	
+empty JWT params	envelope	*	raw	inert		a value="" JWT field is treated as absent	
+initial_state	envelope	challenge	raw	stripped	honored	unsigned JSON is signed into sessionJWT_0; omitted or forged started_at defeats the clock (measured 2026-10-06, probe-state-forge.py)	WW3-205
+initial_state	envelope	session	raw	inert		ignored when a sessionJWT is present	
+challengeJWT	envelope	session	raw	rejected:400	honored	no play_id cross-check against the session's embedded challenge_jwt outside the verdict fold	WW3-205
+challenge_jwt	envelope	session	raw	stripped	honored	raw wins the session //= merge, then is hoisted to challengeJWT	WW3-205
+problemJWT	envelope	session	raw	honored		sidecar: replaces only SOURCE_OVERRIDE_FIELDS, atomically	LTW-088
+isInstructor	reveal	grounded	raw	stripped		response length vs baseline; no correct_ans / solution	WW3-R46 (measured 2026-08-05)
+isInstructor	reveal	ungrounded	raw	honored		STRICT_JWT=0 editor posture	WW3-R46
+isInstructor	reveal	peer	peer	honored		signed body is the trust gate	
+isInstructor	reveal	session	session	overridden		session claim wins over raw	
+renderMode	reveal	grounded	raw	stripped		response length vs baseline	WW3-R51 (measured 2026-08-12)
+renderMode	reveal	ungrounded	raw	honored			WW3-R51
+renderMode+hideFeedback	reveal	*	claim	honored	overridden	the hideFeedback claim overrides the mode default; today the bundle resets it. WW3 mints no renderMode	WW3-R70
+showCorrectAnswers	reveal	problem	raw	stripped		honored only under an offering renderMode claim (no-stakes, preview)	WW3-R51
+showCorrectAnswers	reveal	challenge	raw	overridden		hard-zeroed; render_permissions claim only	t/reveal_invariant.t
+showCorrectAnswers	reveal	review	raw	overridden		hard-zeroed; reveal arrives through revealJWT	WW3-117
+showCorrectAnswers	reveal	session	session	overridden		session claim wins over raw	WW3-R67 (retire)
+_reveal_grant	reveal	*	raw	stripped		SENSITIVE_PARAMS	WW3-117
+revealJWT	reveal	review	raw	honored		verified and play-bound; expired or wrong play reveals nothing	WW3-117
+revealJWT	reveal	problem,challenge	raw	inert			
+showHints	reveal	*	raw	inert		resolver hardwires from isInstructor	
+showSolutions	reveal	*	raw	inert		resolver hardwires from isInstructor	
+showCorrectAnswersButton	reveal	*	raw	tighten-only	honored	raw may hide it, never show it; the click still meets the showCorrectAnswers rules	WW3-R70
+hideCheckAnswersButton	presentation	*	raw	tighten-only	honored	raw may hide it, never show it against a mode	WW3-R70
+hideFeedback	presentation	problem	raw	tighten-only		raw may raise it, never lower a claim or mode	WW3-R70
+hideFeedback	presentation	challenge	raw	tighten-only		raw may raise it, never lower a claim or mode	WW3-R70
+hideFeedback	presentation	review	raw	tighten-only		raw may raise it	WW3-R70
+problemSource	grade	challenge	raw	stripped	honored	renders the caller's source; the submissionJWT carries the claim's pg_hash + seed with that score	WW3-R68
+problemSource	grade	review	raw	stripped	honored	renders the caller's source as the record of the play	WW3-R68
+problemSource	grade	problem	raw	stripped	honored	beside a claimed sourceFilePath it renders (editor_preview) and the answerJWT reports its score	WW3-R68
+problemSource	grade	problem	claim	honored		renders and emits; the integrator signed this content (ADAPT signs sourceFilePath, never problemSource)	WW3-R68
+problemSource	grade	content_fetch	raw	stripped	honored	hint / solution / answer of the caller's own source	WW3-R68
+problemSource	grade	ungrounded	raw	honored		STRICT_JWT=0 editor posture	
+problemSourceURL	grade	problem	raw	stripped	honored	claim wins when present; else a caller-chosen server-side fetch	WW3-R68
+problemSourceURL	grade	challenge,review	raw	overridden		lane derives it from the claim's pg_hash	
+sourceFilePath	grade	challenge,review	raw	inert		problemSourceURL resolves first	
+sourceFilePath	grade	problem	raw	stripped	honored	claim wins when present	WW3-R68
+pg_hash	grade	challenge,review	raw	overridden		lane sets it from the claim	
+pg_hash	grade	problem	raw	stripped	honored	used as a cache hint for a claim's sourceFilePath and for macro injection	WW3-R68
+problemSeed	grade	challenge,review	raw	overridden		lane sets it from the claim or the draw	
+problemSeed	grade	problem	raw	stripped	honored	claim wins when present; else the caller picks the variant	WW3-R68
+problemSeed	grade	grounded	claim	honored		absent or empty: renders the default seed AND carries a warnings entry on the outbound answerJWT / submissionJWT (ADAPT can send an empty string)	WW3-R68
+position	grade	challenge	raw	honored		selects a slot inside the signed problems[]	
+position	grade	review	raw	overridden		lane sets it from the claim	
+state	grade	*	raw	inert		a form value is a string; the lane reads a hash	
+AnSwEr*	grade	problem,challenge	raw	honored		the student's answers	
+AnSwEr*	grade	review	raw	overridden		submitted_answers covers every answer PG defines	
+MaThQuIlL_AnSwEr*	grade	review	raw	overridden	honored	survives when the claim carries no MathQuill twin for that blank; display only	
+submitAnswers	grade	problem,challenge	raw	honored			
+submitAnswers	grade	review	raw	overridden		lane sets 1	
+answersSubmitted	grade	*	raw	honored		OR'd with submitAnswers; session claim wins	
+processAnswers	grade	*	raw	honored		0 skips grading of the caller's own render	
+numCorrect	grade	*	raw	stripped		SENSITIVE_PARAMS	
+numIncorrect	grade	*	raw	stripped		SENSITIVE_PARAMS	
+essay	grade	*	raw	honored			
+JWTanswerURL	routing	*	raw	stripped		SENSITIVE_PARAMS; challenge sets it from answer_url	
+parent_origin	routing	*	raw	stripped		SENSITIVE_PARAMS	
+parent_origin	routing	peer	peer	honored			
+sessionID	routing	*	raw	stripped		SENSITIVE_PARAMS	
+formAction	routing	*	raw	stripped	honored	renamed to formURL before the strip; where the form posts	WW3-R69
+formURL	routing	*	raw	stripped	honored	where the form posts	WW3-R69
+formURL	routing	problem,peer	claim	honored		integrator setting (proxying LMS)	WW3-R69
+baseURL	presentation	*	raw	stripped	honored	sets SITE_URL, which becomes <base href>: every relative asset resolves against the requested host	WW3-R69
+baseURL	presentation	problem,peer	claim	honored		integrator setting (proxying LMS)	WW3-R69
+extra_header_text	presentation	*	raw	stripped	honored	unescaped (%==) into <head>	WW3-R69
+extra_header_text	presentation	problem,peer	claim	honored		integrator setting; unescaped by design	WW3-R69
+hideElements	presentation	*	raw	stripped	honored	repeated keys arrive as an array; selectors are xml-escaped, not CSS-escaped	WW3-R69
+hideElements	presentation	problem,challenge	claim	honored		inline <style> in <head>	WW3-R01
+outputFormat	presentation	challenge	raw	overridden		lane sets default	
+outputFormat	presentation	review	raw	overridden		lane sets static	
+outputFormat	presentation	problem,peer,ungrounded	raw	honored		debug degrades to default unless RENDERER_DEBUG_FORMAT	WW3-R57
+displayMode	presentation	*	raw	honored			
+language	presentation	*	raw	honored			
+entryAssist	presentation	*	raw	honored			
+answerPrefix	presentation	*	raw	honored			
+forceScaffoldsOpen	presentation	*	raw	honored			
+psvn	presentation	*	raw	honored			
+problemUUID	presentation	*	raw	honored		PG resource aliasing	
+showPartialCorrectAnswers	presentation	*	raw	honored		ignored under hideFeedback	
+showSummary	presentation	*	raw	honored			
+showScoreSummary	presentation	*	raw	honored			
+showFooter	presentation	*	raw	honored			
+showComments	presentation	*	raw	honored			
+includeTags	presentation	*	raw	honored			
+view_problem_debugging_info	diagnostic	problem	raw	honored		ADAPT lever; error verbosity only	WW3-R56
+view_problem_debugging_info	diagnostic	challenge,review	raw	stripped	honored		WW3-R58
+showPGInfo	diagnostic	*	raw	honored		request half; needs the show_pg_info permission	WW3-R56
+showAnsHashInfo	diagnostic	*	raw	honored		request half; needs the permission twin	WW3-R56
+showAnsGroupInfo	diagnostic	*	raw	honored		request half; needs the permission twin	WW3-R56
+showResourceInfo	diagnostic	*	raw	honored		request half; needs the permission twin	WW3-R56
+show_pg_info	diagnostic	*	raw	overridden		resolver sets it from isInstructor	WW3-R56
+show_answer_hash_info	diagnostic	*	raw	overridden		resolver sets it from isInstructor	WW3-R56
+show_answer_group_info	diagnostic	*	raw	overridden		resolver sets it from isInstructor	WW3-R56
+show_resource_info	diagnostic	*	raw	overridden		resolver sets it from isInstructor	WW3-R56
+clientDebug	diagnostic	*	raw	honored		debug template only	
+originIP	telemetry	*	raw	overridden		re-applied after the lane	
+noCache	telemetry	*	raw	stripped	honored	skips the content cache, forcing an OPL fetch; no sender in ww3, portal, stack or OPLv3	WW3-R69
+noCache	telemetry	problem,peer	claim	honored		integrator setting	WW3-R69
+*	grade	*	raw	honored		any key not stripped reaches PG's inputs_ref; problem macros may read it	
