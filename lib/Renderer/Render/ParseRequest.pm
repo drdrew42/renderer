@@ -30,9 +30,8 @@ use Mojo::Base -signatures;
 #
 # Moved out of Renderer::Controller::Render in WW3-R33.
 
-use Mojo::JSON qw(decode_json);
-
-use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
+use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict verifyAndFoldLaunchVerdict);
+use Renderer::Util::JWT qw(verify_problem_jwt);
 use Renderer::Lane::Session;
 use Renderer::Lane::Problem;
 use Renderer::Lane::Challenge;
@@ -90,26 +89,19 @@ sub _parse_envelope ($c, $params, $ctx) {
 	# backing value was undef render as `value=""`, which is `defined` but empty;
 	# Crypt::JWT::decode_jwt rejects empty tokens with "missing token". Strip
 	# them up front so the dispatcher below sees a clean envelope shape.
-	for my $k (qw(problemJWT sessionJWT challengeJWT submissionJWT verdict_signed initial_state)) {
+	for my $k (qw(problemJWT sessionJWT challengeJWT submissionJWT verdict_signed)) {
 		delete $params->{$k} if defined $params->{$k} && !length $params->{$k};
 	}
 
-	# initial_state: portal-supplied JSON serialization of the play's initial
-	# navigation state (next_available, current_focus, draws[], finalization,
-	# started_at). Per Lifecycle.md, the portal hands challenge_jwt +
-	# initial_state to the renderer for sessionJWT_0 minting on first render.
-	# Decoded into $params->{state} so generatePlaySessionJWT picks it up
-	# uniformly with the sessionJWT-decoded path.
-	if (defined $params->{initial_state} && !defined $params->{sessionJWT}) {
-		eval {
-			my $decoded = decode_json($params->{initial_state});
-			$params->{state} = $decoded if ref $decoded eq 'HASH';
-			1;
-		} or do {
-			$c->log->warn("initial_state parse failed: $@");
-		};
-		delete $params->{initial_state};
-	}
+	# Play state reaches the challenge lane only from signed sources: the
+	# launch verdict on a first render, the sessionJWT after it (WW3-205).
+	# A raw initial_state is never read, and a raw challenge_jwt is dropped
+	# so the session's embedded claim is the only value Lane::Session hoists.
+	delete @{$params}{qw(initial_state challenge_jwt)};
+
+	# A first render is one that arrived without a sessionJWT — decided
+	# before the launch fold below supplies one.
+	my $is_first_render = !defined $params->{sessionJWT};
 
 	# problemJWT / challengeJWT / submissionJWT are sibling body-lane trust
 	# anchors — never more than one at a time. Each carries a complete
@@ -123,11 +115,17 @@ sub _parse_envelope ($c, $params, $ctx) {
 	}
 
 	# Render-time verdict fold (WW3-053). When the portal threads
-	# verdict_signed through a render request — typically on the RESUME path
-	# where /play/launch handed the portal session_jwt + verdict_signed — the
+	# verdict_signed through a render request — on the RESUME path, where
+	# /play/status handed the portal session_jwt + verdict_signed — the
 	# renderer mints sessionJWT_{k+1} folding the verdict before downstream
 	# processing reads state. Replaces $params->{sessionJWT} so Lane::Session's
 	# decode below sees the verdict-folded state.
+	#
+	# The FIRST render of a play carries the launch verdict and no sessionJWT
+	# (WW3-205). The challengeJWT is verified as the lane verifies it, then the
+	# verdict folds into an empty base: sessionJWT_0, embedding the raw
+	# challengeJWT. A challengeJWT with neither a session nor a verdict has no
+	# signed source for its play state and is refused.
 	#
 	# Lives here rather than Lane::Challenge because the fold mutates
 	# sessionJWT (which Lane::Session decodes), so the operation must run
@@ -135,19 +133,30 @@ sub _parse_envelope ($c, $params, $ctx) {
 	# challengeJWT for the play_id cross-check, not a challenge-lane operation
 	# per se.
 	if (defined $params->{verdict_signed}) {
-		return $c->exception('verdict_signed requires sessionJWT.', 400)
-			unless defined $params->{sessionJWT};
 		return $c->exception('verdict_signed requires challengeJWT.', 400)
 			unless defined $params->{challengeJWT};
 
-		my ($folded, $err) = verifyAndFoldVerdict($params->{sessionJWT}, $params->{verdict_signed},
-			$ENV{problemJWTsecret}, $ENV{webworkJWTsecret},);
+		my ($folded, $err);
+		if (defined $params->{sessionJWT}) {
+			($folded, $err) = verifyAndFoldVerdict($params->{sessionJWT}, $params->{verdict_signed},
+				$ENV{problemJWTsecret}, $ENV{webworkJWTsecret},);
+		} else {
+			my (undef, $cjwt_err) = verify_problem_jwt($params->{challengeJWT});
+			return $c->credential_error($cjwt_err) if $cjwt_err;
+
+			($folded, $err) = verifyAndFoldLaunchVerdict(
+				$params->{challengeJWT}, $params->{verdict_signed},
+				$ENV{problemJWTsecret},  $ENV{webworkJWTsecret},
+			);
+		}
 		if ($err) {
 			$c->log->error("verdict_signed fold rejected: $err");
 			return $c->exception("verdict_signed: $err", 400);
 		}
 		$params->{sessionJWT} = $folded;
 		delete $params->{verdict_signed};
+	} elsif (defined $params->{challengeJWT} && !defined $params->{sessionJWT}) {
+		return $c->exception('challengeJWT requires sessionJWT or verdict_signed.', 400);
 	}
 
 	# Reject raw-param pg_hash + problemSource without an upstream JWT —
@@ -180,8 +189,8 @@ sub _parse_envelope ($c, $params, $ctx) {
 	$params->{problemSeed}  //= delete $params->{problemseed}  if exists $params->{problemseed};
 
 	# Stash flags consumed by downstream phases.
-	$c->stash(_is_first_render => !defined $params->{sessionJWT} ? 1 : 0);
-	$c->stash(_no_cache        => $params->{noCache}             ? 1 : 0);
+	$c->stash(_is_first_render => $is_first_render   ? 1 : 0);
+	$c->stash(_no_cache        => $params->{noCache} ? 1 : 0);
 
 	# Strip security-sensitive params from untrusted inputs. Peer-signed
 	# bodies are exempt — a verified peer signature IS the trust gate, and

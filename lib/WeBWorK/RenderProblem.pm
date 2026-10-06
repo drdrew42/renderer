@@ -448,8 +448,9 @@ sub generatePlaySessionJWT {
 	my ($pg, $inputs_ref) = @_;
 
 	# Extract prior state + sequence from the inbound sessionJWT (already
-	# decoded by parseRequest into $inputs_ref via the generic claim merge).
-	# First render of a play has no inbound state — sequence starts at 0.
+	# decoded by parseRequest into $inputs_ref via the session claim merge).
+	# A first render's inbound session is the launch-verdict fold
+	# (sessionJWT_0, WW3-205); with no inbound sequence the mint starts at 0.
 	my $prev_seq    = $inputs_ref->{mint_sequence};
 	my $next_seq    = defined $prev_seq                    ? $prev_seq + 1        : 0;
 	my $prior_state = (ref $inputs_ref->{state} eq 'HASH') ? $inputs_ref->{state} : {};
@@ -478,7 +479,6 @@ sub generatePlaySessionJWT {
 		# (the rendered problem) lives in render-context (form/URL), not
 		# in state.current_focus — student_picks mode keeps focus null.
 		state => {
-			started_at      => $prior_state->{started_at},
 			current_focus   => $prior_state->{current_focus},
 			next_available  => $prior_state->{next_available}  // [],
 			spent_on_record => $prior_state->{spent_on_record} // [],
@@ -493,7 +493,7 @@ sub generatePlaySessionJWT {
 
 		# Cumulative "has submitted at some point" — see comment in
 		# standaloneRenderer. Top-level so parseRequest's claim merge
-		# treats it as a security-sensitive claim (line ~206).
+		# holds it over a raw param (SESSION_STATE_CLAIMS).
 		answersSubmitted => $answers_submitted,
 
 		mint_sequence => $next_seq,

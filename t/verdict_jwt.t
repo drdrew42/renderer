@@ -5,7 +5,7 @@ use Test::More;
 use Crypt::JWT qw(encode_jwt decode_jwt);
 
 use lib 'lib';
-use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict);
+use WeBWorK::VerdictJWT qw(verifyAndFoldVerdict verifyAndFoldLaunchVerdict);
 
 my $ORCH     = 'test-orchestrator-secret-32bytes';
 my $RENDERER = 'test-renderer-secret-32bytes____';
@@ -108,7 +108,7 @@ subtest 'happy path: closed mode fold advances state and sequence' => sub {
 	is($claims->{state}{current_focus}, 1, 'current_focus from verdict');
 	is_deeply($claims->{state}{next_available}, [ 1, 2 ], 'next_available from verdict');
 	is_deeply($claims->{state}{spent_on_record}, [0], 'spent_on_record from verdict (WW3-177b)');
-	is($claims->{state}{started_at}, '2026-04-27T17:00:00Z', 'started_at preserved');
+	ok(!exists $claims->{state}{started_at}, 'started_at is not carried into the folded state (C5)');
 	is_deeply($claims->{state}{draws}, [], 'draws[] empty (closed mode, no draw_next)');
 	is($claims->{state}{finalization}, undef, 'finalization undef');
 	is($claims->{challenge_jwt},       $cjwt, 'challenge_jwt re-embedded verbatim');
@@ -337,6 +337,64 @@ subtest 'fold omits projection fields a verdict does not carry' => sub {
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
 	ok(!exists $claims->{state}{progress},  'no progress key when the verdict omits it');
 	ok(!exists $claims->{state}{deadlines}, 'no deadlines key when the verdict omits it');
+};
+
+# Launch fold (WW3-205) -------------------------------------------------------
+
+subtest 'launch fold: verdict into an empty base mints sessionJWT_0' => sub {
+	my $cjwt = make_challenge_jwt();
+	my $draw = {
+		draw_position => 0,
+		pool_index    => 2,
+		pg_hash       => 'sha256:d0',
+		seed          => 4321,
+		drawn_at      => '2026-10-06T12:00:00Z'
+	};
+	my $vsigned = make_verdict_signed(
+		basis   => 0,
+		verdict => {
+			current_focus   => 0,
+			next_available  => [0],
+			draw_next       => $draw,
+			finalization    => undef,
+			spent_on_record => [],
+			progress        => { kind => 'classic', attempted => 0, total => 3 },
+			deadlines       => { 0 => '2026-10-06T13:00:00Z' },
+		},
+	);
+
+	my ($jwt, $err) = verifyAndFoldLaunchVerdict($cjwt, $vsigned, $ORCH, $RENDERER);
+	is($err, undef, 'launch fold succeeds');
+	my $claims = decode_jwt(token => $jwt, key => $RENDERER, accepted_alg => 'HS256');
+	is($claims->{challenge_jwt},        $cjwt, 'raw challengeJWT embedded verbatim');
+	is($claims->{mint_sequence},        1,     'mint_sequence 1');
+	is($claims->{answersSubmitted},     0,     'answersSubmitted 0');
+	is($claims->{state}{current_focus}, 0,     'current_focus from the verdict');
+	is_deeply($claims->{state}{next_available}, [0],     'next_available from the verdict');
+	is_deeply($claims->{state}{draws},          [$draw], 'draws[] holds the initial draw');
+	is($claims->{state}{progress}{kind}, 'classic',              'progress folded through');
+	is($claims->{state}{deadlines}{0},   '2026-10-06T13:00:00Z', 'deadlines folded through');
+	ok(!exists $claims->{state}{started_at}, 'no started_at (C5)');
+};
+
+subtest 'launch fold: verdict for another play is rejected' => sub {
+	my $cjwt    = make_challenge_jwt();
+	my $vsigned = make_verdict_signed(play_id => '99999999-9999-9999-9999-999999999999');
+
+	my ($jwt, $err) = verifyAndFoldLaunchVerdict($cjwt, $vsigned, $ORCH, $RENDERER);
+	is($jwt, undef, 'no sessionJWT');
+	like($err, qr/play_id mismatch/, 'error names the gate');
+};
+
+subtest 'launch fold: challengeJWT under the wrong secret is rejected' => sub {
+	my $cjwt = encode_jwt(
+		payload => { play_id => '11111111-1111-1111-1111-111111111111' },
+		alg     => 'HS256',
+		key     => 'wrong-secret-wrong-secret-wrong!'
+	);
+	my ($jwt, $err) = verifyAndFoldLaunchVerdict($cjwt, make_verdict_signed(), $ORCH, $RENDERER);
+	is($jwt, undef, 'no sessionJWT');
+	like($err, qr/challengeJWT: invalid signature/, 'error names the gate');
 };
 
 done_testing();

@@ -4,12 +4,13 @@ use strict;
 use warnings;
 
 use Exporter 'import';
-our @EXPORT_OK = qw(test_app temp_render_root);
+our @EXPORT_OK = qw(test_app temp_render_root launch_verdict);
 
 use File::Temp qw(tempdir);
 use File::Path qw(make_path);
 use File::Spec;
 use Test::Mojo;
+use Crypt::JWT qw(encode_jwt);
 
 # Create a temporary RENDER_ROOT with required directory structure.
 # Returns the path. Caller should keep $dir in scope (auto-cleans on destroy).
@@ -49,6 +50,33 @@ sub test_app {
 	}
 
 	return Test::Mojo->new('Renderer');
+}
+
+# Mint a launch verdict — what the orchestrator returns from /play/launch and
+# the portal threads through a play's first render (WW3-205). HS256 under
+# problemJWTsecret, mint_sequence_basis 0. Defaults bind to the play_id the
+# challengeJWT fixtures carry; `verdict` replaces the Verdict body wholesale.
+sub launch_verdict {
+	my (%args) = @_;
+	return encode_jwt(
+		payload => {
+			iss                 => 'https://ww3.example.edu',
+			aud                 => $ENV{SITE_HOST},
+			play_id             => $args{play_id}      // '11111111-1111-1111-1111-111111111111',
+			challenge_id        => $args{challenge_id} // 'sha256:abcdef',
+			mint_sequence_basis => 0,
+			verdict             => $args{verdict} // {
+				current_focus   => undef,
+				next_available  => [ 0, 1, 2 ],
+				draw_next       => undef,
+				finalization    => undef,
+				spent_on_record => [],
+			},
+		},
+		key      => $ENV{problemJWTsecret},
+		alg      => 'HS256',
+		auto_iat => 1,
+	);
 }
 
 1;

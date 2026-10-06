@@ -4,10 +4,11 @@ package WeBWorK::VerdictJWT;
 #
 # Per WeBWorK3/Tasks/backlog/WW3-053, the renderer mints sessionJWT_{k+1}
 # from the orchestrator's signed verdict. This module is the single source
-# of truth for that operation — both the render-time fold (when the portal
-# threads verdict_signed through a render request on the RESUME path) and
-# the post-answer-URL fold (when sendSubmissionEnvelope returns a verdict
-# in its response body) call into it.
+# of truth for that operation — the render-time fold (when the portal
+# threads verdict_signed through a render request on the RESUME path), the
+# post-answer-URL fold (when sendSubmissionEnvelope returns a verdict in its
+# response body), and the first-render fold of the launch verdict (WW3-205:
+# verifyAndFoldLaunchVerdict, below) all call into it.
 #
 # # The fold contract
 #
@@ -50,11 +51,19 @@ package WeBWorK::VerdictJWT;
 #   - state.finalization    ← verdict.finalization
 #   - state.progress       ← verdict.progress    (WW3-042, when present)
 #   - state.deadlines      ← verdict.deadlines   (WW3-041, when present)
-#   - state.started_at     ← base.state.started_at  (preserved — duration
-#                            anchor doesn't move under verdict folding)
 #   - mint_sequence        ← base.mint_sequence + 1
 #   - challenge_jwt        ← base.challenge_jwt   (re-embed verbatim)
 #   - iss/aud              ← $ENV{SITE_HOST}      (same as generatePlaySessionJWT)
+#
+# # The launch fold (verifyAndFoldLaunchVerdict)
+#
+# The first render of a play has no base session: the portal sends the
+# challengeJWT and the launch verdict /play/launch returned. Gates 1–2 run
+# as above; the raw challengeJWT stands in for the embedded one (gates 4–5
+# check verdict.play_id against it); gate 6 runs against an empty base
+# (mint_sequence 0). The fold yields sessionJWT_0 with challenge_jwt = the
+# raw challengeJWT, mint_sequence 1, answersSubmitted 0, and draws[] holding
+# at most the verdict's draw_next.
 #
 # # Why a separate module
 #
@@ -71,7 +80,7 @@ use Crypt::JWT          qw(decode_jwt);
 use Renderer::Util::JWT qw(mint_jwt);
 use Exporter            qw(import);
 
-our @EXPORT_OK = qw(verifyAndFoldVerdict);
+our @EXPORT_OK = qw(verifyAndFoldVerdict verifyAndFoldLaunchVerdict);
 
 # verifyAndFoldVerdict( $base_session_jwt, $verdict_signed, $orch_secret, $renderer_secret )
 #   → ($new_session_jwt, undef)  on success
@@ -86,24 +95,8 @@ sub verifyAndFoldVerdict {
 	return (undef, 'orchestrator_secret is required') unless defined $orch_secret      && $orch_secret ne '';
 	return (undef, 'renderer_secret is required')     unless defined $renderer_secret  && $renderer_secret ne '';
 
-	# 1. Verify and decode the signed verdict.
-	my $verdict_claims;
-	eval {
-		$verdict_claims = decode_jwt(token => $verdict_signed, key => $orch_secret, accepted_alg => 'HS256');
-		1;
-	} or do {
-		return (undef, "verdict_signed: invalid signature ($@)");
-	};
-
-	# 2. Required claims present.
-	my $verdict_play_id = $verdict_claims->{play_id};
-	return (undef, 'verdict_signed: missing play_id claim') unless defined $verdict_play_id;
-
-	my $verdict_basis = $verdict_claims->{mint_sequence_basis};
-	return (undef, 'verdict_signed: missing mint_sequence_basis claim') unless defined $verdict_basis;
-
-	my $verdict = $verdict_claims->{verdict};
-	return (undef, 'verdict_signed: missing verdict claim') unless ref $verdict eq 'HASH';
+	my ($verdict_claims, $verdict_err) = _verify_verdict($verdict_signed, $orch_secret);
+	return (undef, $verdict_err) if $verdict_err;
 
 	# 3. Verify and decode the base sessionJWT.
 	my $base_claims;
@@ -119,18 +112,83 @@ sub verifyAndFoldVerdict {
 	return (undef, 'base_session_jwt: missing embedded challenge_jwt')
 		unless defined $embedded_cjwt && $embedded_cjwt ne '';
 
-	# Decode the embedded challengeJWT under the orchestrator's secret. The
-	# renderer trusts orchestrator-signed claims; this is the standard verify.
-	my $cjwt_claims;
+	my ($session_play_id, $cjwt_err) = _challenge_play_id($embedded_cjwt, $orch_secret);
+	return (undef, "embedded challenge_jwt: $cjwt_err") if $cjwt_err;
+
+	return _fold_and_mint($verdict_claims, $base_claims, $embedded_cjwt, $session_play_id, $renderer_secret);
+}
+
+# verifyAndFoldLaunchVerdict( $challenge_jwt, $verdict_signed, $orch_secret, $renderer_secret )
+#   → ($session_jwt_0, undef)  on success
+#   → (undef, $error_string)   on failure
+#
+# The first-render fold: the launch verdict into an empty base, with the raw
+# challengeJWT embedded. See "The launch fold" in the module docs.
+sub verifyAndFoldLaunchVerdict {
+	my ($challenge_jwt, $verdict_signed, $orch_secret, $renderer_secret) = @_;
+
+	return (undef, 'challenge_jwt is required')       unless defined $challenge_jwt   && $challenge_jwt ne '';
+	return (undef, 'verdict_signed is required')      unless defined $verdict_signed  && $verdict_signed ne '';
+	return (undef, 'orchestrator_secret is required') unless defined $orch_secret     && $orch_secret ne '';
+	return (undef, 'renderer_secret is required')     unless defined $renderer_secret && $renderer_secret ne '';
+
+	my ($verdict_claims, $verdict_err) = _verify_verdict($verdict_signed, $orch_secret);
+	return (undef, $verdict_err) if $verdict_err;
+
+	my ($play_id, $cjwt_err) = _challenge_play_id($challenge_jwt, $orch_secret);
+	return (undef, "challengeJWT: $cjwt_err") if $cjwt_err;
+
+	return _fold_and_mint($verdict_claims, {}, $challenge_jwt, $play_id, $renderer_secret);
+}
+
+# Gates 1–2: verify the signed verdict and require its claims.
+#   → (\%verdict_claims, undef) | (undef, $error_string)
+sub _verify_verdict {
+	my ($verdict_signed, $orch_secret) = @_;
+
+	my $verdict_claims;
 	eval {
-		$cjwt_claims = decode_jwt(token => $embedded_cjwt, key => $orch_secret, accepted_alg => 'HS256');
+		$verdict_claims = decode_jwt(token => $verdict_signed, key => $orch_secret, accepted_alg => 'HS256');
 		1;
 	} or do {
-		return (undef, "embedded challenge_jwt: invalid signature ($@)");
+		return (undef, "verdict_signed: invalid signature ($@)");
 	};
 
-	my $session_play_id = $cjwt_claims->{play_id};
-	return (undef, 'embedded challenge_jwt: missing play_id') unless defined $session_play_id;
+	return (undef, 'verdict_signed: missing play_id claim') unless defined $verdict_claims->{play_id};
+	return (undef, 'verdict_signed: missing mint_sequence_basis claim')
+		unless defined $verdict_claims->{mint_sequence_basis};
+	return (undef, 'verdict_signed: missing verdict claim') unless ref $verdict_claims->{verdict} eq 'HASH';
+
+	return ($verdict_claims, undef);
+}
+
+# Decode a challengeJWT under the orchestrator's secret and return its
+# play_id — the value a verdict is bound to.
+#   → ($play_id, undef) | (undef, $error_string)
+sub _challenge_play_id {
+	my ($challenge_jwt, $orch_secret) = @_;
+
+	my $cjwt_claims;
+	eval {
+		$cjwt_claims = decode_jwt(token => $challenge_jwt, key => $orch_secret, accepted_alg => 'HS256');
+		1;
+	} or do {
+		return (undef, "invalid signature ($@)");
+	};
+
+	return (undef,                   'missing play_id') unless defined $cjwt_claims->{play_id};
+	return ($cjwt_claims->{play_id}, undef);
+}
+
+# Gates 5–6, the fold, and the mint. $base_claims is the decoded base
+# sessionJWT ({} for the launch fold); $challenge_jwt is re-embedded verbatim.
+#   → ($new_session_jwt, undef) | (undef, $error_string)
+sub _fold_and_mint {
+	my ($verdict_claims, $base_claims, $challenge_jwt, $session_play_id, $renderer_secret) = @_;
+
+	my $verdict_play_id = $verdict_claims->{play_id};
+	my $verdict_basis   = $verdict_claims->{mint_sequence_basis};
+	my $verdict         = $verdict_claims->{verdict};
 
 	# 5. play_id cross-check.
 	if ($verdict_play_id ne $session_play_id) {
@@ -151,15 +209,15 @@ sub verifyAndFoldVerdict {
 
 	# verdict.draw_next, when present, appends one new draw to draws[]. Closed
 	# mode never produces draw_next, so this is a no-op there. Open mode with
-	# random_one selection emits a fresh draw entry per submission.
+	# random_one selection emits a fresh draw entry per submission, and the
+	# launch verdict carries the play's initial draw.
 	if (ref $verdict->{draw_next} eq 'HASH') {
 		push @base_draws, $verdict->{draw_next};
 	}
 
 	my $new_state = {
-		started_at      => $base_state->{started_at},                                                       # preserved
 		current_focus   => $verdict->{current_focus},
-		next_available  => ref $verdict->{next_available} eq 'ARRAY' ? $verdict->{next_available} : [],
+		next_available  => ref $verdict->{next_available} eq 'ARRAY'  ? $verdict->{next_available}  : [],
 		spent_on_record => ref $verdict->{spent_on_record} eq 'ARRAY' ? $verdict->{spent_on_record} : [],
 		draws           => \@base_draws,
 		finalization    => $verdict->{finalization},
@@ -184,7 +242,7 @@ sub verifyAndFoldVerdict {
 	my $payload = {
 		iss              => $ENV{SITE_HOST},
 		aud              => $ENV{SITE_HOST},
-		challenge_jwt    => $embedded_cjwt,
+		challenge_jwt    => $challenge_jwt,
 		state            => $new_state,
 		mint_sequence    => $session_seq + 1,
 		answersSubmitted => $answers_submitted,

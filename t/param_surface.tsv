@@ -30,17 +30,18 @@ sessionJWT	envelope	session	raw	rejected:401		status on a bad signature
 X-Peer-Signature	envelope	peer	raw	rejected:401		status; 'Peer signature rejected'	
 STRICT_JWT=1+no credential	envelope	ungrounded	envelope	rejected:401		status; 'requires a problemJWT'	WW3-R44
 pg_hash+problemSource	envelope	ungrounded	envelope	rejected:400		status; 'Malformed request.'	
-verdict_signed	envelope	session	raw	rejected:400		status without sessionJWT, without challengeJWT, or on a failed fold	WW3-053
+verdict_signed	envelope	session	raw	rejected:400		status without challengeJWT, on a failed fold, or on a play_id that is not the challengeJWT's	WW3-053, WW3-205
 position	envelope	challenge	raw	rejected:400		status when missing, non-integer, or out of range	
 answer_url	envelope	challenge	claim	rejected:400		status when the claim is absent	
 pg_hash+seed+position	envelope	review	claim	rejected:400		status when any is absent	
 seed=*	envelope	challenge	claim	rejected:400		status when the open slot has no recorded draw	
 empty JWT params	envelope	*	raw	inert		a value="" JWT field is treated as absent	
-initial_state	envelope	challenge	raw	stripped	honored	unsigned JSON is signed into sessionJWT_0; omitted or forged started_at defeats the clock (measured 2026-10-06, probe-state-forge.py)	WW3-205
+initial_state	envelope	challenge	raw	stripped		deleted before the lanes; a first render's state comes from the signed launch verdict	WW3-205
 initial_state	envelope	session	raw	inert		ignored when a sessionJWT is present	
-challengeJWT	envelope	session	raw	rejected:400	honored	no play_id cross-check against the session's embedded challenge_jwt outside the verdict fold	WW3-205
-challenge_jwt	envelope	session	raw	stripped	honored	raw wins the session //= merge, then is hoisted to challengeJWT	WW3-205
-*	envelope	session	session	overridden	honored	every signed session claim beats a raw param of the same name except the student's answer fields (raw is always lowest priority; answer submission cannot be signed); today only isInstructor, showCorrectAnswers, answersSubmitted do	WW3-205
+challengeJWT	envelope	session	raw	rejected:400		status unless byte-equal to the session's embedded challenge_jwt	WW3-205
+challengeJWT	envelope	challenge	envelope	rejected:400		status with neither sessionJWT nor verdict_signed; 'challengeJWT requires sessionJWT or verdict_signed.'	WW3-205
+challenge_jwt	envelope	session	raw	stripped		deleted before the session prefix; only the session's embedded claim is hoisted to challengeJWT	WW3-205
+*	envelope	session	session	overridden		every signed session claim beats a raw param of the same name except the student's answer fields (raw is always lowest priority; answer submission cannot be signed). SESSION_STATE_CLAIMS names the state claims; t/session_precedence.t pins it to the minters	WW3-205
 problemJWT	envelope	session	raw	honored		sidecar: replaces only SOURCE_OVERRIDE_FIELDS, atomically	LTW-088
 isInstructor	reveal	grounded	raw	stripped		response length vs baseline; no correct_ans / solution	WW3-R46 (measured 2026-08-05)
 isInstructor	reveal	ungrounded	raw	honored		STRICT_JWT=0 editor posture	WW3-R46
@@ -80,7 +81,7 @@ problemSeed	grade	problem	raw	stripped	honored	claim wins when present; else the
 problemSeed	grade	grounded	claim	honored		absent or empty: renders the default seed AND carries a warnings entry on the outbound answerJWT / submissionJWT (ADAPT can send an empty string)	WW3-R68
 position	grade	challenge	raw	honored		selects a slot inside the signed problems[]	
 position	grade	review	raw	overridden		lane sets it from the claim	
-state	grade	*	raw	inert		a form value is a string; the lane reads a hash	
+state	grade	*	raw	inert		a form value is a string; the lane reads a hash, and a session's state claim replaces it	
 AnSwEr*	grade	problem,challenge	raw	honored		the student's answers	
 AnSwEr*	grade	review	raw	overridden		submitted_answers covers every answer PG defines	
 MaThQuIlL_AnSwEr*	grade	review	raw	inert		a blank whose claim carries no MathQuill twin renders no MathQuill field, so the raw value has nothing to fill (Drew, 2026-10-06)	

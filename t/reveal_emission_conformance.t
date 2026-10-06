@@ -116,9 +116,20 @@ sub problem_jwt {
 sub challenge_jwt {
 	my (%claims) = @_;
 	return problem_jwt(
+		play_id    => 'p-1',
 		problems   => [ { pg_hash => 'sha256:p0', seed => 111 } ],
 		answer_url => 'https://orchestrator.test/answer',
 		%claims,
+	);
+}
+
+# The launch verdict a play's first render carries beside its challengeJWT
+# (WW3-205) — bound to challenge_jwt()'s play_id.
+sub launch_verdict {
+	return problem_jwt(
+		play_id             => 'p-1',
+		mint_sequence_basis => 0,
+		verdict => { current_focus => undef, next_available => [0], draw_next => undef, finalization => undef },
 	);
 }
 
@@ -142,6 +153,7 @@ subtest 'ParseRequest strips raw isInstructor + renderMode from a grounded reque
 	# elevation and render-mode params, and the reveal button's own flag.
 	my %params = (
 		challengeJWT       => challenge_jwt(),
+		verdict_signed     => launch_verdict(),
 		isInstructor       => 1,
 		renderMode         => 'preview',
 		showCorrectAnswers => 1,

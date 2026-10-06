@@ -9,6 +9,7 @@ our @EXPORT_OK = qw(
 	ELEVATION_PARAMS
 	RENDER_MODE_PARAMS
 	SOURCE_OVERRIDE_FIELDS
+	SESSION_STATE_CLAIMS
 	ANSWER_RESPONSE_SUBJECT
 	ANSWER_RESPONSE_DEFAULT_MESSAGE
 	PLATFORM_NAME
@@ -124,6 +125,33 @@ use constant SOURCE_OVERRIDE_FIELDS => qw(
 	sourceFilePath
 	pg_hash
 	problemSource
+);
+
+# The claims a renderer-minted sessionJWT carries as session state — every
+# claim the two minters write (WeBWorK::RenderProblem generateJWTs for the
+# problem lane, generatePlaySessionJWT and WeBWorK::VerdictJWT for the
+# challenge lane) other than the answer labels generateJWTs copies from PG's
+# KEPT_EXTRA_ANSWERS. isInstructor and showCorrectAnswers are the claims
+# Lane::Session has always held over raw input. Lane::Session applies each of
+# these over a raw param of the same name; any other session claim is a
+# student answer field, and the current render's raw value for it wins
+# (WW3-205). t/session_precedence.t pins this list to the minters.
+use constant SESSION_STATE_CLAIMS => qw(
+	iss
+	aud
+	iat
+	sessionID
+	problemUUID
+	problemJWT
+	pg_hash
+	numCorrect
+	numIncorrect
+	answersSubmitted
+	isInstructor
+	showCorrectAnswers
+	challenge_jwt
+	state
+	mint_sequence
 );
 
 # answerJWT response envelope defaults (legacy lane sendAnswerJWT and

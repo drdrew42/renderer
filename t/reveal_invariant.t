@@ -13,6 +13,9 @@ BEGIN {
 use Test::Mojo;
 use Crypt::JWT qw(encode_jwt);
 
+use lib 't/lib';
+use TestHelper qw(launch_verdict);
+
 # ─── The reveal invariant ────────────────────────────────────────────────────
 #
 # Enforces the reveal-flag end-state decision (vault:
@@ -181,7 +184,7 @@ sub body { return $t->tx->res->body }
 subtest 'Challenge lane: raw isInstructor=1 does not reveal (stripped)' => sub {
 	my $jwt  = challenge_jwt();
 	my %base = (
-		challengeJWT  => $jwt, position => 0, problemSource => $pg_source,
+		challengeJWT  => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
 		submitAnswers => 1,    'AnSwEr0001' => '0',    # a wrong submit, so feedback is identical either way
 	);
 
@@ -199,7 +202,7 @@ subtest 'Challenge lane: raw isInstructor=1 does not reveal (stripped)' => sub {
 subtest 'Challenge lane: raw showCorrectAnswers=1 does not reveal (hard-zeroed)' => sub {
 	my $jwt  = challenge_jwt();
 	my %base = (
-		challengeJWT  => $jwt, position => 0, problemSource => $pg_source,
+		challengeJWT  => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
 		submitAnswers => 1,    'AnSwEr0001' => '0',
 	);
 
@@ -228,7 +231,7 @@ subtest 'Challenge lane: a TRUSTED isInstructor claim DOES reveal (the convenien
 	$t->post_ok(
 		'/render-api', { Accept => 'application/json' },
 		form => {
-			challengeJWT => $jwt, position => 0, problemSource => $pg_source,
+			challengeJWT => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
 			submitAnswers => 1, 'AnSwEr0001' => '0',
 		}
 	)->status_is(200);
@@ -394,7 +397,7 @@ subtest 'Feedback flags do not leak reveal content' => sub {
 	$t->post_ok(
 		'/render-api', { Accept => 'application/json' },
 		form => {
-			challengeJWT => $jwt, position => 0, problemSource => $pg_source,
+			challengeJWT => $jwt, verdict_signed => launch_verdict(), position => 0, problemSource => $pg_source,
 			submitAnswers => 1, 'AnSwEr0001' => '42',
 			showPartialCorrectAnswers => 1, showScoreSummary => 1,
 		}

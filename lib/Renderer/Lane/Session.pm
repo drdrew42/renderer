@@ -7,10 +7,13 @@ package Renderer::Lane::Session;
 #   * Decode under webworkJWTsecret. No issuer check — a valid HMAC under
 #     the shared secret IS the provenance proof; iss was only ever a
 #     hostname coupling (see LibreTexts Decisions D-003 / v2.0.4).
-#   * Security-sensitive claims always win over raw params (prevents
-#     student-side claw-back of isInstructor / answersSubmitted, plus
-#     showCorrectAnswers backward-compat).
-#   * For all other claims, raw params win (current responses vs prior).
+#   * Every session-state claim (SESSION_STATE_CLAIMS) wins over a raw
+#     param of the same name — raw input is the lowest priority (WW3-205).
+#   * The student's answer fields are the exception: the answer labels a
+#     problem-lane session keeps from KEPT_EXTRA_ANSWERS are prior
+#     responses, and the current render's raw answers win over them.
+#   * A raw challengeJWT must be byte-equal to the session's embedded
+#     challenge_jwt (400 otherwise) — a session binds its play definition.
 #   * The body problemJWT comes from the session's nested ("matryoshka")
 #     claim. A sidecar problemJWT submitted top-level in tandem is NOT
 #     discarded: if it differs from the nested token it is stashed and its
@@ -34,7 +37,9 @@ no warnings qw(experimental::signatures);
 use Crypt::JWT qw(decode_jwt);
 
 use Renderer::Lane::Problem qw(decode_claims);
-use Renderer::Constants     qw(SOURCE_OVERRIDE_FIELDS);
+use Renderer::Constants     qw(SOURCE_OVERRIDE_FIELDS SESSION_STATE_CLAIMS);
+
+my %SESSION_STATE_CLAIM = map { $_ => 1 } SESSION_STATE_CLAIMS;
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(apply_prefix apply_source_override);
@@ -59,9 +64,12 @@ sub apply_prefix ($c, $params) {
 		return $c->credential_error($@);
 	};
 
-	# Security-sensitive claims always win over raw params.
-	for (qw(isInstructor showCorrectAnswers answersSubmitted)) {
-		$params->{$_} = $claims->{$_} if exists $claims->{$_};
+	# A session binds its play definition: a raw challengeJWT alongside it
+	# must be the session's own embedded challenge_jwt, byte for byte.
+	if (defined $params->{challengeJWT}) {
+		my $embedded = $claims->{challenge_jwt};
+		return $c->exception('challengeJWT does not match the session.', 400)
+			unless defined $embedded && $params->{challengeJWT} eq $embedded;
 	}
 
 	# Capture any sidecar (top-level) problemJWT before the nested one takes
@@ -71,10 +79,15 @@ sub apply_prefix ($c, $params) {
 	my $sidecar = delete $params->{problemJWT};
 	my $nested  = $claims->{problemJWT};
 
-	# Bulk merge: raw params win for everything else (current responses
-	# beat prior). problemJWT must come from session for consistency.
+	# Merge: session-state claims replace raw params; answer fields keep the
+	# raw (current) response and fall back to the session's prior one.
+	# problemJWT comes from the session for consistency.
 	foreach my $key (keys %$claims) {
-		$params->{$key} //= $claims->{$key};
+		if ($SESSION_STATE_CLAIM{$key}) {
+			$params->{$key} = $claims->{$key};
+		} else {
+			$params->{$key} //= $claims->{$key};
+		}
 	}
 
 	if (defined $sidecar && defined $nested && $sidecar ne $nested) {
