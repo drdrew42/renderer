@@ -150,14 +150,7 @@ subtest 'problemJWT: a selector containing } cannot open a new rule (WW3-R69)' =
 
 # ─── Raw-param rejection ───────────────────────────────────────────────────
 
-# hideElements is not on SENSITIVE_PARAMS (it's not security-sensitive — caller
-# can already toggle iframe styles via css-message.js). So a raw-param submission
-# *would* reach the template. This test documents that the declarative path
-# works equivalently for raw form submissions when no JWT is present, which
-# matches the legacy css-message.js capability boundary.
-#
-# If at some point we want to restrict hideElements to JWT-bearing requests
-# only (e.g. add it to SENSITIVE_PARAMS), this test will flip and serve as
-# the regression sentinel.
+# hideElements is on SENSITIVE_PARAMS (WW3-R69): raw input is stripped on every
+# non-peer lane. t/integrator_settings.t covers it per lane.
 
 done_testing();

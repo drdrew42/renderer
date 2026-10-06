@@ -11,7 +11,7 @@ BEGIN {
 }
 
 # Integrator settings — baseURL, formURL / formAction, extra_header_text,
-# noCache — land from a token claim or a peer body and are stripped from raw
+# noCache, hideElements — land from a token claim or a peer body and are stripped from raw
 # input on every other lane. answers_submitted, PG's grader argument, is
 # stripped from every source (WW3-R69).
 #
@@ -73,6 +73,7 @@ sub problem_jwt {
 }
 
 sub challenge_jwt {
+	my (%claims) = @_;
 	return encode_jwt(
 		payload => {
 			aud              => $ENV{SITE_HOST},
@@ -91,6 +92,7 @@ sub challenge_jwt {
 			},
 			render_permissions => { isInstructor => 0, showCorrectAnswers => 0 },
 			answer_url         => 'http://127.0.0.1:9999/fake-answer-callback',
+			%claims,
 		},
 		key => $ENV{problemJWTsecret},
 		alg => 'HS256',
@@ -191,6 +193,34 @@ subtest 'peer lane: integrator settings in the signed body land' => sub {
 
 	peer_post(problemSource => $pg_source, problemSeed => 1234, outputFormat => 'default', formAction => "$evil/peer");
 	$t->content_like(qr{action="\Q$evil\E/peer"}, 'formAction is renamed to formURL and sets the form action');
+};
+
+# ─── hideElements: claim-only on every non-peer lane ───────────────────────
+
+my $hide_probe = qr{<style>[^<]*\.hide-probe[^<]*display:\s*none};
+my @hide       = (hideElements => [ '.hide-probe', '.hide-probe-2' ]);
+
+for my $name (sort keys %lane) {
+	subtest "$name lane: raw hideElements is inert" => sub {
+		form_post($lane{$name}->(), @hide);
+		$t->content_unlike($hide_probe, 'repeated raw hideElements keys do not reach the hide-style block');
+	};
+}
+
+subtest 'hideElements: claim and peer values land' => sub {
+	form_post(problemJWT => problem_jwt(@hide));
+	$t->content_like($hide_probe, 'problem-lane claim');
+
+	form_post(
+		challengeJWT   => challenge_jwt(@hide),
+		verdict_signed => launch_verdict(),
+		position       => 0,
+		problemSource  => $pg_source
+	);
+	$t->content_like($hide_probe, 'challenge-lane claim');
+
+	peer_post(problemSource => $pg_source, problemSeed => 1234, outputFormat => 'default', @hide);
+	$t->content_like($hide_probe, 'peer body');
 };
 
 # ─── answers_submitted is stripped from every source ───────────────────────
