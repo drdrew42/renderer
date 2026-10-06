@@ -83,7 +83,7 @@ position	grade	review	raw	overridden		lane sets it from the claim
 state	grade	*	raw	inert		a form value is a string; the lane reads a hash	
 AnSwEr*	grade	problem,challenge	raw	honored		the student's answers	
 AnSwEr*	grade	review	raw	overridden		submitted_answers covers every answer PG defines	
-MaThQuIlL_AnSwEr*	grade	review	raw	overridden	honored	survives when the claim carries no MathQuill twin for that blank; display only	
+MaThQuIlL_AnSwEr*	grade	review	raw	inert		a blank whose claim carries no MathQuill twin renders no MathQuill field, so the raw value has nothing to fill (Drew, 2026-10-06)	
 submitAnswers	grade	problem,challenge	raw	honored			
 submitAnswers	grade	review	raw	overridden		lane sets 1	
 answersSubmitted	grade	*	raw	honored		OR'd with submitAnswers; session claim wins	
