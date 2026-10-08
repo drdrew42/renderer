@@ -127,8 +127,8 @@ sub submission_jwt {
 	);
 }
 
-# The WW3 sidecar: `grants` names what it unlocks. Pass grants => undef for a
-# sidecar minted before `grants` existed, which carried showCorrectAnswers and
+# The WW3 sidecar: `grants` names what it unlocks. grants => undef builds one
+# with no grants claim, carrying the retired showCorrectAnswers and
 # showSolutions claims instead.
 sub reveal_jwt {
 	my (%opt) = @_;
@@ -280,10 +280,10 @@ for my $lane (qw(challenge review)) {
 		dumps($r->('broken', revealJWT => $sidecar), 'both');
 	};
 
-	subtest "\u$lane lane: a sidecar with no grants claim is a reveal" => sub {
+	subtest "\u$lane lane: a sidecar with no grants claim grants nothing" => sub {
 		my $sidecar = reveal_jwt(grants => undef);
-		like($r->('working', revealJWT => $sidecar), $REVEAL, 'legacy sidecar: the solution renders');
-		no_dump($r->('broken', revealJWT => $sidecar), 'legacy sidecar');
+		unlike($r->('working', revealJWT => $sidecar), $REVEAL, 'no grants claim: no reveal');
+		no_dump($r->('broken', revealJWT => $sidecar), 'no grants claim');
 	};
 
 	subtest "\u$lane lane: a sidecar bound to another play grants nothing" => sub {

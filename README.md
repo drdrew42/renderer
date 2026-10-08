@@ -208,7 +208,7 @@ Parameters that control the structure and templating of the response.
 | ------------ | ------ | ------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | language     | string | en            | Language to render the problem in (if supported)              | affects the translation of template strings, _not_ actual problem content                                               |
 | \_format     | string | 'html'        | Determine how the response is _structured_ ('html' or 'json') | usually 'html' if the user is directly interacting with the renderer, 'json' if your CMS sits between user and renderer |
-| outputFormat | string | 'default'     | Determines how the problem should be formatted                | 'default', 'static', 'PTX', 'raw', or                                                                                   |
+| outputFormat | string | 'default'     | Determines how the problem should be formatted                | 'default', 'simple', 'static' or 'json'; PreTeXt output is its own endpoint, `POST /render-ptx`                          |
 | displayMode  | string | 'MathJax'     | How to prepare math content for display                       | 'MathJax' or 'ptx'                                                                                                      |
 
 #### User Interactions
@@ -219,7 +219,6 @@ Requesting `outputFormat: 'static'` will prevent any buttons from being included
 
 | Key                    | Type             | Default Value | Description                                  | Notes |
 | ---------------------- | ---------------- | ------------- | -------------------------------------------- | ----- |
-| hidePreviewButton      | number (boolean) | false         | "Preview My Answers" is enabled by default   |       |
 | hideCheckAnswersButton | number (boolean) | false         | "Submit Answers" is enabled by default       |       |
 
 The rendered problem has one interact button. Correct answers, hints and solutions reach a student through the
@@ -229,14 +228,13 @@ them, from a form field or a JWT claim alike.
 
 #### Content
 
-Control what is shown to the user: hints, solutions, attempt results, scores, etc.
+Control what is shown to the user: attempt results, scores, etc. Hints and solutions are not request parameters: an
+`isInstructor` render shows both, a signed reveal sidecar shows solutions, and every other render shows neither.
 
 | Key               | Type             | Default Value  | Description                                                                     | Notes                                                                             |
 | ----------------- | ---------------- | -------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | permissionLevel   | number           | 0              | **DEPRECATED.** Use `isInstructor` instead.                                     |                                                                                   |
 | isInstructor      | number (boolean) | 0              | Is the user viewing the problem an instructor or not.                           | Used by PG to determine if scaffolds can be allowed to be open among other things |
-| showHints         | number (boolean) | 1              | Whether or not to show hints                                                    |                                                                                   |
-| showSolutions     | number (boolean) | `isInstructor` | Whether or not to show the solutions                                            |                                                                                   |
 | hideAttemptsTable | number (boolean) | 0              | Hide the table of answer previews/results/messages                              | If you have a replacement for flagging the submitted entries as correct/incorrect |
 | showSummary       | number (boolean) | 1              | Determines whether or not to show a summary of the attempt underneath the table | Only relevant if the Attempts Table is shown `hideAttemptsTable: false` (default) |
 | showComments      | number (boolean) | 0              | Renders author comment field at the end of the problem                          |                                                                                   |
@@ -293,15 +291,9 @@ None of the surfaces below are renderer bugs; they're parameters the renderer tr
 
 ### Surfaces that can leak correct answers
 
-These output formats include `answers.correct_ans` for every slot in the response, with **no internal gate**:
-
-| Parameter         | Value | Where the leak happens                                                                  |
-| ----------------- | ----- | --------------------------------------------------------------------------------------- |
-| `outputFormat`    | `raw` | `lib/WeBWorK/FormatRenderedProblem.pm:180` — emits the entire `$rh_result` as JSON      |
-| `outputFormat`    | `ptx` | `lib/WeBWorK/FormatRenderedProblem.pm:159` — builds `answerhashXML` from `answers`      |
-
-The `json` output format **is** internally gated (`FormatRenderedProblem.pm:289` — only includes `answers` when
-`isInstructor=1`), so it's safe as long as `isInstructor` is constrained.
+The `json` output format includes `answers` only when `isInstructor=1` (`lib/WeBWorK/FormatRenderedProblem.pm`), so
+it is safe as long as `isInstructor` is constrained. PreTeXt output, which carries an answer hash, is served only by
+`POST /render-ptx`.
 
 ### Surfaces that change the trust profile of a render
 

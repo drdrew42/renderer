@@ -39,9 +39,8 @@ our @GRANTS = qw(reveal debug);
 #   reveal — answers AND solutions, one grant.
 #   debug  — PG's debugging view (view_problem_debugging_info).
 #
-# The `grants` claim lists what the sidecar unlocks. A sidecar without one was
-# minted before grants existed and is a reveal; sidecars live minutes, so that
-# reading covers a deploy, nothing longer. Names outside @GRANTS grant nothing.
+# The `grants` claim lists what the sidecar unlocks. A sidecar without one, or
+# with names outside @GRANTS, grants nothing.
 sub verify ($c, $params, $expected_play_id) {
 	my $token = $params->{revealJWT};
 	return {} unless defined $token && length $token;
@@ -66,11 +65,9 @@ sub verify ($c, $params, $expected_play_id) {
 		return {};
 	}
 
-	return { reveal => 1 } unless exists $claims->{grants};
-
 	my $grants = $claims->{grants};
 	unless (ref $grants eq 'ARRAY') {
-		$c->log->info("revealJWT grants is not a list — not granting");
+		$c->log->info("revealJWT grants is absent or not a list — not granting");
 		return {};
 	}
 	my %named = map { $_ => 1 } grep { defined && !ref } @$grants;
