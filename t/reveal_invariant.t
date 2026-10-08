@@ -29,10 +29,10 @@ use TestHelper qw(launch_verdict stage_fixture_problems);
 #
 # This is WW3-R46's outstanding regression-guard + drift-test, generalized to
 # the whole taxonomy. It pins the enforcement at the LANE level, which is where
-# it lives: resolve_permissions itself trusts its input (it passes a student's
-# showCorrectAnswers=1 straight through — see permissions_resolver.t); the lanes
-# are what strip / hard-zero / claim-gate before the resolver ever runs. "Care
-# does not generalize; structure does."
+# it lives: resolve_permissions trusts its isInstructor input, so the lanes are
+# what strip / hard-zero / claim-gate it before the resolver ever runs. "Care
+# does not generalize; structure does." The retired showCorrectAnswers
+# (WW3-R67) is pinned on every lane and carrier in show_correct_answers_retired.t.
 #
 # Runs without a live OPL: the challenge and reView lanes name their problem by
 # pg_hash, and the fixture source is staged in the content cache under each
@@ -109,8 +109,7 @@ sub challenge_jwt {
 			},
 			answer_url => 'http://127.0.0.1:9999/fake-answer-callback',
 			# Baseline: reveal fully off. Overridable to install a trusted claim.
-			render_permissions =>
-				{ isInstructor => 0, showCorrectAnswers => 0, showHints => 0, showSolutions => 0 },
+			render_permissions => { isInstructor => 0, showHints => 0, showSolutions => 0 },
 			%overrides,
 		},
 		key => $ENV{problemJWTsecret},
@@ -164,12 +163,11 @@ sub reveal_jwt {
 	my (%claims) = @_;
 	return encode_jwt(
 		payload => {
-			aud                => $ENV{SITE_HOST},
-			iss                => $ENV{SITE_HOST},
-			play_id            => '11111111-1111-1111-1111-111111111111',
-			showCorrectAnswers => 1,
-			showSolutions      => 1,
-			exp                => time + 300,
+			aud     => $ENV{SITE_HOST},
+			iss     => $ENV{SITE_HOST},
+			play_id => '11111111-1111-1111-1111-111111111111',
+			grants  => ['reveal'],
+			exp     => time + 300,
 			%claims,
 		},
 		key => $ENV{problemJWTsecret},
@@ -203,7 +201,7 @@ subtest 'Challenge lane: raw isInstructor=1 does not reveal (stripped)' => sub {
 	is(length($elevated), length($baseline), 'byte-length identical to the un-elevated render');
 };
 
-subtest 'Challenge lane: raw showCorrectAnswers=1 does not reveal (hard-zeroed)' => sub {
+subtest 'Challenge lane: raw showCorrectAnswers=1 does not reveal (retired)' => sub {
 	my $jwt  = challenge_jwt();
 	my %base = (
 		challengeJWT   => $jwt,
@@ -220,7 +218,7 @@ subtest 'Challenge lane: raw showCorrectAnswers=1 does not reveal (hard-zeroed)'
 		->status_is(200);
 	my $elevated = body();
 
-	unlike($elevated, $ANSWER_MARK, 'showCorrectAnswers is hard-zeroed on the challenge lane');
+	unlike($elevated, $ANSWER_MARK, 'showCorrectAnswers reveals nothing on the challenge lane');
 	is(length($elevated), length($baseline), 'byte-length identical');
 };
 
@@ -229,10 +227,7 @@ subtest 'Challenge lane: a TRUSTED isInstructor claim DOES reveal (the convenien
 	# claim in render_permissions is signed by the orchestrator; a student
 	# cannot mint it. isInstructor resolves to revealAll, so the authored
 	# SOLUTION renders inline — the signal that the trusted-claim reveal path
-	# works. (correct_ans lives in the graded-submission answer table, populated
-	# by an explicit showCorrectAnswers on a student submit — see
-	# challenge_jwt.t — not by an instructor preview, which reveals the
-	# solution.)
+	# works.
 	my $jwt = challenge_jwt(render_permissions => { isInstructor => 1 });
 
 	$t->post_ok(
@@ -267,9 +262,8 @@ subtest 'Review lane: raw isInstructor=1 is hard-zeroed (no reveal)' => sub {
 };
 
 subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-state)' => sub {
-	# WW3-117 landed: raw showCorrectAnswers is hard-zeroed on this lane, so a
-	# student's own POST reveals nothing — the permission sidecar is the sole
-	# reveal path now.
+	# A student's own POST reveals nothing — the permission sidecar is the sole
+	# reveal path.
 	my $sub  = submission_jwt();
 	my %base = (submissionJWT => $sub);
 
@@ -279,7 +273,7 @@ subtest 'Review lane: raw showCorrectAnswers=1 does not reveal (WW3-117 end-stat
 	$t->post_ok('/render-api', form => { %base, showCorrectAnswers => 1 })->status_is(200);
 	my $with = length(body());
 
-	is($with, $baseline, 'raw showCorrectAnswers is hard-zeroed — no reveal without the sidecar');
+	is($with, $baseline, 'raw showCorrectAnswers reveals nothing — no reveal without the sidecar');
 };
 
 # ─── Review lane — the WW3-117 permission sidecar ────────────────────────────
@@ -347,13 +341,13 @@ subtest 'Review lane: a raw _reveal_grant injection does not reveal (stripped)' 
 	is(length(body()), $baseline, 'byte-identical — the flag was stripped');
 };
 
-# ─── Problem lane (LibreTexts) — showCorrectAnswers mode-gate ────────────────
+# ─── Problem lane (LibreTexts) ───────────────────────────────────────────────
 
-subtest 'Problem lane: raw showCorrectAnswers does not reveal on the custom default (WW3-R51)' => sub {
-	# The last raw reveal path left open on this lane: on the `custom` default
-	# (ADAPT's mode) a student could POST showCorrectAnswers=1 and read the
-	# canonical answer. Now gated on the resolved mode offering the button. Same
-	# mode, with and without the flag, isolates the reveal from any chrome delta.
+subtest 'Problem lane: raw showCorrectAnswers does not reveal on the custom default' => sub {
+	# On the `custom` default (ADAPT's mode) a student once could POST
+	# showCorrectAnswers=1 and read the canonical answer (WW3-R51); the flag is
+	# retired now (WW3-R67). Same mode, with and without the flag, isolates the
+	# reveal from any chrome delta.
 	my %base = (
 		problemJWT    => problem_jwt(),
 		submitAnswers => 1,
@@ -367,36 +361,8 @@ subtest 'Problem lane: raw showCorrectAnswers does not reveal on the custom defa
 		->status_is(200);
 	my $injected = body();
 
-	unlike($injected, $ANSWER_MARK, 'raw showCorrectAnswers does not reveal on custom (no offering bundle)');
+	unlike($injected, $ANSWER_MARK, 'raw showCorrectAnswers does not reveal on custom');
 	is(length($injected), length($baseline), 'byte-length identical to the un-revealed render');
-};
-
-subtest 'Problem lane: an offering-mode CLAIM keeps showCorrectAnswers working' => sub {
-	# The other half — the button's mechanism is not broken, only mode-gated. A
-	# no-stakes CLAIM (renderMode is claim-only on a grounded lane, WW3-R51 §0,
-	# so the mode is trusted) offers the button, and a student pressing it
-	# reveals. Compared under the SAME mode so the delta is the reveal, not the
-	# no-stakes chrome.
-	my $jwt  = problem_jwt(renderMode => 'no-stakes');
-	my %base = (
-		problemJWT    => $jwt,
-		submitAnswers => 1,
-		'AnSwEr0001'  => '0',
-	);
-
-	$t->post_ok('/render-api', { Accept => 'application/json' }, form => {%base})->status_is(200);
-	my $ns_baseline = body();
-
-	$t->post_ok('/render-api', { Accept => 'application/json' }, form => { %base, showCorrectAnswers => 1 })
-		->status_is(200);
-	my $revealed = body();
-
-	# Same mode, so the only difference is the flag: a content delta is the
-	# reveal, isolated. (reveal_reporting.t asserts the authoritative
-	# answerJWT.answers_shown=1 for the no-stakes case; here we pin that the
-	# affordance still lights on the render itself.)
-	cmp_ok(length($revealed), '>', length($ns_baseline),
-		'no-stakes honours showCorrectAnswers — the reveal renders');
 };
 
 # ─── Feedback flags are NOT reveal — do not over-retire them ─────────────────
@@ -430,9 +396,8 @@ subtest 'Feedback flags do not leak reveal content' => sub {
 #
 # * Problem lane (LibreTexts). Its raw-isInstructor-stripped reveal-negative and
 #   its trusted-claim / VPC-editor reveal-positive live in entry_gate.t (:188,
-#   :239). Its showCorrectAnswers mode-gate — the last raw reveal path here — is
-#   pinned above (WW3-R51). It KEEPS in-render reveal for a trusted isInstructor
-#   claim (Tier B): instructor reveal is revealAll, not this student flag.
+#   :239). It KEEPS in-render reveal for a trusted isInstructor claim (Tier B):
+#   instructor reveal is revealAll.
 # * The typed reveal endpoints (/hint, /solution, /answer) — source (b) of the
 #   invariant — are pinned in hint_solution_endpoints.t and answer_endpoint.t
 #   (valid typed token → content; wrong/absent typ → 401).

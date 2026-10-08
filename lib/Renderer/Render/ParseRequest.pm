@@ -39,7 +39,7 @@ use Renderer::Lane::Review;
 use Renderer::Lane::Peer;
 use Renderer::Lane::Ungrounded;
 use Renderer::Constants qw(
-	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS DEBUG_PARAMS
+	SENSITIVE_PARAMS ELEVATION_PARAMS RENDER_MODE_PARAMS TOKEN_CONTENT_PARAMS DEBUG_PARAMS RETIRED_PARAMS
 );
 use Renderer::Seed       qw(resolve_seed MALFORMED_SEED_MESSAGE);
 use Renderer::RenderMode qw(resolve_render_mode RATCHET);
@@ -69,6 +69,10 @@ sub dispatch ($c) {
 	# params after its own `answers_submitted => 1`, so a value from any source
 	# would replace it and the stock graders would score the submission 0.
 	delete $params{answers_submitted};
+
+	# Retired parameters (WW3-R67) are deleted here, after the lanes, from
+	# every source; see RETIRED_PARAMS.
+	delete @params{ +RETIRED_PARAMS };
 
 	# Mode resolution runs HERE — parent process, post-claim-merge, pre-fork.
 	# Flattens the renderMode intent claim into the primitive flag bundle so
@@ -262,9 +266,8 @@ sub _parse_envelope ($c, $params, $ctx) {
 		# (WW3-R44), so this exemption opens nothing on a student-facing
 		# instance.
 		#
-		# Stashed before deletion so Lane::Review can restore
-		# showCorrectAnswers, the one legitimate raw-form consumer left in
-		# the tree — an interim closed by WW3-117; see Lane::Review.
+		# Stashed before deletion so the ratchet can apply a raw
+		# isInstructor=0 after the mode resolves.
 		my $grounded =
 			defined $params->{problemJWT}
 			|| defined $params->{challengeJWT}

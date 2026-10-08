@@ -143,7 +143,7 @@ subtest 'every non-answer claim a minter writes is a session-state claim' => sub
 subtest 'every session-state claim is one a minter writes (or a held-over trust claim)' => sub {
 	my %written = map {%$_} values %minted;
 	my @unwritten =
-		grep { !exists $written{$_} } grep { $_ ne 'isInstructor' && $_ ne 'showCorrectAnswers' } SESSION_STATE_CLAIMS;
+		grep { !exists $written{$_} } grep { $_ ne 'isInstructor' } SESSION_STATE_CLAIMS;
 	is_deeply(\@unwritten, [], 'no stale entries in SESSION_STATE_CLAIMS');
 };
 

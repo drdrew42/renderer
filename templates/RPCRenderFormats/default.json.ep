@@ -32,8 +32,6 @@
 	% body_part700 => $formatName eq 'static' ? '' : join('', '<p>',
 		% $showCheckAnswersButton ? submit_button($interactLabel,
 			% name => 'WWsubmit', class => 'btn btn-primary mb-1') : '',
-		% $showCorrectAnswersButton ? submit_button($lh->maketext('Show Correct Answers'),
-			% name => 'WWcorrectAns', class => 'btn btn-primary mb-1') : '',
 		% '</p>'),
 	% body_part999 => '</form></div></div></div>'
 		% . ($showFooter

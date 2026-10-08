@@ -18,21 +18,20 @@ package Renderer::RenderMode;
 # layers compose; they don't conflict.
 #
 # Modes:
-#   default      — staked attempts, verdict per attempt. Reveal button hidden
-#                  AND the reveal itself refused (WW3-R46) — a coordinator
-#                  that wants one mints it out of band rather than asking
-#                  the render for it.
+#   default      — staked attempts, verdict per attempt.
 #   no-feedback  — score it, ship it, say nothing about correctness.
-#                  hideFeedback kill-switch + reveal button hidden + reveal
-#                  forced off for defense in depth.
-#   review       — past-attempt display; no resubmits. Reveal button hidden
-#                  and the reveal refused (WW3-R46). An instructor still
+#                  hideFeedback kill-switch.
+#   review       — past-attempt display; no resubmits. An instructor still
 #                  sees answers via isInstructor → revealAll, which the
 #                  permissions resolver applies after this bundle.
-#   no-stakes    — sandbox / drill / public widget. Reveal button shown.
+#   no-stakes    — sandbox / drill / public widget.
 #   preview      — author / library browse; isInstructor=1 → revealAll
 #                  bundle via the permissions resolver.
 #   custom       — passthrough. No primitives locked.
+#
+# No mode reveals answers to a student: the reveal reaches a render only
+# through isInstructor or a verified reveal sidecar (Renderer::Permissions),
+# and reaches a student through the content-fetch endpoints.
 #
 # Unknown / absent renderMode → treated as 'custom' (forward-compat).
 #
@@ -42,13 +41,6 @@ package Renderer::RenderMode;
 #      either direction;
 #   3. a raw value — set aside in $raw_ref before the lanes — applies only
 #      when it moves the value toward the stricter setting.
-# One interim exception: under a mode that offers the reveal (no-stakes,
-# preview), a raw showCorrectAnswers is the Show Correct Answers button's
-# click, and applies when no claim or lane has set the flag (WW3-R67 retires
-# the button and this exception with it).
-#
-# The remaining bundle primitive, showCorrectAnswersButton, is set by the
-# bundle outright.
 #
 # renderMode itself is policy: claim-only on grounded lanes
 # (RENDER_MODE_PARAMS, WW3-R51), so a student cannot pick the bundle.
@@ -73,7 +65,6 @@ use constant RENDER_MODES => [qw(default no-feedback review no-stakes preview cu
 use constant RATCHET => {
 	hideFeedback           => 1,
 	hideCheckAnswersButton => 1,
-	showCorrectAnswers     => 0,
 	isInstructor           => 0,
 };
 
@@ -81,49 +72,26 @@ use constant RATCHET => {
 # not listed flows through from $inputs_ref unchanged. 'custom' has an empty
 # bundle (full passthrough).
 my %BUNDLES = (
-	# WW3-R46: `showCorrectAnswers => 0` alongside the hidden button.
-	#
-	# Hiding a button is not refusing an action. These bundles used to
-	# suppress only `showCorrectAnswersButton`, so a caller who was never
-	# offered the reveal could still POST `showCorrectAnswers=1` and get
-	# the canonical answer — measured on the homelab 2026-08-05 against a
-	# student's own live challengeJWT.
-	#
-	# `no-feedback` already did this ("reveal forced off for defense in
-	# depth"); `default` and `review` did not. Same bundle table, same
-	# author, one function apart — which is the WW3-098 shape again.
 	'default' => {
-		hideFeedback             => 0,
-		hideCheckAnswersButton   => 0,
-		showCorrectAnswersButton => 0,
-		showCorrectAnswers       => 0,
+		hideFeedback           => 0,
+		hideCheckAnswersButton => 0,
 	},
 	'no-feedback' => {
-		hideFeedback             => 1,
-		hideCheckAnswersButton   => 0,
-		showCorrectAnswersButton => 0,
-		showCorrectAnswers       => 0,
+		hideFeedback           => 1,
+		hideCheckAnswersButton => 0,
 	},
-	# Instructor reView reaches the answers through isInstructor → revealAll
-	# in resolve_permissions, which runs AFTER this bundle and is not
-	# suppressed by it. What this closes is the student-supplied flag.
-	# WW3-117 removes the flag from the portal entirely.
 	'review' => {
-		hideFeedback             => 0,
-		hideCheckAnswersButton   => 1,
-		showCorrectAnswersButton => 0,
-		showCorrectAnswers       => 0,
+		hideFeedback           => 0,
+		hideCheckAnswersButton => 1,
 	},
 	'no-stakes' => {
-		hideFeedback             => 0,
-		hideCheckAnswersButton   => 0,
-		showCorrectAnswersButton => 1,
+		hideFeedback           => 0,
+		hideCheckAnswersButton => 0,
 	},
 	'preview' => {
-		hideFeedback             => 0,
-		hideCheckAnswersButton   => 0,
-		showCorrectAnswersButton => 1,
-		isInstructor             => 1,
+		hideFeedback           => 0,
+		hideCheckAnswersButton => 0,
+		isInstructor           => 1,
 	},
 	'custom' => {},
 );
@@ -137,8 +105,7 @@ sub resolve_render_mode ($inputs_ref, $raw_ref = {}) {
 	my $ratchet = RATCHET;
 
 	for my $k (sort keys %$bundle) {
-		if (exists $ratchet->{$k}) { $inputs_ref->{$k} //= $bundle->{$k} }
-		else                       { $inputs_ref->{$k} = $bundle->{$k} }
+		$inputs_ref->{$k} //= $bundle->{$k};
 	}
 
 	my @ignored;
@@ -146,8 +113,6 @@ sub resolve_render_mode ($inputs_ref, $raw_ref = {}) {
 		my $raw    = $raw_ref->{$k} ? 1 : 0;
 		my $strict = $ratchet->{$k};
 		if ($raw == $strict) {
-			$inputs_ref->{$k} = $raw;
-		} elsif ($k eq 'showCorrectAnswers' && $bundle->{showCorrectAnswersButton} && !defined $inputs_ref->{$k}) {
 			$inputs_ref->{$k} = $raw;
 		} elsif (($inputs_ref->{$k} ? 1 : 0) != $raw) {
 			push @ignored, $k;

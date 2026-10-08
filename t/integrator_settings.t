@@ -101,7 +101,7 @@ sub challenge_jwt {
 				is_done        => [ { name => 'student_finalized' } ],
 				selection      => 'student_picks',
 			},
-			render_permissions => { isInstructor => 0, showCorrectAnswers => 0 },
+			render_permissions => { isInstructor => 0 },
 			answer_url         => 'http://127.0.0.1:9999/fake-answer-callback',
 			%claims,
 		},

@@ -217,11 +217,15 @@ Control how the user is allowed to interact with the rendered problem.
 
 Requesting `outputFormat: 'static'` will prevent any buttons from being included in the rendered output, regardless of the following options.
 
-| Key                      | Type             | Default Value  | Description                                                                                  | Notes |
-| ------------------------ | ---------------- | -------------- | -------------------------------------------------------------------------------------------- | ----- |
-| hidePreviewButton        | number (boolean) | false          | "Preview My Answers" is enabled by default                                                   |       |
-| hideCheckAnswersButton   | number (boolean) | false          | "Submit Answers" is enabled by default                                                       |       |
-| showCorrectAnswersButton | number (boolean) | `isInstructor` | "Show Correct Answers" is disabled by default, enabled if `isInstructor` is true (see below) |       |
+| Key                    | Type             | Default Value | Description                                  | Notes |
+| ---------------------- | ---------------- | ------------- | -------------------------------------------- | ----- |
+| hidePreviewButton      | number (boolean) | false         | "Preview My Answers" is enabled by default   |       |
+| hideCheckAnswersButton | number (boolean) | false         | "Submit Answers" is enabled by default       |       |
+
+The rendered problem has one interact button. Correct answers, hints and solutions reach a student through the
+typed-token endpoints `POST /render-api/answer`, `/render-api/hint` and `/render-api/solution`; an `isInstructor` render
+shows them inline. `showCorrectAnswers` and `showCorrectAnswersButton` are retired: the renderer accepts and ignores
+them, from a form field or a JWT claim alike.
 
 #### Content
 
@@ -258,7 +262,7 @@ the problem rendered by this JWT cannot override this setting by including `isIn
 This JWT encapsulates a user's attempt on a problem, including:
 
 - the text and LaTeX versions of each answer entry
-- count of incorrect attempts (stopping after a correct attempt, or after `showCorrectAnswers` is used)
+- count of correct and incorrect attempts
 - the problemJWT
 
 If stored (see next), this JWT can be submitted as the sole request parameter, and the response will effectively restore
@@ -304,7 +308,6 @@ The `json` output format **is** internally gated (`FormatRenderedProblem.pm:289`
 | Parameter           | Risk if URL-injectable                                                                          |
 | ------------------- | ----------------------------------------------------------------------------------------------- |
 | `isInstructor`      | Toggles answer inclusion in `outputFormat=json`; also flips defaults for `showSolutions` etc.   |
-| `showCorrectAnswers`| Renders the correct-answer reveal directly in the result summary                                |
 | `problemSourceURL`  | Redirects source-fetch to an arbitrary URL (deployer should pin to their own OPL/library)       |
 | `problemSource`     | Lets the caller execute arbitrary PG; intended in the peer-signed lane, hostile in any other    |
 | `JWTanswerURL`      | Where answerJWTs (score + sessionJWT) are POSTed — **the renderer already gates this internally to JWT-only** since the consequence (signing scores to an attacker-controlled endpoint) is severe. The other rows are not internally gated. |

@@ -229,7 +229,7 @@ Storable-serialized `$ret` hashref. So `$inputs_ref` mutations, `$c->stash` assi
 package globals set inside `standaloneRenderer` (or anything it calls) are **invisible to
 the parent** — and the parent re-reads `$inputs_ref` afterward in
 `WeBWorK::FormatRenderedProblem::formatRenderedProblem` for the format-layer primitives
-(`showCorrectAnswersButton`, `hideCheckAnswersButton`, `outputFormat`, `_*` stash fields, …).
+(`hideCheckAnswersButton`, `interactLabel`, `outputFormat`, `_*` stash fields, …).
 
 > **Rule:** anything that mutates request state and must be visible *both* inside the
 > subprocess *and* in the parent afterward has to run in the controller layer,

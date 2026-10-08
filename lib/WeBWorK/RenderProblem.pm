@@ -218,20 +218,16 @@ sub standaloneRenderer {
 	# Render-mode resolution happened upstream in
 	# Renderer::Render::ParseRequest::dispatch — pre-fork, parent process.
 	# By the time we get here, $inputs_ref already carries the resolved
-	# primitive flags (hideFeedback, hideCheckAnswersButton,
-	# showCorrectAnswersButton, isInstructor, etc.). Mode-aware logic ends
-	# at the dispatch layer; everything from this point on reads primitives.
+	# primitive flags (hideFeedback, hideCheckAnswersButton, isInstructor,
+	# etc.). Mode-aware logic ends at the dispatch layer; everything from this
+	# point on reads primitives.
 
 	# Permission model — see Renderer::Permissions for the full rule set.
 	# Single decision point; no defaulting logic in this function. PG's 0/2
 	# magic value for showCorrectAnswers is the only translation that stays
 	# here, at the WeBWorK::PG->new() call boundary below.
 	#
-	# Session lifecycle (non-instructor only):
-	# - answerJWTs flow on every submit. The LMS owns due-date / scoring.
-	# - Session locks when: student scores 100% OR showCorrectAnswers
-	#   (config-gated, see WW3-R02 / generateJWTs in Render.pm).
-	# - After lock: no answerJWT, no session updates.
+	# answerJWTs flow on every submit. The LMS owns due-date / scoring.
 	my $perms              = resolve_permissions($inputs_ref);
 	my $isInstructor       = $perms->{isInstructor};
 	my $showCorrectAnswers = $perms->{showCorrectAnswers};

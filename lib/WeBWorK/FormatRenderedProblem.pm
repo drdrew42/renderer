@@ -109,12 +109,11 @@ sub formatRenderedProblem {
 	# default / simple / static all render the same template: it is
 	# `RPCRenderFormats/default` for every format except json (below), so any
 	# non-json format lands there while keeping its own name. `static` also
-	# hides the two buttons and — via the data-static stamp the template reads
-	# from formatName — renders non-interactive (WW3-121). Caller's explicit
-	# per-button flags win; translate only when the flag isn't already set.
+	# hides the interact button and — via the data-static stamp the template
+	# reads from formatName — renders non-interactive (WW3-121). A caller's
+	# explicit flag wins; translate only when the flag isn't already set.
 	if ($formatName eq 'static') {
-		$inputs_ref->{hideCheckAnswersButton}   //= 1;
-		$inputs_ref->{showCorrectAnswersButton} //= 0;
+		$inputs_ref->{hideCheckAnswersButton} //= 1;
 	}
 
 	# Add JS files requested by problems via ADD_JS_FILE() in the PG file.
@@ -161,8 +160,7 @@ sub formatRenderedProblem {
 	my %PROBLEM_LANG_AND_DIR = get_problem_lang_and_dir($rh_result->{flags}, 'auto:en:ltr', $formLanguage);
 	my $PROBLEM_LANG_AND_DIR = join(' ', map {qq{$_="$PROBLEM_LANG_AND_DIR{$_}"}} keys %PROBLEM_LANG_AND_DIR);
 
-	my $submitMode      = defined($inputs_ref->{submitAnswers}) || $inputs_ref->{answersSubmitted} || 0;
-	my $showCorrectMode = defined($inputs_ref->{showCorrectAnswers}) || 0;
+	my $submitMode = defined($inputs_ref->{submitAnswers}) || $inputs_ref->{answersSubmitted} || 0;
 	# A problemUUID should be added to the request as a parameter.  It is used by PG to create a proper UUID for use in
 	# aliases for resources.  It should be unique for a course, user, set, problem, and version.
 	my $problemUUID   = $inputs_ref->{problemUUID}   // '';
@@ -182,7 +180,7 @@ sub formatRenderedProblem {
 	my $resultSummary = '';
 	if (!$renderErrorOccurred
 		&& $showSummary
-		&& ($submitMode || $showCorrectMode)
+		&& $submitMode
 		&& $problemResult->{summary})
 	{
 		$resultSummary = $c->c(
@@ -228,10 +226,7 @@ sub formatRenderedProblem {
 		# via the tokens block, not here.
 		#
 		# Permissions block is the resolver's view (renderer decision),
-		# not raw inputs — instructor mode's default-on rules now show
-		# correctly here. Was a latent bug pre-R36: instructors with no
-		# explicit showCorrectAnswers would see 0 in this block while
-		# the actual render resolved to 1.
+		# not raw inputs.
 		my $perms = Renderer::Permissions::resolve_permissions($inputs_ref);
 		my $debug = {
 			lane           => $trust_lane,
@@ -318,32 +313,30 @@ sub formatRenderedProblem {
 	my %template_params = (
 		template => 'RPCRenderFormats/default',
 		$formatName eq 'json' ? (format => 'json') : (),
-		formatName               => $formatName,
-		lh                       => $lh,
-		rh_result                => $rh_result,
-		SITE_URL                 => $SITE_URL,
-		FORM_ACTION_URL          => $FORM_ACTION_URL,
-		parent_origin            => $parent_origin,
-		trust_lane               => $trust_lane,
-		render_error             => $renderErrorOccurred ? 1 : 0,
-		COURSE_LANG_AND_DIR      => get_lang_and_dir($formLanguage),
-		PROBLEM_LANG_AND_DIR     => $PROBLEM_LANG_AND_DIR,
-		third_party_css          => \@third_party_css,
-		extra_css_files          => \@extra_css_files,
-		third_party_js           => \@third_party_js,
-		extra_js_files           => \@extra_js_files,
-		problemText              => $problemText,
-		extra_header_text        => $inputs_ref->{extra_header_text} // '',
-		hideElementsCSS          => $hideElementsCSS,
-		resultSummary            => $resultSummary,
-		showSummary              => $showSummary,
-		showScoreSummary         => $showScoreSummary,
-		showCheckAnswersButton   => $inputs_ref->{hideCheckAnswersButton} ? 0 : 1,
-		interactLabel            => $interactLabel,
-		showCorrectAnswersButton => $inputs_ref->{showCorrectAnswersButton}
-			// ($inputs_ref->{isInstructor} ? 1 : 0),
-		showFooter   => $inputs_ref->{showFooter} // 0,
-		pretty_print => \&pretty_print,
+		formatName             => $formatName,
+		lh                     => $lh,
+		rh_result              => $rh_result,
+		SITE_URL               => $SITE_URL,
+		FORM_ACTION_URL        => $FORM_ACTION_URL,
+		parent_origin          => $parent_origin,
+		trust_lane             => $trust_lane,
+		render_error           => $renderErrorOccurred ? 1 : 0,
+		COURSE_LANG_AND_DIR    => get_lang_and_dir($formLanguage),
+		PROBLEM_LANG_AND_DIR   => $PROBLEM_LANG_AND_DIR,
+		third_party_css        => \@third_party_css,
+		extra_css_files        => \@extra_css_files,
+		third_party_js         => \@third_party_js,
+		extra_js_files         => \@extra_js_files,
+		problemText            => $problemText,
+		extra_header_text      => $inputs_ref->{extra_header_text} // '',
+		hideElementsCSS        => $hideElementsCSS,
+		resultSummary          => $resultSummary,
+		showSummary            => $showSummary,
+		showScoreSummary       => $showScoreSummary,
+		showCheckAnswersButton => $inputs_ref->{hideCheckAnswersButton} ? 0 : 1,
+		interactLabel          => $interactLabel,
+		showFooter             => $inputs_ref->{showFooter} // 0,
+		pretty_print           => \&pretty_print,
 	);
 
 	# outputFormat=json — the WW2-compatibility template. Carries sessionJWT

@@ -10,6 +10,7 @@ our @EXPORT_OK = qw(
 	RENDER_MODE_PARAMS
 	TOKEN_CONTENT_PARAMS
 	DEBUG_PARAMS
+	RETIRED_PARAMS
 	DEFAULT_SEED
 	SEED_DEFAULTED_WARNING
 	SOURCE_OVERRIDE_FIELDS
@@ -86,32 +87,13 @@ use constant SENSITIVE_PARAMS => qw(
 # Care does not generalize; structure does. Stripping here means a new
 # lane inherits the protection by existing, rather than by its author
 # remembering.
-#
-# showCorrectAnswers is deliberately NOT in this list. It is the "Show
-# Correct Answers" BUTTON's own mechanism — the rendered form posts it back
-# when a student presses the button the mode bundle chose to display.
-# Stripping it would break that affordance.
-#
-# Each lane handles it according to what that lane is for:
-#
-#   Lane::Challenge — hard-zeroed, claim-or-nothing. Mid-play, live
-#     scoring.
-#   Lane::Review    — hard-zeroed. The reveal arrives only through the
-#     verified permission sidecar (Renderer::RevealSidecar, WW3-117).
-#   Lane::Problem   — LibreTexts'. The raw flag is honoured only under an
-#     offering render mode (WW3-R51). There isInstructor is an
-#     AUTHORING AND BROWSING mode switch rather than a student-facing
-#     permission: reveal content reaches ADAPT out of band via
-#     /render-api/hint, /solution and /answer, so a student interaction
-#     never needs these flags at all.
 use constant ELEVATION_PARAMS => qw(
 	isInstructor
 );
 
 # Render-MODE selectors — a renderMode picks a primitive-flag bundle
-# (Renderer::RenderMode), and two bundles ELEVATE: `preview` sets
-# isInstructor=1 (→ revealAll) and `preview`/`no-stakes` set
-# showCorrectAnswersButton=1. So a raw `renderMode=preview` re-derives the very
+# (Renderer::RenderMode), and the `preview` bundle ELEVATES: it sets
+# isInstructor=1 (→ revealAll). So a raw `renderMode=preview` re-derives the very
 # isInstructor that ELEVATION_PARAMS strips — the WW3-R46 defect class, one
 # indirection over. Measured 2026-08-12 on the homelab: a student's own
 # challengeJWT plus a raw `renderMode=preview` resolved to revealAll mid-play
@@ -173,6 +155,17 @@ use constant DEBUG_PARAMS => qw(
 	view_problem_debugging_info
 );
 
+# Retired parameters (WW3-R67): the in-render answer reveal and its button.
+# Answers reach a render through isInstructor or a verified reveal sidecar
+# (Renderer::Permissions) and reach a student through /render-api/answer.
+# Deleted after the lanes from every source — raw, token claim, session claim
+# and peer body — so a sender that still includes them renders exactly as if
+# it had not; LibreTexts, for one, signs showCorrectAnswersButton=0.
+use constant RETIRED_PARAMS => qw(
+	showCorrectAnswers
+	showCorrectAnswersButton
+);
+
 # The seed a render uses when its request names none, absent or empty, on every
 # lane (Renderer::Seed).
 use constant DEFAULT_SEED => 1234;
@@ -202,8 +195,8 @@ use constant SOURCE_OVERRIDE_FIELDS => qw(
 # claim the two minters write (WeBWorK::RenderProblem generateJWTs for the
 # problem lane, generatePlaySessionJWT and WeBWorK::VerdictJWT for the
 # challenge lane) other than the answer labels generateJWTs copies from PG's
-# KEPT_EXTRA_ANSWERS. isInstructor and showCorrectAnswers are the claims
-# Lane::Session has always held over raw input. Lane::Session applies each of
+# KEPT_EXTRA_ANSWERS. isInstructor is the claim Lane::Session has always held
+# over raw input. Lane::Session applies each of
 # these over a raw param of the same name; any other session claim is a
 # student answer field, and the current render's raw value for it wins
 # (WW3-205). t/session_precedence.t pins this list to the minters.
@@ -219,7 +212,6 @@ use constant SESSION_STATE_CLAIMS => qw(
 	numIncorrect
 	answersSubmitted
 	isInstructor
-	showCorrectAnswers
 	challenge_jwt
 	state
 	mint_sequence

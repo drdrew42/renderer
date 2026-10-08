@@ -22,15 +22,8 @@ package Renderer::Lane::Review;
 #     is read-only; the late emission gate naturally short-circuits because
 #     no JWTanswerURL is ever set.
 #
-# Button-hide flags (hideCheckAnswersButton / showCorrectAnswersButton) ride
-# as raw form params from the portal — display preferences, not security
-# claims.
-#
-# showCorrectAnswers is a security claim: on reView the student holds their
-# own submissionJWT, so a raw form field would be the only thing between them
-# and the answers. The lane hard-zeroes it, and the reveal arrives only
-# through the verified permission sidecar (_reveal_grant, WW3-117) — see
-# apply below.
+# The reveal arrives only through the verified permission sidecar
+# (_reveal_grant, WW3-117) — see apply below.
 #
 # view_problem_debugging_info likewise arrives only through the sidecar's
 # `debug` grant (WW3-R58).
@@ -116,15 +109,6 @@ sub apply ($c, $params) {
 	# and is NOT recoverable here: the submissionJWT carries no role claim,
 	# and nothing in the reView flow has ever legitimately supplied one.
 	$params->{isInstructor} = 0;
-
-	# showCorrectAnswers is hard-zeroed on this lane (WW3-117): the reView reveal
-	# now arrives only through the verified permission sidecar above
-	# (_reveal_grant), never a raw form field the student controls. A student
-	# adding showCorrectAnswers to their own POST reveals nothing — the sidecar
-	# is the sole reveal path, which closes the R46-class interim. The claim
-	# path mirrors Lane::Challenge: hard-zero here, re-enable via the trusted
-	# grant in resolve_permissions.
-	$params->{showCorrectAnswers} = 0;
 
 	$c->stash(_trust_lane => 'review');
 	return 1;

@@ -228,27 +228,6 @@ subtest 'grounded request: raw isInstructor=1 is stripped' => sub {
 	is(length($elevated), length($baseline), 'byte-identical to the un-elevated render');
 };
 
-subtest 'mode bundles: default and review refuse the reveal, not just the button' => sub {
-	# The bundle-level half of WW3-R46. Kept here rather than only in
-	# render_mode.t because the bundles are only half the story: they bite
-	# only when a caller opts into a mode, and WW3 sends renderMode only
-	# for library preview. The challenge lane's own hard-zero is what
-	# closes it for play — see Lane::Challenge.
-	require Renderer::RenderMode;
-
-	for my $mode (qw(default review)) {
-		my $i = { renderMode => $mode };
-		Renderer::RenderMode::resolve_render_mode($i, { showCorrectAnswers => 1 });
-		is($i->{showCorrectAnswers}, 0, "$mode bundle refuses a caller-supplied reveal");
-	}
-
-	for my $mode (qw(no-stakes preview)) {
-		my $i = { renderMode => $mode };
-		Renderer::RenderMode::resolve_render_mode($i, { showCorrectAnswers => 1 });
-		is($i->{showCorrectAnswers}, 1, "$mode still offers it");
-	}
-};
-
 # The CHALLENGE and REVIEW lane guards live in t/reveal_invariant.t — WW3-R46's
 # regression guard and drift test, generalized to the whole reveal invariant
 # (per lane x flag). The subtest above stays here as the Lane::Problem half.

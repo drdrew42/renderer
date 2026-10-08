@@ -49,14 +49,21 @@ subtest 'student: everything off by default' => sub {
 	is($p->{showHints},          0, 'showHints hardwired off (use /render-api/hint)');
 };
 
-subtest 'student: showCorrectAnswers from input, solutions/hints stay off' => sub {
+subtest 'student: a retired showCorrectAnswers input reveals nothing (WW3-R67)' => sub {
 	my $p = resolve_permissions({
 		isInstructor       => 0,
 		showCorrectAnswers => 1,
 	});
-	is($p->{showCorrectAnswers}, 1, 'correct answers shown');
+	is($p->{showCorrectAnswers}, 0, 'correct answers stay off');
 	is($p->{showSolutions},      0, 'solutions still hardwired off');
 	is($p->{showHints},          0, 'hints still hardwired off');
+};
+
+subtest 'student: a verified reveal grant shows answers and solutions, never hints' => sub {
+	my $p = resolve_permissions({ isInstructor => 0, _reveal_grant => 1 });
+	is($p->{showCorrectAnswers}, 1, 'answers on');
+	is($p->{showSolutions},      1, 'solutions on');
+	is($p->{showHints},          0, 'hints stay off');
 };
 
 subtest 'student: inbound showSolutions/showHints are ignored' => sub {

@@ -22,16 +22,17 @@ package Renderer::Permissions;
 #     wants the "what would a student see" view, mint a JWT with
 #     isInstructor=0 instead of trying to suppress per-flag.
 #
-#   Student (assessed): nothing revealed by default. showCorrectAnswers
-#     is the only in-render reveal trigger (the "Show Correct Answers"
-#     button). Hints and solutions are NEVER rendered in the main
-#     response — `showHints` and `showSolutions` are hardwired to 0
-#     regardless of inbound. Callers wanting hint or solution content
-#     must use the dedicated `/render-api/hint` and `/render-api/solution`
-#     endpoints, which are gated by typed-JWT and minted policy-side by
-#     the LMS / orchestrator. This minimizes the cheat surface: the
-#     student-facing render carries only the problem, never the canonical
-#     answer derivation.
+#   Student (assessed): nothing revealed. Answers and solutions reach a
+#     student render only through a verified reveal sidecar (_reveal_grant);
+#     hints never do. Callers wanting answer, hint or solution content for a
+#     student use the dedicated `/render-api/answer`, `/render-api/hint` and
+#     `/render-api/solution` endpoints, which are gated by typed-JWT and
+#     minted policy-side by the LMS / orchestrator. This minimizes the cheat
+#     surface: the student-facing render carries only the problem, never the
+#     canonical answer derivation.
+#
+# The three show* outputs are PG's translator options of the same names,
+# derived from isInstructor and the reveal grant alone (WW3-R67).
 #
 # The `isInstructor` field is the mode switch and is normalized to a
 # strict 0/1 boolean here. Callers that previously read
@@ -58,10 +59,9 @@ sub resolve_permissions ($inputs_ref) {
 		$showSolutions      = 1;
 		$showHints          = 1;
 	} else {
-		# Student: showCorrectAnswers is the only in-render reveal.
-		# Hints and solutions are hardwired off — fetch via /render-api/hint
-		# and /render-api/solution endpoints instead.
-		$showCorrectAnswers = $inputs_ref->{showCorrectAnswers} ? 1 : 0;
+		# Student: nothing in-render. Answers, hints and solutions come from
+		# the content-fetch endpoints.
+		$showCorrectAnswers = 0;
 		$showSolutions      = 0;
 		$showHints          = 0;
 	}

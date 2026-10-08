@@ -74,19 +74,17 @@ sub upstream_problem_jwt {
 }
 
 # Submit and decode the answerJWT so we can assert the per-render reveal fact.
-# showCorrectAnswers reveals only under an OFFERING mode now (WW3-R51): the
-# problem lane gates the raw flag on the `custom` default. renderMode rides the
-# JWT claim (it is stripped from raw form input on grounded lanes), so a reveal
-# case passes `renderMode => 'no-stakes'` to open the affordance.
+# Answers show in a render only under isInstructor or a verified reveal sidecar
+# (WW3-R67); on the problem lane that is the isInstructor claim.
 sub submit_and_decode {
 	my (%form) = @_;
-	my $render_mode = delete $form{renderMode};
+	my $instructor = delete $form{isInstructor};
 	$t->post_ok(
 		'/render-api' => form => {
 			problemJWT => upstream_problem_jwt(
 				problemSource => $pg_source,
 				problemSeed   => 1234,
-				$render_mode ? (renderMode => $render_mode) : ()
+				$instructor ? (isInstructor => 1) : ()
 			),
 			outputFormat  => 'debug',
 			submitAnswers => 1,
@@ -105,12 +103,11 @@ sub submit_and_decode {
 # ─── The per-render reveal fact ────────────────────────────────────────────
 
 subtest 'answers_shown = 1 when the render shows correct answers' => sub {
-	# Wrong submit + showCorrectAnswers under an offering mode: the render
-	# exposes the answer.
-	my $r = submit_and_decode(AnSwEr0001 => '41', showCorrectAnswers => 1, renderMode => 'no-stakes');
-	is($r->{answer}{answers_shown}, 1, 'answerJWT.answers_shown = 1');
-	# Solutions are hardwired off in a student render regardless of the flag.
-	is($r->{answer}{solutions_shown}, 0, 'answerJWT.solutions_shown = 0 (student render)');
+	# Wrong submit under a trusted isInstructor claim: revealAll exposes the
+	# answer and the solution.
+	my $r = submit_and_decode(AnSwEr0001 => '41', isInstructor => 1);
+	is($r->{answer}{answers_shown},   1, 'answerJWT.answers_shown = 1');
+	is($r->{answer}{solutions_shown}, 1, 'answerJWT.solutions_shown = 1 (revealAll)');
 };
 
 subtest 'answers_shown = 0 when the render does not show answers' => sub {
@@ -119,20 +116,15 @@ subtest 'answers_shown = 0 when the render does not show answers' => sub {
 	is($r->{answer}{solutions_shown}, 0, 'answerJWT.solutions_shown = 0');
 };
 
-subtest 'answers_shown = 0 on the custom default even with showCorrectAnswers (WW3-R51 gate)' => sub {
-	# The problem-lane mode-gate. On the `custom` default (no offering bundle,
-	# ADAPT's mode) a raw showCorrectAnswers is dropped — a student cannot
-	# self-reveal. The offering-mode case above is the other direction; together
-	# they pin the gate both ways in an environment this file can run.
-	my $r = submit_and_decode(AnSwEr0001 => '41', showCorrectAnswers => 1);    # no renderMode → custom
-	is($r->{answer}{answers_shown}, 0, 'raw showCorrectAnswers on custom is gated off');
+subtest 'answers_shown = 0 with a retired showCorrectAnswers (WW3-R67)' => sub {
+	my $r = submit_and_decode(AnSwEr0001 => '41', showCorrectAnswers => 1);
+	is($r->{answer}{answers_shown}, 0, 'a raw showCorrectAnswers shows nothing');
 };
 
 subtest 'answers_shown reflects the effective permission, not a correct score' => sub {
-	# Correct submit + showCorrectAnswers under an offering mode: the answer is
-	# still SHOWN this render (the old ratchet suppressed the flag on an earned
-	# score; the plain fact does not — it reports what was displayed).
-	my $r = submit_and_decode(AnSwEr0001 => '42', showCorrectAnswers => 1, renderMode => 'no-stakes');
+	# Correct submit under revealAll: the answer is still SHOWN this render —
+	# the plain fact reports what was displayed.
+	my $r = submit_and_decode(AnSwEr0001 => '42', isInstructor => 1);
 	is($r->{answer}{answers_shown}, 1, 'answers_shown = 1 even on a correct submit');
 };
 

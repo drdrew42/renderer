@@ -72,14 +72,8 @@ async sub problem ($c) {
 	$return_object->{inputs_ref} = $inputs_ref;
 
 	# If answerURL provided, send the answerJWT (problem-lane) or submissionJWT
-	# envelope (challenge-lane) back to the LMS on a graded submission.
-	#
-	# This used to also fire on a "ratchet flip" — a peek (showCorrectAnswers
-	# without submit) reported to the LMS at render time. That path is gone: it
-	# only ever fired on the problem lane (the challenge lane hard-zeroes
-	# showCorrectAnswers), and ADAPT hides the reveal button so it never fired
-	# there either. Reveals are recorded by WW3 at mint now, not inferred from
-	# a render-time report. So the trigger is submit, full stop.
+	# envelope (challenge-lane) back to the LMS on a graded submission. The
+	# trigger is submit; reveals are recorded where they are minted.
 	if ($inputs_ref->{JWTanswerURL} && $inputs_ref->{submitAnswers}) {
 		# Emission gate. The renderer's contract is validate-then-render; we
 		# do NOT refuse to render based on grounding shape. What we DO refuse
@@ -97,9 +91,7 @@ async sub problem ($c) {
 
 	# log interaction and format the response
 	if ($c->app->config('INTERACTION_LOG')) {
-		my $displayScore = $return_object->{problem_result}{score};
-		$displayScore .= '*' if $inputs_ref->{showCorrectAnswers};
-		$displayScore //= 'err';
+		my $displayScore = $return_object->{problem_result}{score} // 'err';
 
 		$c->logAttempt(
 			$inputs_ref->{sessionID},
@@ -155,24 +147,15 @@ async sub problem ($c) {
 			) if $html_hash;
 		}
 
-		# An interaction is an ACT — a graded submit, or a give-up (peeking at
-		# the correct answer instead of finishing, which lumps with the
-		# never-finished tail in the per-problem outcome distribution). A
-		# reView is neither, so a static render records none.
-		unless ($inputs_ref->{isInstructor} || $is_static) {
-			if ($inputs_ref->{submitAnswers}) {
-				Renderer::Telemetry::record_interaction(
-					pg_hash => $inputs_ref->{pg_hash},
-					action  => 'submit',
-					score   => $return_object->{problem_result}{score},
-					attempt => ($inputs_ref->{numIncorrect} // 0) + 1,
-				);
-			} elsif ($inputs_ref->{showCorrectAnswers}) {
-				Renderer::Telemetry::record_interaction(
-					pg_hash => $inputs_ref->{pg_hash},
-					action  => 'show_answers',
-				);
-			}
+		# An interaction is an ACT — a graded submit. A reView is not one, so a
+		# static render records none.
+		if ($inputs_ref->{submitAnswers} && !$inputs_ref->{isInstructor} && !$is_static) {
+			Renderer::Telemetry::record_interaction(
+				pg_hash => $inputs_ref->{pg_hash},
+				action  => 'submit',
+				score   => $return_object->{problem_result}{score},
+				attempt => ($inputs_ref->{numIncorrect} // 0) + 1,
+			);
 		}
 	}
 
@@ -296,11 +279,9 @@ async sub solution ($c) {
 # POST /render-api/answer (WW3-R47). Same gate, same source binding, same
 # error contract as its two siblings — only the payload differs.
 #
-# This is the route that lets an orchestrator stop asking the RENDER to
-# reveal anything. `showCorrectAnswers` as a render flag has to be trusted
-# from the request, which is how WW3-R46 happened; a typed token minted by
-# whoever holds the policy cannot be self-declared, and the mint is a
-# chokepoint the orchestrator can record against. See WW3-117.
+# The student's route to the answer key: a typed token minted by whoever
+# holds the policy cannot be self-declared, and the mint is a chokepoint the
+# orchestrator can record against. See WW3-117.
 async sub answer ($c) {
 	return await _content_fetch($c, 'answer', \&WeBWorK::HintSolution::render_answer);
 }

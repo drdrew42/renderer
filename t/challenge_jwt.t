@@ -56,7 +56,7 @@ sub make_challenge_jwt {
 			selection      => 'student_picks',
 		},
 		constraints        => { duration_seconds => 3600 },
-		render_permissions => { isInstructor     => 0, showCorrectAnswers => 0, showHints => 1 },
+		render_permissions => { isInstructor     => 0, showHints => 1 },
 		answer_url         => 'http://127.0.0.1:9999/fake-answer-callback',
 		%overrides,
 	};
@@ -287,28 +287,6 @@ subtest 'outputFormat hardcoded to default on challengeJWT path (URL ignored)' =
 	my $resp = decode_json($t->tx->res->body);
 	ok(exists $resp->{renderedHTML}, 'response is the standard JSON envelope (default), not debug');
 	ok(!exists $resp->{permissions}, 'no debug-format leak (permissions is the debug indicator)');
-};
-
-# ─── render_permissions ────────────────────────────────────────────────────
-
-subtest 'render_permissions.showCorrectAnswers from challengeJWT reaches the renderer' => sub {
-	# A submitted answer with showCorrectAnswers=1 should reveal correct-answer
-	# UI ('correct_ans' marker in the JSON response). Same fixture without the
-	# permission keeps it suppressed. Proves the permission claim is applied
-	# rather than ignored.
-	my $jwt_with =
-		make_challenge_jwt(render_permissions => { isInstructor => 0, showCorrectAnswers => 1, showHints => 1 },);
-	post_json({
-		challengeJWT   => $jwt_with,
-		verdict_signed => launch_verdict(),
-		position       => 0,
-		submitAnswers  => 1,
-		'AnSwEr0001'   => '0',
-	})->status_is(200);
-	my $with = decode_json($t->tx->res->body);
-	# correct_ans appears in the answer-state portion of the response when
-	# showCorrectAnswers is honored.
-	like(encode_json($with), qr/correct_ans/, 'showCorrectAnswers honored from JWT claim');
 };
 
 # ─── Coexistence ────────────────────────────────────────────────────────────

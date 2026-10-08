@@ -51,16 +51,18 @@ isInstructor	reveal	session	session	overridden		session claim wins over raw
 renderMode	reveal	grounded	raw	stripped		response length vs baseline	WW3-R51 (measured 2026-08-12)
 renderMode	reveal	ungrounded	raw	honored			WW3-R51
 renderMode+hideFeedback	reveal	*	claim	honored		the hideFeedback claim overrides the mode default, in either direction	WW3-R70
-showCorrectAnswers	reveal	problem	raw	stripped		honored only under an offering renderMode claim (no-stakes, preview)	WW3-R51
-showCorrectAnswers	reveal	challenge	raw	overridden		hard-zeroed; render_permissions claim, or reveal arrives through revealJWT	t/reveal_invariant.t, WW3-R58
-showCorrectAnswers	reveal	review	raw	overridden		hard-zeroed; reveal arrives through revealJWT	WW3-117
-showCorrectAnswers	reveal	session	session	overridden		session claim wins over raw	WW3-R67 (retire)
+showCorrectAnswers	reveal	*	raw	stripped		RETIRED_PARAMS: deleted after the lanes; response identical to omitting it, tokens aside	t/show_correct_answers_retired.t, WW3-R67
+showCorrectAnswers	reveal	problem	claim	stripped		RETIRED_PARAMS	t/show_correct_answers_retired.t, WW3-R67
+showCorrectAnswers	reveal	challenge	claim	stripped		render_permissions.showCorrectAnswers; Lane::Challenge reads isInstructor, showHints, showSolutions only	t/show_correct_answers_retired.t, WW3-R67
+showCorrectAnswers	reveal	session	session	stripped		RETIRED_PARAMS	t/show_correct_answers_retired.t, WW3-R67
+showCorrectAnswers	reveal	peer	peer	stripped		RETIRED_PARAMS	t/show_correct_answers_retired.t, WW3-R67
+showCorrectAnswersButton	presentation	*	raw	stripped		RETIRED_PARAMS; the frame has one interact button	t/show_correct_answers_retired.t, WW3-R67
+showCorrectAnswersButton	presentation	problem	claim	stripped		RETIRED_PARAMS; LibreTexts signs 0 and renders unchanged	t/show_correct_answers_retired.t, WW3-R67
 _reveal_grant	reveal	*	raw	stripped		SENSITIVE_PARAMS	WW3-117
 revealJWT	reveal	challenge,review	raw	honored		verified and play-bound; grants: reveal (answers + solutions) and/or debug; no grants claim is reveal; expired, wrong play, empty or unknown grants: nothing	WW3-117, WW3-R58
 revealJWT	reveal	problem	raw	inert			
 showHints	reveal	*	raw	inert		resolver hardwires from isInstructor	
 showSolutions	reveal	*	raw	inert		resolver hardwires from isInstructor	
-showCorrectAnswersButton	reveal	*	raw	tighten-only	honored	raw may hide it, never show it; the click still meets the showCorrectAnswers rules	WW3-R67
 hideCheckAnswersButton	presentation	*	raw	tighten-only		raw may hide it, never show it against a mode or claim; review and static hide it	WW3-R70
 interactLabel	presentation	*	raw	stripped		SENSITIVE_PARAMS; the label defaults to "Check Answers", or "Save Answers" under hideFeedback	WW3-R70
 interactLabel	presentation	problem,peer	claim	honored		integrator setting; HTML-escaped into the interact button	WW3-R70

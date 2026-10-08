@@ -110,21 +110,12 @@
 					% if ($formatName eq 'debug' && $rh_result->{inputs_ref}{clientDebug}) {
 						%= hidden_field clientDebug => $rh_result->{inputs_ref}{clientDebug}
 					% }
-					%# WW3-R21: container renders only when at least one button is
-					%# visible. Replaces the previous `formatName ne 'static'` magic-
-					%# string check; static now expresses itself via the three
-					%# button-hide flags set at the dispatcher boundary.
-					% my $any_button = $showCheckAnswersButton || $showCorrectAnswersButton;
-					% if ($any_button) {
+					%# WW3-R21: container renders only when the interact button is
+					%# visible; static hides it at the dispatcher boundary.
+					% if ($showCheckAnswersButton) {
 						<div class="submit-buttons-container col-12 mb-2">
-							% if ($showCheckAnswersButton) {
-								<%= submit_button $interactLabel,
-									name => 'submitAnswers', class => 'btn btn-primary mb-1' %>
-							% }
-							% if ($showCorrectAnswersButton) {
-								<%= submit_button $lh->maketext('Show Correct Answers'),
-									name => 'showCorrectAnswers', class => 'btn btn-primary mb-1' %>
-							% }
+							<%= submit_button $interactLabel,
+								name => 'submitAnswers', class => 'btn btn-primary mb-1' %>
 						</div>
 					% }
 				% end

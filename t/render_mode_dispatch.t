@@ -82,25 +82,18 @@ subtest 'ungrounded: renderMode echoed back in debug; empty overrides when calle
 subtest 'ungrounded: no-feedback overrides conflicting caller primitives' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
-			problemSource      => $pg_source,
-			problemSeed        => 1234,
-			outputFormat       => 'debug',
-			renderMode         => 'no-feedback',
-			hideFeedback       => 0,               # mode forces to 1
-			showCorrectAnswers => 1,               # mode forces to 0
+			problemSource => $pg_source,
+			problemSeed   => 1234,
+			outputFormat  => 'debug',
+			renderMode    => 'no-feedback',
+			hideFeedback  => 0,               # mode forces to 1
 		}
 	)->status_is(200);
 
 	my $debug = $t->tx->res->json;
 	is($debug->{renderMode}, 'no-feedback', 'mode preserved');
-	is_deeply(
-		[ sort @{ $debug->{mode_overrides} } ],
-		[ sort qw(hideFeedback showCorrectAnswers) ],
-		'both conflicting caller primitives recorded as overrides',
-	);
-	# Permission resolver downstream of mode: showCorrectAnswers should be 0.
-	is($debug->{permissions}{showCorrectAnswers},
-		0, 'mode-forced showCorrectAnswers=0 visible to permission resolver');
+	is_deeply($debug->{mode_overrides},
+		['hideFeedback'], 'the conflicting caller primitive recorded as an override');
 };
 
 subtest 'ungrounded: custom mode is pure passthrough' => sub {
@@ -225,27 +218,9 @@ subtest 'problemJWT: preview claim overrides caller isInstructor=0 in form' => s
 # Pre-WW3-R43-hoist, resolve_render_mode lived inside the rendering
 # subprocess. Mutations to $inputs_ref made in the child were lost across
 # the fork boundary, so FormatRenderedProblem (which runs in the parent
-# post-subprocess) saw the un-mutated values. Symptom: preview rendered
-# without the Show Correct Answers button. This subtest pins the fix —
-# format-layer button-visibility flags must reflect the mode bundle.
-
-subtest 'preview mode: Show Correct Answers button reaches the format layer' => sub {
-	my $jwt = make_problem_jwt(
-		problemSource => $pg_source,
-		problemSeed   => 1234,
-		renderMode    => 'preview',
-	);
-
-	$t->post_ok(
-		'/render-api' => form => {
-			problemJWT   => $jwt,
-			outputFormat => 'default',
-		}
-	)->status_is(200)->content_like(
-		qr/Show Correct Answers/,
-		'preview-mode showCorrectAnswersButton=1 visible to template after fork',
-	);
-};
+# post-subprocess) saw the un-mutated values. Symptom: a mode's button flag
+# never reached the template. The subtest below pins the fix — format-layer
+# button-visibility flags must reflect the mode bundle.
 
 subtest 'review mode: Check Answers button hidden in the format layer' => sub {
 	my $jwt = make_problem_jwt(

@@ -19,12 +19,12 @@ use Renderer::Permissions          qw(resolve_permissions);
 # REAL lane code host-side (MockController, no app boot — the async render
 # pipeline is not exercised here; the lane/strip/resolver decisions are pure).
 #
-#   1. A student cannot self-grant a reveal. The defence lives at four sites:
+#   1. A student cannot self-grant a reveal. The defence lives at three sites:
 #        (a) ParseRequest strips isInstructor + renderMode from raw input,
-#        (b) the RenderMode bundle zeros showCorrectAnswers on non-offering
-#            modes (via Lane::Problem's mode-gate),
-#        (c) Lane::Challenge / Lane::Review hard-zero showCorrectAnswers,
-#        (d) resolve_permissions is the final student/instructor switch.
+#        (b) Lane::Review hard-zeroes isInstructor,
+#        (c) resolve_permissions derives the reveal from isInstructor and a
+#            verified sidecar grant alone — the retired showCorrectAnswers
+#            (WW3-R67) is no input to it.
 #      Fed raw `showCorrectAnswers=1` / `isInstructor=1` / `renderMode=preview`,
 #      every grounded lane resolves to the student view.
 #
@@ -150,13 +150,12 @@ sub submission_jwt {
 subtest 'ParseRequest strips raw isInstructor + renderMode from a grounded request' => sub {
 	my $c = MockController->new;
 	# A student's own POST: a grounded body (challengeJWT) plus hand-added
-	# elevation and render-mode params, and the reveal button's own flag.
+	# elevation and render-mode params.
 	my %params = (
-		challengeJWT       => challenge_jwt(),
-		verdict_signed     => launch_verdict(),
-		isInstructor       => 1,
-		renderMode         => 'preview',
-		showCorrectAnswers => 1,
+		challengeJWT   => challenge_jwt(),
+		verdict_signed => launch_verdict(),
+		isInstructor   => 1,
+		renderMode     => 'preview',
 	);
 	my %ctx;
 	ok(Renderer::Render::ParseRequest::_parse_envelope($c, \%params, \%ctx), '_parse_envelope ok');
@@ -165,13 +164,9 @@ subtest 'ParseRequest strips raw isInstructor + renderMode from a grounded reque
 	ok(!exists $params{renderMode},   'raw renderMode stripped (RENDER_MODE_PARAMS)');
 	is($c->stash('_stripped_elevation')->{isInstructor},
 		1, 'stripped isInstructor stashed for a lane that legitimately restores it');
-	# showCorrectAnswers is set aside for the ratchet (WW3-R70): the lanes see
-	# only claims, and dispatch re-applies the raw value where it tightens or
-	# where an offering mode leaves the flag to the reveal button.
-	ok(!exists $params{showCorrectAnswers}, 'raw showCorrectAnswers set aside before the lanes');
 	is_deeply(
 		$c->stash('_raw_ratchet'),
-		{ showCorrectAnswers => 1, isInstructor => 1 },
+		{ isInstructor => 1 },
 		'the raw ratchet values ride the stash to mode resolution'
 	);
 };
@@ -180,23 +175,20 @@ subtest 'ParseRequest strips raw isInstructor + renderMode from a grounded reque
 # Part 2 — every grounded lane keeps a raw reveal student-side (sites b, c, d)
 # ═════════════════════════════════════════════════════════════════════════════
 
-subtest 'Lane::Problem: raw showCorrectAnswers is mode-gated off (custom → no reveal)' => sub {
-	my $c = MockController->new;
-	# A showCorrectAnswers that reaches the lane is zeroed by the lane's own
-	# gate. No renderMode claim ⇒ resolves to `custom`, whose bundle offers no
-	# reveal button — so the mode-gate zeros the flag.
+subtest 'Lane::Problem: raw showCorrectAnswers reveals nothing' => sub {
+	my $c      = MockController->new;
 	my %params = (
 		problemJWT         => problem_jwt(problemSource => 'S', pg_hash => 'sha256:p0'),
 		showCorrectAnswers => 1,
 	);
 	ok(Renderer::Lane::Problem::apply($c, \%params), 'apply ok');
 	my $perms = resolve_permissions(\%params);
-	is($perms->{showCorrectAnswers}, 0, 'reveal denied — mode-gate zeroed the raw flag');
+	is($perms->{showCorrectAnswers}, 0, 'reveal denied');
 	is($perms->{isInstructor},       0, 'student');
 	is($perms->{showSolutions},      0, 'no revealAll');
 };
 
-subtest 'Lane::Challenge: raw showCorrectAnswers is hard-zeroed' => sub {
+subtest 'Lane::Challenge: raw showCorrectAnswers reveals nothing' => sub {
 	my $c      = MockController->new;
 	my %params = (
 		challengeJWT       => challenge_jwt(),
@@ -205,16 +197,15 @@ subtest 'Lane::Challenge: raw showCorrectAnswers is hard-zeroed' => sub {
 		showCorrectAnswers => 1,
 	);
 	ok(Renderer::Lane::Challenge::apply($c, \%params), 'apply ok');
-	is($params{showCorrectAnswers}, 0, 'lane hard-zeroed the raw flag');
 	my $perms = resolve_permissions(\%params);
 	is($perms->{showCorrectAnswers}, 0, 'reveal denied');
 	is($perms->{showSolutions},      0, 'no revealAll');
 };
 
-subtest 'Lane::Review: raw showCorrectAnswers AND isInstructor are hard-zeroed' => sub {
+subtest 'Lane::Review: raw isInstructor is hard-zeroed and showCorrectAnswers reveals nothing' => sub {
 	my $c = MockController->new;
 	# reView is the lane where the student is SUPPOSED to hold their own body
-	# token, so its self-defence must be total: both vectors hard-zeroed.
+	# token, so its self-defence must be total.
 	my %params = (
 		submissionJWT      => submission_jwt(),
 		problemSource      => 'S',
@@ -222,8 +213,7 @@ subtest 'Lane::Review: raw showCorrectAnswers AND isInstructor are hard-zeroed' 
 		isInstructor       => 1,
 	);
 	ok(Renderer::Lane::Review::apply($c, \%params), 'apply ok');
-	is($params{showCorrectAnswers}, 0, 'lane hard-zeroed showCorrectAnswers');
-	is($params{isInstructor},       0, 'lane hard-zeroed isInstructor');
+	is($params{isInstructor}, 0, 'lane hard-zeroed isInstructor');
 	my $perms = resolve_permissions(\%params);
 	is($perms->{showCorrectAnswers}, 0, 'reveal denied');
 	is($perms->{isInstructor},       0, 'student');

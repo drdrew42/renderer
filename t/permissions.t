@@ -117,7 +117,7 @@ subtest 'instructor: hints visible regardless of inbound showHints' => sub {
 
 # ─── Student defaults ────────────────────────────────────────────────────
 
-subtest 'student: no solutions without showCorrectAnswers' => sub {
+subtest 'student: no solutions by default' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
 			problemSource => $pg_source,
@@ -129,7 +129,7 @@ subtest 'student: no solutions without showCorrectAnswers' => sub {
 	unlike($body, qr/solution accordion/, 'no solutions for student by default');
 };
 
-subtest 'student: showCorrectAnswers does NOT imply solutions (hardwired off)' => sub {
+subtest 'student: a retired showCorrectAnswers reveals no solution (hardwired off)' => sub {
 	$t->post_ok(
 		'/render-api' => form => {
 			problemSource      => $pg_source,
@@ -192,11 +192,10 @@ subtest 'debug outputFormat returns diagnostic JSON' => sub {
 	# lane-conditional isLocked block retired alongside the field.
 	$t->post_ok(
 		'/render-api' => form => {
-			problemSource      => $pg_source,
-			outputFormat       => 'debug',
-			problemSeed        => 1234,
-			isInstructor       => 1,
-			showCorrectAnswers => 1,
+			problemSource => $pg_source,
+			outputFormat  => 'debug',
+			problemSeed   => 1234,
+			isInstructor  => 1,
 		}
 	)->status_is(200)->json_has('/permissions')->json_has('/problem')->json_has('/macros')->json_has('/result')
 		->json_is('/lane'                           => 'ungrounded')->json_is('/permissions/isInstructor' => 1)
@@ -252,48 +251,6 @@ subtest 'perfect score: renderer keeps emitting answerJWTs (no terminal state)' 
 	my $second = $t->tx->res->json;
 	ok($second->{tokens}{answerJWT},
 		'subsequent submit still produces answerJWT (renderer never terminates post-R31)');
-};
-
-subtest 'showCorrectAnswers: per-render answers_shown, no sticky carry-forward' => sub {
-	# no-stakes is an OFFERING mode (WW3-R51): it lets a student render honour
-	# showCorrectAnswers. It rides the JWT claim because renderMode is stripped
-	# from raw form input on grounded lanes. Without it the flag is gated off on
-	# the `custom` default and answers_shown would stay 0.
-	my $problemJWT = upstream_problem_jwt(renderMode => 'no-stakes', problemSeed => 9999);
-
-	# Wrong answer + reveal → this render showed the answer.
-	$t->post_ok(
-		'/render-api' => form => {
-			problemJWT         => $problemJWT,
-			outputFormat       => 'debug',
-			submitAnswers      => 1,
-			showCorrectAnswers => 1,
-			AnSwEr0001         => '41',
-		}
-	)->status_is(200);
-
-	my $submit  = $t->tx->res->json;
-	my $answer1 = decode_jwt(token => $submit->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
-	is($answer1->{answers_shown}, 1, 'answerJWT.answers_shown = 1 (this render showed answers)');
-
-	# Subsequent submit WITHOUT reveal → answers_shown = 0. There is no sticky
-	# carry-forward: each render reports its own fact. The old ratchet would
-	# have kept answersRevealed=1 here; the plain fact does not, because WW3
-	# owns reveal history in the chain, not the wire.
-	$t->post_ok(
-		'/render-api' => form => {
-			problemJWT    => $problemJWT,
-			sessionJWT    => $submit->{tokens}{sessionJWT},
-			outputFormat  => 'debug',
-			submitAnswers => 1,
-			AnSwEr0001    => '42',
-		}
-	)->status_is(200);
-
-	my $follow_up = $t->tx->res->json;
-	ok($follow_up->{tokens}{answerJWT}, 'follow-up submit still produces answerJWT');
-	my $answer2 = decode_jwt(token => $follow_up->{tokens}{answerJWT}, key => $ENV{problemJWTsecret});
-	is($answer2->{answers_shown}, 0, 'answers_shown = 0 on the follow-up (no sticky carry-forward)');
 };
 
 # ─── WW3-R56: debug permission half is isInstructor-gated ─────────────────

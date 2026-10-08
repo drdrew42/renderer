@@ -96,9 +96,9 @@ sub record_render {
 	_maybe_flush();
 }
 
-# Record an interaction event (answer submission, preview, show answers).
-# Non-instructor only — student-experience signal. Instructor submits/show-
-# answers would poison completion-rate and give-up-rate aggregates.
+# Record an interaction event (an answer submission). Non-instructor only —
+# student-experience signal. Instructor submits would poison completion-rate
+# aggregates.
 sub record_interaction {
 	my (%args) = @_;
 	return if $args{is_instructor};

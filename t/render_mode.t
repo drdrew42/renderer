@@ -17,62 +17,54 @@ subtest 'RENDER_MODES enumerates the documented modes' => sub {
 
 # ─── Per-mode bundles ─────────────────────────────────────────────────────
 
-subtest 'default: verdict per attempt, no reveal button' => sub {
+subtest 'default: verdict per attempt' => sub {
 	my $i = { renderMode => 'default' };
 	resolve_render_mode($i);
-	is($i->{hideFeedback},             0, 'hideFeedback=0');
-	is($i->{hideCheckAnswersButton},   0, 'hideCheckAnswersButton=0');
-	is($i->{showCorrectAnswersButton}, 0, 'showCorrectAnswersButton=0 (coordinator-mediated)');
+	is($i->{hideFeedback},           0, 'hideFeedback=0');
+	is($i->{hideCheckAnswersButton}, 0, 'hideCheckAnswersButton=0');
 	ok(!exists $i->{isInstructor}, 'isInstructor untouched');
 };
 
 subtest 'no-feedback: exam mode kill-switch' => sub {
 	my $i = { renderMode => 'no-feedback' };
 	resolve_render_mode($i);
-	is($i->{hideFeedback},             1, 'hideFeedback=1 (kill switch)');
-	is($i->{hideCheckAnswersButton},   0, 'submit still allowed');
-	is($i->{showCorrectAnswersButton}, 0, 'no reveal button');
-	is($i->{showCorrectAnswers},       0, 'defense in depth: no reveal');
+	is($i->{hideFeedback},           1, 'hideFeedback=1 (kill switch)');
+	is($i->{hideCheckAnswersButton}, 0, 'submit still allowed');
 };
 
-subtest 'review: no resubmits, reveal coordinator-mediated' => sub {
+subtest 'review: no resubmits' => sub {
 	my $i = { renderMode => 'review' };
 	resolve_render_mode($i);
-	is($i->{hideFeedback},             0, 'feedback shown');
-	is($i->{hideCheckAnswersButton},   1, 'no new submits');
-	is($i->{showCorrectAnswersButton}, 0, 'no reveal button');
+	is($i->{hideFeedback},           0, 'feedback shown');
+	is($i->{hideCheckAnswersButton}, 1, 'no new submits');
 };
 
 subtest 'no-stakes: free-for-all sandbox' => sub {
 	my $i = { renderMode => 'no-stakes' };
 	resolve_render_mode($i);
-	is($i->{hideFeedback},             0, 'feedback shown');
-	is($i->{hideCheckAnswersButton},   0, 'submit allowed');
-	is($i->{showCorrectAnswersButton}, 1, 'reveal button shown');
+	is($i->{hideFeedback},           0, 'feedback shown');
+	is($i->{hideCheckAnswersButton}, 0, 'submit allowed');
 };
 
 subtest 'preview: instructor revealAll' => sub {
 	my $i = { renderMode => 'preview' };
 	resolve_render_mode($i);
-	is($i->{hideFeedback},             0, 'feedback shown');
-	is($i->{hideCheckAnswersButton},   0, 'submit allowed');
-	is($i->{showCorrectAnswersButton}, 1, 'reveal button shown');
-	is($i->{isInstructor},             1, 'isInstructor=1 (perms resolver expands to revealAll)');
+	is($i->{hideFeedback},           0, 'feedback shown');
+	is($i->{hideCheckAnswersButton}, 0, 'submit allowed');
+	is($i->{isInstructor},           1, 'isInstructor=1 (perms resolver expands to revealAll)');
 };
 
 subtest 'custom: pure passthrough' => sub {
 	my $i = {
-		renderMode               => 'custom',
-		hideFeedback             => 1,
-		hideCheckAnswersButton   => 1,
-		showCorrectAnswersButton => 1,
-		isInstructor             => 1,
+		renderMode             => 'custom',
+		hideFeedback           => 1,
+		hideCheckAnswersButton => 1,
+		isInstructor           => 1,
 	};
 	resolve_render_mode($i);
-	is($i->{hideFeedback},             1, 'caller value preserved');
-	is($i->{hideCheckAnswersButton},   1, 'caller value preserved');
-	is($i->{showCorrectAnswersButton}, 1, 'caller value preserved');
-	is($i->{isInstructor},             1, 'caller value preserved');
+	is($i->{hideFeedback},           1, 'caller value preserved');
+	is($i->{hideCheckAnswersButton}, 1, 'caller value preserved');
+	is($i->{isInstructor},           1, 'caller value preserved');
 };
 
 # ─── Forward-compat: absent / unknown mode = custom ────────────────────
@@ -152,9 +144,6 @@ subtest 'order 3: raw tightens, never loosens' => sub {
 	resolve_render_mode($i, { isInstructor => 1 });
 	ok(!$i->{isInstructor}, 'raw isInstructor=1 is ignored');
 
-	$i = {};
-	resolve_render_mode($i, { showCorrectAnswers => 1 });
-	ok(!$i->{showCorrectAnswers}, 'raw showCorrectAnswers=1 is ignored with no mode');
 };
 
 subtest 'mode leaves primitives it does not own alone' => sub {
@@ -164,37 +153,16 @@ subtest 'mode leaves primitives it does not own alone' => sub {
 	is($i->{hideFeedback}, 0, 'default bundle still applies hideFeedback');
 };
 
-subtest 'showCorrectAnswersButton is set by the bundle outright' => sub {
-	my $i = { renderMode => 'default', showCorrectAnswersButton => 1 };
-	resolve_render_mode($i, {});
-	is($i->{showCorrectAnswersButton}, 0, 'the bundle value replaces a supplied one');
-};
+subtest 'no mode carries the retired reveal or its button (WW3-R67)' => sub {
+	for my $mode (@{ RENDER_MODES() }) {
+		my $bundle = mode_bundle($mode);
+		ok(!exists $bundle->{showCorrectAnswers},       "$mode: no showCorrectAnswers");
+		ok(!exists $bundle->{showCorrectAnswersButton}, "$mode: no showCorrectAnswersButton");
 
-subtest 'default and review refuse a raw showCorrectAnswers (WW3-R46)' => sub {
-	# Offering is not the same as permitting. Both bundles hide the reveal
-	# button; before R46 neither refused the flag, so a caller who was
-	# never offered the reveal could ask for it directly and be given it.
-	for my $mode (qw(default review)) {
 		my $i       = { renderMode => $mode };
 		my $ignored = resolve_render_mode($i, { showCorrectAnswers => 1 });
-		is($i->{showCorrectAnswers},       0, "$mode refuses a raw showCorrectAnswers");
-		is($i->{showCorrectAnswersButton}, 0, "$mode still hides the button");
-		ok((grep { $_ eq 'showCorrectAnswers' } @$ignored), "$mode reports the raw value it ignored");
-	}
-};
-
-subtest 'no-stakes and preview still offer the reveal' => sub {
-	# The bundles where revealing costs nothing keep the button's click
-	# working until WW3-R67 retires it.
-	for my $mode (qw(no-stakes preview)) {
-		my $i = { renderMode => $mode };
-		resolve_render_mode($i, { showCorrectAnswers => 1 });
-		is($i->{showCorrectAnswers},       1, "$mode honours the button's raw showCorrectAnswers");
-		is($i->{showCorrectAnswersButton}, 1, "$mode offers the button");
-
-		$i = { renderMode => $mode, showCorrectAnswers => 0 };
-		resolve_render_mode($i, { showCorrectAnswers => 1 });
-		is($i->{showCorrectAnswers}, 0, "$mode: a lane or claim that set the flag holds");
+		ok(!$i->{showCorrectAnswers}, "$mode: a raw showCorrectAnswers sets nothing");
+		is_deeply($ignored, [], "$mode: and is no ratchet key");
 	}
 };
 
@@ -207,11 +175,11 @@ subtest 'return value records the raw values the ratchet ignored' => sub {
 		{
 			hideFeedback           => 0,    # loosens → ignored
 			hideCheckAnswersButton => 0,    # matches the bundle → nothing to ignore
-			showCorrectAnswers     => 1,    # loosens → ignored
+			isInstructor           => 1,    # loosens → ignored
 		}
 	);
 	is(ref($ignored), 'ARRAY', 'returns an arrayref');
-	is_deeply([ sort @$ignored ], [ sort qw(hideFeedback showCorrectAnswers) ], 'only loosening keys recorded');
+	is_deeply([ sort @$ignored ], [ sort qw(hideFeedback isInstructor) ], 'only loosening keys recorded');
 };
 
 subtest 'empty list when nothing is ignored' => sub {
