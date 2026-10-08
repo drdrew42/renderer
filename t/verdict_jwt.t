@@ -302,9 +302,9 @@ subtest 'fold preserves base challenge_jwt verbatim' => sub {
 	is($claims->{challenge_jwt}, $cjwt, 'embedded challenge_jwt is byte-identical to base');
 };
 
-# Play-mode projection fold (WW3-042/041) -------------------------------------
+# Play-mode projection fold (WW3-042) -------------------------------------
 
-subtest 'fold carries verdict.progress and verdict.deadlines into state' => sub {
+subtest 'fold carries verdict.progress into state, never deadlines' => sub {
 	my $cjwt    = make_challenge_jwt();
 	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 2);
 	my $vsigned = make_verdict_signed(
@@ -324,19 +324,18 @@ subtest 'fold carries verdict.progress and verdict.deadlines into state' => sub 
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
 	is($claims->{state}{progress}{kind},   'classic',              'progress.kind folded through');
 	is($claims->{state}{progress}{passed}, 1,                      'progress body folded through');
-	is($claims->{state}{deadlines}{0},     '2026-08-24T09:05:00Z', 'deadlines folded through');
+	ok(!exists $claims->{state}{deadlines}, 'a stray verdict deadlines is not folded (retired, WW3-212c)');
 };
 
 subtest 'fold omits projection fields a verdict does not carry' => sub {
 	my $cjwt    = make_challenge_jwt();
 	my $base    = make_session_jwt(challenge_jwt => $cjwt, mint_sequence => 1);
-	my $vsigned = make_verdict_signed(basis => 1);                              # default verdict: no progress/deadlines
+	my $vsigned = make_verdict_signed(basis => 1);                              # default verdict: no progress
 
 	my ($new_jwt, $err) = verifyAndFoldVerdict($base, $vsigned, $ORCH, $RENDERER);
 	is($err, undef, 'fold succeeds');
 	my $claims = decode_jwt(token => $new_jwt, key => $RENDERER, accepted_alg => 'HS256');
 	ok(!exists $claims->{state}{progress},  'no progress key when the verdict omits it');
-	ok(!exists $claims->{state}{deadlines}, 'no deadlines key when the verdict omits it');
 };
 
 # Launch fold (WW3-205) -------------------------------------------------------
@@ -373,7 +372,7 @@ subtest 'launch fold: verdict into an empty base mints sessionJWT_0' => sub {
 	is_deeply($claims->{state}{next_available}, [0],     'next_available from the verdict');
 	is_deeply($claims->{state}{draws},          [$draw], 'draws[] holds the initial draw');
 	is($claims->{state}{progress}{kind}, 'classic',              'progress folded through');
-	is($claims->{state}{deadlines}{0},   '2026-10-06T13:00:00Z', 'deadlines folded through');
+	ok(!exists $claims->{state}{deadlines}, 'a stray verdict deadlines is not folded (retired, WW3-212c)');
 	ok(!exists $claims->{state}{started_at}, 'no started_at (C5)');
 };
 

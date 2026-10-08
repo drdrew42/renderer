@@ -685,7 +685,7 @@ subtest 'C4 first render: challengeJWT + launch verdict mints the session from t
 	is($claims->{state}{current_focus}, 0,    'current_focus from the verdict');
 	is_deeply($claims->{state}{next_available}, [ 0, 1 ], 'next_available from the verdict');
 	is_deeply($claims->{state}{draws},          [$draw],  'draws[] holds the verdict draw');
-	is($claims->{state}{deadlines}{0}, '2026-10-06T13:00:00Z', 'deadlines from the verdict');
+	ok(!exists $claims->{state}{deadlines}, 'a stray verdict deadlines is not folded (retired, WW3-212c)');
 	ok(!exists $claims->{state}{started_at}, 'no started_at (C5)');
 	ok(!$claims->{answersSubmitted},         'answersSubmitted 0');
 };

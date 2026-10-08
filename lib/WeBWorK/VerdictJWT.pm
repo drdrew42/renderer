@@ -50,7 +50,6 @@ package WeBWorK::VerdictJWT;
 #   - state.draws[]         ← base.state.draws ∪ verdict.draw_next  (open mode)
 #   - state.finalization    ← verdict.finalization
 #   - state.progress       ← verdict.progress    (WW3-042, when present)
-#   - state.deadlines      ← verdict.deadlines   (WW3-041, when present)
 #   - mint_sequence        ← base.mint_sequence + 1
 #   - challenge_jwt        ← base.challenge_jwt   (re-embed verbatim)
 #   - iss/aud              ← $ENV{SITE_HOST}      (same as generatePlaySessionJWT)
@@ -223,13 +222,11 @@ sub _fold_and_mint {
 		finalization    => $verdict->{finalization},
 	};
 
-	# Play-mode projection (WW3-042/041): the orchestrator's mode-shaped progress
-	# and per-problem deadlines ride the verdict; fold them through unchanged so
-	# the portal reads them off the sessionJWT state per submission. Copied, never
-	# computed — the renderer is not the atom evaluator. Present only when the
-	# verdict carries them (a mode with no per-problem timer omits deadlines).
-	$new_state->{progress}  = $verdict->{progress}  if defined $verdict->{progress};
-	$new_state->{deadlines} = $verdict->{deadlines} if defined $verdict->{deadlines};
+	# Play-mode projection (WW3-042): the orchestrator's mode-shaped progress
+	# rides the verdict; fold it through unchanged so the portal reads it off the
+	# sessionJWT state per submission. Copied, never computed — the renderer is not
+	# the atom evaluator. Present only when the verdict carries it.
+	$new_state->{progress} = $verdict->{progress} if defined $verdict->{progress};
 
 	# answersSubmitted is the cumulative "this play has seen at least one
 	# submit" flag. The base sessionJWT carries it forward via parseRequest's
