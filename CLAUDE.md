@@ -8,6 +8,8 @@ WeBWorK standalone problem renderer. Executes PG (Problem Generator) code in a s
 **Entry point**: `lib/Renderer.pm` (routes, startup, content-cache wiring)
 **Config**: `renderer.conf.dist` → `renderer.conf`
 **Content mode**: content-addressed rendering for the LibreTexts/ADAPT deployment (the `CONTENT_ADDRESSED` path)
+**Branches**: `develop` is the working branch and the release line — tags are cut from it. `main` lags and is not a release source.
+**Deployment shape**: a service container in a larger stack (LibreTexts/ADAPT, WW3). Standalone conveniences are removed; standalone use still works but is not a design target.
 
 ### Module Map
 
