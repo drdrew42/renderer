@@ -15,25 +15,31 @@ WeBWorK standalone problem renderer. Executes PG (Problem Generator) code in a s
 lib/
 ├── Renderer.pm                         # App entry: startup(), routes, helpers, Hypnotoad env var overrides
 ├── Renderer/
-│   ├── Constants.pm                    # SENSITIVE_PARAMS, ANSWER_RESPONSE_*, shared string constants
+│   ├── Constants.pm                    # Strip lists (SENSITIVE/ELEVATION/RENDER_MODE/TOKEN_CONTENT/DEBUG/RETIRED_PARAMS), DEFAULT_SEED, SESSION_STATE_CLAIMS
 │   ├── ContentCache.pm                 # Content-addressed caching: pg_hash → local disk, OPL fetch on miss
 │   ├── Identity.pm                     # Ed25519 keypair: env vars → disk → generate. Fleet identity via Secrets Manager.
 │   ├── Log.pm                          # Structured-JSON log formatter factory + iso8601_now helper (R38)
-│   ├── OPLAuthed.pm                    # Shared verify-and-parse for OPL-signed POSTs (Callback + Audit), R34
+│   ├── OPLAuthed.pm                    # Shared verify-and-parse for OPL-signed POSTs (Callback, Audit, AdminInspect)
 │   ├── OPLClient.pm                    # OPL HTTP contract: URL templates, conditional GET, redirect canonicalization
 │   ├── Permissions.pm                  # resolve_permissions(): single decision point for show* booleans
-│   ├── Registration.pm                 # Bidirectional TOFU registration with OPL instances
+│   ├── Registration.pm                 # Bidirectional TOFU registration with OPL; peer-signature verification
+│   ├── RenderMode.pm                   # Render-mode bundles + the RATCHET (defaults → claim → raw may only tighten)
+│   ├── RevealSidecar.pm                # Permission-sidecar (revealJWT) verification: play-bound grants (reveal, debug)
+│   ├── Seed.pm                         # The seed rule every lane applies: absent/empty → DEFAULT_SEED + warning
 │   ├── Telemetry.pm                    # In-memory buffer, 60s/100-event flush, Ed25519-signed batches to OPL
 │   ├── Version.pm                      # pg_version / renderer_version helpers
 │   ├── Controller/
+│   │   ├── AdminInspect.pm             # POST /render-api/admin/inspect-cache — OPL-signed cache introspection
 │   │   ├── Audit.pm                    # POST /render-api/audit — OPL-signed macro audit
 │   │   ├── Callback.pm                 # POST /render-api/callback — OPL-signed render probe / cache invalidation
-│   │   ├── Render.pm                   # POST /render-api — thin route handler; delegates to Render::*
+│   │   ├── Render.pm                   # /render-api, the hint/solution/answer content fetches, /render-ptx; delegates to Render::*
 │   │   └── StaticFiles.pm              # Static asset serving
 │   ├── Lane/
 │   │   ├── Challenge.pm                # challengeJWT body lane (orchestrator-minted, WW3-032)
+│   │   ├── ContentFetch.pm             # Typed problemJWT lane for /render-api/{hint,solution,answer}
 │   │   ├── Peer.pm                     # Peer-signed lane (Ed25519 verify, server-to-server trust)
-│   │   ├── Problem.pm                  # Legacy problemJWT body lane (LMS-minted, LibreTexts/ADAPT)
+│   │   ├── Problem.pm                  # problemJWT body lane (LMS-minted; single-renderer integrators, LibreTexts/ADAPT)
+│   │   ├── Review.pm                   # submissionJWT read-only reView replay lane (never emits)
 │   │   ├── Session.pm                  # sessionJWT prefix lane (continuation state, claims-always-win)
 │   │   └── Ungrounded.pm               # No-JWT-no-peer lane: STRICT_JWT entry gate + self-mint UX
 │   ├── Render/
@@ -54,7 +60,7 @@ lib/
 │   └── Utils/
 │       ├── LanguageAndDirection.pm     # Locale + RTL handling
 │       └── Tags.pm                     # OPL tag parsing (cold path; only when includeTags is set)
-└── PG/                                 # PG submodule (math engine, macros, MathObjects) — upstream, not ours
+└── PG/                                 # PG submodule: the drdrew42/pg fork (upstream main + the %envir commit; see Conventions)
 ```
 
 ### Content-Addressed Flow
@@ -74,23 +80,23 @@ lib/
 - **TOFU registration**: `Registration.pm` handles bidirectional trust with OPL. Renderer registers its public key + callback URL. OPL can probe back via callback endpoint.
 - **Hypnotoad env vars**: `HYPNOTOAD_WORKERS`, `HYPNOTOAD_ACCEPTS`, `HYPNOTOAD_REQUESTS`, `HYPNOTOAD_SPARE`, `HYPNOTOAD_CLIENTS`, `HYPNOTOAD_GRACEFUL_TIMEOUT`. Override `renderer.conf` values.
 
-### Authorization Model — Two Lanes, Two Gates
+### Authorization Model — Two Trust Signals, Two Gates
 
-The renderer accepts two kinds of trusted callers:
+A request proves itself by one of two **trust signals**; `Renderer::Render::ParseRequest` then dispatches it to a **lane** — a `Renderer::Lane::*` body handler (`Problem`, `Challenge`, `Review`, `ContentFetch`, `Peer`, `Ungrounded`; `Session` is a prefix layer, not a lane). The `_trust_lane` stash carries the lane's name. Glossary: `WeBWorK/Renderer/Conventions.md`.
 
-| Lane | Trust signal | Common use |
-|---|---|---|
-| **JWT-bearing** | `problemJWT` / `sessionJWT` minted by a peer using shared `problemJWTsecret` | Browser-mediated render: student attempts, instructor preview of library problems, assignment delivery |
-| **Peer-signed** | Ed25519 signature on the request itself (`X-Peer-Name` + `X-Peer-Timestamp` + `X-Peer-Signature` headers), peer pubkey pinned via `RENDERER_PEERS` config | Server-to-server: raw `problemSource` authoring, editor flows, asset fetches |
+| Trust signal | Evidence | Lanes | Common use |
+|---|---|---|---|
+| **JWT** | `problemJWT`, `challengeJWT` or `submissionJWT` signed with `problemJWTsecret`; a `sessionJWT` (continuation, `webworkJWTsecret`) rides with it | Problem, Challenge, Review, ContentFetch | Browser-mediated render: student attempts, instructor preview, assignment delivery, reView |
+| **Peer signature** | Ed25519 over the request (`X-Peer-Name` + `X-Peer-Timestamp` + `X-Peer-Signature`), peer pubkey pinned via `RENDERER_PEERS` | Peer | Server-to-server: raw `problemSource` authoring, editor flows |
 
 And two orthogonal gates govern what any given request may do:
 
 | Gate | Mechanism | Semantics |
 |---|---|---|
 | **Entry** | `STRICT_JWT` env/config | When truthy, reject requests that have *neither* a JWT *nor* a valid peer signature. When falsy, ungrounded requests are permitted via self-minted JWT (legacy/VPC editor posture). |
-| **Emission** | `_can_emit_answer_jwt` stash | Always active. An `answerJWT` is only emitted when the request arrived with an *upstream* problemJWT (not self-minted, not peer-signed). Peer-signed raw-source renders never emit answerJWTs — the "one-shot rule." |
+| **Emission** | `_can_emit_answer_jwt` stash | Always active. Only `Lane::Problem` and `Lane::Challenge` set it; a self-minted or peer-signed first render never does, so a submit there is a 403. |
 
-**Peer-signed requests always admitted** (when registered + signature valid), regardless of `STRICT_JWT`. STRICT_JWT controls whether *ungrounded, unsigned* requests can self-mint. This lets a single strict instance serve both the browser lane (via JWT) and the editor lane (via peer signature) — valuable for single-deployment consolidation.
+**Peer-signed requests always admitted** (when registered + signature valid), regardless of `STRICT_JWT`. STRICT_JWT controls whether *ungrounded, unsigned* requests can self-mint. This lets a single strict instance serve both browser renders (via JWT) and editor renders (via peer signature) — valuable for single-deployment consolidation.
 
 **Raw `problemSource` one-shot rule**: peer-signed render requests carrying raw source render one-shot only — no `sessionJWT` minted, no `answerJWT` emitted, no `pg_hash` leak to the browser. Editor-providers hold the state; every interaction is a fresh peer-signed render from their backend.
 
@@ -111,35 +117,19 @@ Since WW3-R56 the permission half comes from `resolve_permissions` (keyed on `is
 
 ### Cross-Origin Broadcast (`parent_origin`)
 
-The rendered iframe broadcasts postMessage events (scores, hint clicks, focus/blur) to `window.parent`. To enable principled cross-origin embedding, the renderer accepts a `parent_origin` declaration from either trust lane:
-
-- JWT lane: `parent_origin` as a claim on the problemJWT
-- Peer-signed lane: `parent_origin` as a form-data field in the signed body
-
-When present, templated into rendered HTML as `<html data-parent-origin="...">`. Validation is bidirectional:
-
-- **Outbound** (`problem.js`): uses it as the target origin for every `window.parent.postMessage(data, target)` — no more wildcard `'*'`.
-- **Inbound** (`css-message.js`): rejects messages whose `event.origin` doesn't match. Symmetric trust boundary — only the declared parent can inject CSS, query hints/solutions, or otherwise drive iframe state.
-
-When absent, both directions fall back to legacy behavior: outbound uses `'*'`, inbound accepts any origin. Preserves compatibility with previews, pre-contract integrations, and the unauthenticated self-mint path.
-
-Raw URL/body params for `parent_origin` are stripped unless they arrive inside a JWT claim or signed body — prevents unauthenticated callers from declaring arbitrary broadcast targets.
-
-Frame identification: `problem.js` reads `window.name` (settable cross-origin via `<iframe name="...">`) before falling back to `window.frameElement` — the latter is null cross-origin.
-
-See `LibreTexts/Renderer Secrets Migration.md`, `LibreTexts/Editor Provider Integration — Peer-Signed Render.md`, and `WeBWorK/Renderer/Trust Model and Editor Flow.md` in the vault for the full picture.
+The rendered iframe broadcasts postMessage events (scores, hint clicks, focus/blur) to `window.parent`. A `parent_origin` declared in a signed source — a problemJWT claim or a peer-signed body field — is templated as `<html data-parent-origin="…">` and enforced both ways: `problem.js` targets it on every `postMessage` (never `'*'`), and `css-message.js` rejects inbound messages from any other `event.origin`. Absent, both fall back to the legacy wildcard (previews, pre-contract integrations, self-mint). A raw `parent_origin` is stripped (`SENSITIVE_PARAMS`). Frame identification reads `window.name` before `window.frameElement`, which is null cross-origin. Full contract: `WeBWorK/Renderer/postMessage Protocol.md`.
 
 ### Route Groups
 
 | Route | Controller | Purpose |
 |---|---|---|
-| `POST /render-api` | Render | Core render endpoint (form-data, NOT JSON) |
-| `POST /render-api/callback` | Render | OPL callback for cache invalidation + registration probe |
-| `POST /render-api/audit` | Audit | OPL-signed performance audit ingestion |
-| `POST /render-api/hint` | Render | Dumb content fetch (rendered hint body, R28) |
-| `POST /render-api/solution` | Render | Dumb content fetch (rendered solution body, R28) |
-| `ANY  /render-ptx` | Render | PreTeXt XML output (bypasses parseRequest) |
-| `GET  /health` | (inline) | Health check (JSON) |
+| `ANY  /render-api` | Render | Core render endpoint (form-data, NOT JSON) |
+| `POST /render-api/callback` | Callback | OPL-signed cache invalidation + render probe |
+| `POST /render-api/audit` | Audit | OPL-signed macro audit |
+| `POST /render-api/admin/inspect-cache` | AdminInspect | OPL-signed cache introspection |
+| `POST /render-api/{hint,solution,answer}` | Render | Content fetch, gated by a typed problemJWT |
+| `ANY  /render-ptx` | Render | PreTeXt XML; registered only when `ENABLE_PTX` is set |
+| `ANY  /health` | (inline) | Health check (JSON) |
 | `/pg_files/*`, `/*` | StaticFiles | Static asset serving |
 
 **Important**: The render endpoint takes **form-data**, not JSON. This is a key discovery — documented in `WeBWorK/API Reference.md`.
@@ -155,29 +145,29 @@ See `LibreTexts/Renderer Secrets Migration.md`, `LibreTexts/Editor Provider Inte
 | `LOG_TO_STDERR` | — | Log to stderr (container mode) |
 | `LOG_FORMAT` | plain | `json` for structured logging |
 | `MOJO_LOG_LEVEL` | info | Log level |
-| `MOJO_MODE` | — | `production` disables dev-mode editor routes |
+| `MOJO_MODE` | — | `development` adds the `/die` and `/timeout` test hooks |
+| `RENDERER_DEBUG_FORMAT` | — | Enables `outputFormat=debug` and the JSON diagnostic envelope. Leave unset in production — it exposes PG internals |
+| `ENABLE_PTX` | — | Registers `/render-ptx` (no credential gate; editor/VPC posture only) |
+| `SELF_MINT_DISABLED` | — | Under `STRICT_JWT=0`, render ungrounded requests without wrapping them in a self-minted JWT |
 | `STRICT_JWT` | — | Entry gate: when truthy, reject requests that are neither JWT-bearing nor peer-signed (401). Peer-signed requests are *always* accepted when the signature verifies — STRICT_JWT only governs ungrounded/unsigned requests. Public instances should set; VPC-isolated editor instances can leave unset for backward-compat (self-mint fallback). |
 | `RENDERER_PEERS` | — | JSON array of `{name, public_key}` entries pinning trusted peers for the peer-signed lane. Example: `[{"name":"adapt-editor","public_key":"jEA8..."}]`. Read at startup; cluster-consistent when provided via deployment config. |
 | `PRESERVE_CACHE` | — | When truthy, the container entrypoint skips the default cache-wipe at start. Operator opt-out for cases where carrying a warm cache across deploys matters more than guaranteed format-version consistency. Default behavior: wipe `private/problems/` and `private/macros/` on container start; cache rebuilds from OPL on first miss after deploy. |
 | `HYPNOTOAD_WORKERS` | 10 (conf) | Worker processes |
-| `HYPNOTOAD_ACCEPTS` | 400 (conf) | Max connections per worker before rotation (memory leak mitigation) |
+| `HYPNOTOAD_ACCEPTS` | 10000 (conf) | Max connections per worker before a graceful recycle |
 | `HYPNOTOAD_REQUESTS` | 5 (conf) | Max requests per keep-alive connection |
 
 ## Containerization
 
 Single-stage Dockerfile. Ubuntu 24.04, Node 22 (for PG client-side JS). Hypnotoad as production server. Health check via `curl -I localhost:3000/health`.
 
-**Memory leak**: PG has a known memory leak. Hypnotoad rotates workers via `accepts` setting (default 400). The sawtooth pattern (leak → rotate → drop) is expected and should be visible in memory monitoring.
+**Worker recycling**: PG renders in a per-render forked subprocess, so its leak dies with each child. Hypnotoad `accepts` (10000) is hygiene; there is no leak sawtooth to expect in memory graphs.
 
 ## Testing posture
 
 **One entrypoint: `bash t/ci/run-all.sh`.** It builds the image, starts a container, and
 runs every layer — PG unit tests (informational), the renderer Perl suite (`prove -lr t/`),
 and the bash integration suites (`t/ci/0*.sh`) against a live `morbo`. CI
-(`.github/workflows/test.yml`) runs the same layers. The Perl `t/*.t` layer was historically
-**not** in CI — which is how the WW3-089 source-resolution regression sat broken (the
-challenge/reView render tests silently could not resolve without OPL) until it was caught by
-hand. It gates now.
+(`.github/workflows/test.yml`) runs the same layers.
 
 **Run it on a Docker host, in a clean container.** On macOS the x86 image build is emulated
 and slow — run it on an x86 Docker host natively. It does not run on a bare Mac (no renderer
@@ -198,23 +188,7 @@ every time it's forgotten.
 *(The local perl wrapper, the deployment host, and the container smoke recipe are in the
 gitignored `CLAUDE.local.md`.)*
 
-JS companion code (`public/js/apps/Problem/problem.js`,
-`public/js/apps/CSSMessage/css-message.js`,
-`public/js/apps/DraftTracker/draft-tracker.js` — ~600 lines total) has
-**no JS unit-test harness** by design (WW3-R39 Phase 5 decision). JS
-behavior is verified through:
-
-1. The full-stack browser smoke path (load a rendered problem in a
-   browser, exercise the feature manually).
-2. Perl-side template assertions in `t/asset_config.t` that confirm the
-   asset URLs land in rendered HTML.
-3. Browser DevTools console + the renderer's interaction logs when the
-   parent (portal/LMS) consumes postMessage events.
-
-When changing JS, run the browser smoke for: problem load, focus/blur
-events, hint/solution buttons, draft tracker keystroke debouncing,
-parent→iframe CSS injection. If the JS surface grows beyond ~1k lines
-or starts carrying business logic, revisit and add a Vitest/Jest harness.
+JS companion code (`problem.js`, `css-message.js`, `draft-tracker.js` under `public/js/apps/`) has **no JS unit-test harness** by design (WW3-R39). It is verified by the browser smoke — problem load, focus/blur, hint/solution buttons, draft-tracker debouncing, parent→iframe CSS injection — plus `t/asset_config.t`'s template assertions. If the JS grows past ~1k lines or starts carrying business logic, add a Vitest harness.
 
 ## The fork boundary — two things it breaks
 
@@ -264,7 +238,7 @@ conventions here cost other people review too.
 - PG is a git submodule at `lib/PG/` — update with `git submodule update`
 - Dev-mode editor routes were retired in R07/R08; the controller IO.pm and Model::Problem are gone
 - `renderer.conf` values are overridden by env vars, not replaced — unset vars leave config defaults intact
-- Wide character encoding fixed in Ed25519 signing (`b5124895`) — `encode_utf8` before signing
+- `Renderer::Identity` signs and verifies over UTF-8 bytes (`encode_utf8` before signing); keep the two symmetric
 
 ## Design References
 
@@ -273,3 +247,4 @@ Vault docs (in Cogitari):
 - `WeBWorK/API Reference.md` — endpoint contracts (renderer + OPL)
 - `WeBWorK/Render Telemetry.md` — telemetry pipeline design
 - `WeBWorK/Architecture Vision.md` — where the renderer fits in the full stack
+- `WeBWorK/Renderer/Security Model.md` and `Parameter Reference.md` — read before touching a strip list; `t/param_surface.tsv` is the request-surface manifest
