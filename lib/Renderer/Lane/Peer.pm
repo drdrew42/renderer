@@ -13,11 +13,11 @@ package Renderer::Lane::Peer;
 #     is present and _peer_signed is set. Sets defaults, then self-mints a
 #     problemJWT wrapping the (already-trusted) inputs. The signed body is
 #     not subject to SENSITIVE_PARAMS strip (handled in ParseRequest), so
-#     JWTanswerURL and other sensitive params survive into the mint. The
-#     HTML's hidden problemJWT field then carries continuation through
-#     subsequent submits, which arrive as Lane::Problem requests — claim-
-#     merge sets _can_emit_answer_jwt=1 there, so answerJWT emission works
-#     normally without the editor backend re-signing every interaction.
+#     parent_origin and the integrator settings survive into the mint;
+#     JWTanswerURL does not. The HTML's hidden problemJWT field carries
+#     continuation through subsequent submits, which arrive as Lane::Problem
+#     requests and re-render without the editor backend re-signing every
+#     interaction; with no answer URL in the token, none of them emits.
 #     See [[Trust Model and Editor Flow]].
 
 use strict;
@@ -65,6 +65,11 @@ sub verify ($c) {
 # arrive as Lane::Problem requests and emit answerJWTs normally via the
 # claim-merge / emission-gate path.
 sub apply_body ($c, $params) {
+	# Raw source renders one-shot: the continuation token lets the iframe
+	# re-render and re-check, but names no answer URL, so nothing it carries
+	# can emit — the same posture the ungrounded self-mint gets from the
+	# SENSITIVE_PARAMS strip.
+	delete $params->{JWTanswerURL};
 	self_mint_problem_jwt($params);
 	return 1;
 }

@@ -13,7 +13,7 @@ BEGIN {
 
 use Test::Mojo;
 use Crypt::Ed25519;
-use Crypt::JWT   qw(encode_jwt);
+use Crypt::JWT   qw(encode_jwt decode_jwt);
 use MIME::Base64 qw(encode_base64);
 use Mojo::JSON   qw(encode_json);
 use Mojo::Parameters;
@@ -92,6 +92,23 @@ subtest 'valid peer signature renders raw problemSource' => sub {
 
 	$t->post_ok('/render-api', $headers, $body)->status_is(200)
 		->content_like(qr/Peer-signed render test/i, 'rendered raw source');
+};
+
+subtest 'peer self-mint carries no JWTanswerURL: continuation never emits' => sub {
+	my $body = form_body(
+		problemSource => $pg_source,
+		outputFormat  => 'simple',
+		problemSeed   => 1234,
+		JWTanswerURL  => 'https://editor.example.test/answer',
+	);
+	$t->post_ok('/render-api', peer_headers('POST', '/render-api', $body), $body)->status_is(200);
+	my $html = $t->tx->res->body;
+	my ($token) = $html =~ /<input[^>]*name="problemJWT"[^>]*value="([^"]+)"/;
+	ok($token, 'self-minted problemJWT carries continuation');
+	my $claims = decode_jwt(token => $token, key => $ENV{problemJWTsecret});
+	ok(!exists $claims->{JWTanswerURL}, 'the continuation token names no answer URL');
+	is($claims->{problemSource}, $pg_source, 'the continuation token still names the signed source');
+	unlike($html, qr/<input[^>]*name="sessionJWT"/, 'no sessionJWT minted');
 };
 
 # ── Invalid signature → 401 ──────────────────────────────────────────

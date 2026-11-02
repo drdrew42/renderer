@@ -98,7 +98,7 @@ And two orthogonal gates govern what any given request may do:
 
 **Peer-signed requests always admitted** (when registered + signature valid), regardless of `STRICT_JWT`. STRICT_JWT controls whether *ungrounded, unsigned* requests can self-mint. This lets a single strict instance serve both browser renders (via JWT) and editor renders (via peer signature) — valuable for single-deployment consolidation.
 
-**Raw `problemSource` one-shot rule**: peer-signed render requests carrying raw source render one-shot only — no `sessionJWT` minted, no `answerJWT` emitted, no `pg_hash` leak to the browser. Editor-providers hold the state; every interaction is a fresh peer-signed render from their backend.
+**Raw `problemSource` one-shot rule**: a peer-signed render of raw source emits nothing and leaves nothing gradable — no `sessionJWT`, no `answerJWT`, no `pg_hash` to the browser. `Lane::Peer` still self-mints a JWE problemJWT so the iframe can re-render and re-check, but it drops `JWTanswerURL` first, so the continuation (which arrives as `Lane::Problem`) never emits. Grading needs the content in OPL and a JWT-grounded render. Guard: `t/peer_signed.t`.
 
 ### Debug-flag vocabulary
 
