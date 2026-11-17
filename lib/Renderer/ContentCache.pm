@@ -34,7 +34,13 @@ sub has_problem {
 	return -d _problem_dir($pg_hash);
 }
 
-# Write problem source and a manifest of its macro dependencies (WW3-R11).
+# Write problem source, a manifest of its macro dependencies (WW3-R11), and the
+# OPL resources with their stored alt text (WW3-R78).
+#
+# Resources format at $dir/resources.json:
+#   [ { "content_hash": "sha256:...", "alt": "..." | null }, ... ]
+# Read back by read_resources; a cache staged before this file existed reads [].
+#
 # $macros_aref is an arrayref of hashrefs: each entry carries `name`, `hash`,
 # and (optionally) `source_type` — captured verbatim from OPL's response so
 # the renderer doesn't own the source-type vocabulary. The current renderer
@@ -55,7 +61,7 @@ sub has_problem {
 # the right fix is atomic-rename in `stage_macro` (currently a plain open-write).
 # Pre-emptive note for the maintainer; not blocking R11.
 sub stage_problem {
-	my ($pg_hash, $raw_source, $macros_aref) = @_;
+	my ($pg_hash, $raw_source, $macros_aref, $resources_aref) = @_;
 	my $dir = _problem_dir($pg_hash);
 	make_path($dir);
 
@@ -90,7 +96,45 @@ sub stage_problem {
 		return;
 	}
 
+	# Resources with their stored alt text (WW3-R78). Same atomic write.
+	my @resources;
+	for my $res (@{ $resources_aref // [] }) {
+		next unless ref $res eq 'HASH' && $res->{content_hash};
+		push @resources, { content_hash => $res->{content_hash}, alt => $res->{alt} };
+	}
+
+	my $resources_path = File::Spec->catfile($dir, 'resources.json');
+	my $resources_tmp  = "$resources_path.tmp";
+	open my $rfh, '>:encoding(UTF-8)', $resources_tmp
+		or do { $log->warn("Cannot write resources tmp for $pg_hash: $!"); return };
+	print $rfh encode_json(\@resources);
+	close $rfh;
+	unless (rename $resources_tmp, $resources_path) {
+		$log->warn("Cannot install resources for $pg_hash: $!");
+		unlink $resources_tmp;
+		return;
+	}
+
 	return 1;
+}
+
+# Read resources.json for a cached problem: arrayref of
+# { content_hash, alt } hashes, or [] when absent (staged before WW3-R78).
+sub read_resources {
+	my ($pg_hash) = @_;
+	my $path = File::Spec->catfile(_problem_dir($pg_hash), 'resources.json');
+	return [] unless -f $path;
+	open my $fh, '<:encoding(UTF-8)', $path or return [];
+	local $/;
+	my $body = <$fh>;
+	close $fh;
+
+	my $entries = eval { decode_json($body) };
+	if ($@ || ref $entries ne 'ARRAY') {
+		$log->warn("resources.json for $pg_hash is not a JSON array; ignoring");
+		return [];
+	}
+	return $entries;
 }
 
 # Write a macro file by content hash (idempotent).

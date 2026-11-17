@@ -322,7 +322,7 @@ sub _stage_problem_response ($c, $result, $url) {
 		return (undef, undef);
 	}
 
-	Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link);
+	Renderer::ContentCache::stage_problem($fetched_hash, $raw_source, \@macros_to_link, $result->{resources});
 	Renderer::ContentCache::save_url_index($url, $fetched_hash);
 	_trace($c, 'staged', hash => $fetched_hash, macros => scalar @macros_to_link);
 	$c->log->info("ContentCache STAGED: $fetched_hash from $url");

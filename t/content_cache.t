@@ -257,4 +257,53 @@ subtest 'invalidate on unknown hash returns 0' => sub {
 	is(Renderer::ContentCache::invalidate('does_not_exist'), 0, 'invalidate returns 0 for absent dir');
 };
 
+# --- resources.json (WW3-R78) ---
+
+subtest 'stage_problem writes resources.json and read_resources returns it' => sub {
+	my $pg_hash = 'resourcesstage' x 4;
+	my $res_hash = 'sha256:' . ('c' x 64);
+	my $resources = [
+		{ content_hash => $res_hash, alt => 'A parabola', mime => 'image/png', filename => 'q1.png' },
+		{ content_hash => 'sha256:' . ('d' x 64), alt => undef },
+	];
+
+	ok(Renderer::ContentCache::stage_problem($pg_hash, 'DOCUMENT(); ENDDOCUMENT();', [], $resources),
+		'stage_problem succeeds with resources');
+
+	my $dir = File::Spec->catdir($RENDER_ROOT, 'private', 'problems', $pg_hash);
+	ok(-f File::Spec->catfile($dir, 'resources.json'), 'resources.json installed');
+	ok(!-e File::Spec->catfile($dir, 'resources.json.tmp'), 'no tmp file left behind');
+
+	is_deeply(
+		Renderer::ContentCache::read_resources($pg_hash),
+		[
+			{ content_hash => $res_hash, alt => 'A parabola' },
+			{ content_hash => 'sha256:' . ('d' x 64), alt => undef },
+		],
+		'read_resources returns content_hash and alt only'
+	);
+};
+
+subtest 'read_resources returns [] for a cache staged without resources' => sub {
+	my $pg_hash = 'resourcesabsent' x 4;
+	ok(Renderer::ContentCache::stage_problem($pg_hash, 'DOCUMENT(); ENDDOCUMENT();', []),
+		'stage_problem succeeds without a resources arg');
+	is_deeply(Renderer::ContentCache::read_resources($pg_hash), [], 'resources.json written empty');
+
+	my $legacy = 'resourceslegacy' x 4;
+	Renderer::ContentCache::stage_problem($legacy, 'DOCUMENT(); ENDDOCUMENT();', []);
+	unlink File::Spec->catfile($RENDER_ROOT, 'private', 'problems', $legacy, 'resources.json');
+	is_deeply(Renderer::ContentCache::read_resources($legacy), [], 'absent file reads as []');
+	is_deeply(Renderer::ContentCache::read_resources('never_staged'), [], 'unknown hash reads as []');
+};
+
+subtest 'stage_problem re-stage replaces resources.json' => sub {
+	my $pg_hash = 'resourcesrestage' x 4;
+	my $h = 'sha256:' . ('e' x 64);
+	Renderer::ContentCache::stage_problem($pg_hash, 'x', [], [ { content_hash => $h, alt => 'old' } ]);
+	Renderer::ContentCache::stage_problem($pg_hash, 'x', [], [ { content_hash => $h, alt => 'new' } ]);
+	is_deeply(Renderer::ContentCache::read_resources($pg_hash), [ { content_hash => $h, alt => 'new' } ],
+		'latest stage wins');
+};
+
 done_testing();

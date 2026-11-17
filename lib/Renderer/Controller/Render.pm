@@ -18,6 +18,7 @@ use Time::HiRes qw(time);
 
 use WeBWorK::PreTeXt;
 use WeBWorK::HintSolution;
+use Renderer::AltText;
 use Renderer::ContentCache;
 use Renderer::Telemetry;
 use Renderer::Render::Subprocess qw(render_in_subprocess);
@@ -165,6 +166,29 @@ async sub problem ($c) {
 	# destroyed". No one is on the other end to receive the response anyway —
 	# just drop the abandoned render quietly so the worker stays clean.
 	return unless $c->tx;
+
+	# Alt text (WW3-R78): fixed images take the OPL-stored alt for their content
+	# hash; generated images take the identifying rule. Runs on the final HTML,
+	# after telemetry has hashed the unfilled text.
+	if (defined $return_object->{text}) {
+		my %alt_by_hash;
+		if ($inputs_ref->{pg_hash}) {
+			for my $res (@{ Renderer::ContentCache::read_resources($inputs_ref->{pg_hash}) }) {
+				$alt_by_hash{ $res->{content_hash} } = $res->{alt};
+			}
+		}
+		my ($filled, $alt_counts) = Renderer::AltText::fill_html($return_object->{text}, \%alt_by_hash);
+		$return_object->{text} = $filled;
+		if (grep { $_ } values %$alt_counts) {
+			$c->log->info(
+				join ' ',
+				'alt_fill',
+				'pg_hash=' . ($inputs_ref->{pg_hash} // '(none)'),
+				map {"$_=$alt_counts->{$_}"} sort keys %$alt_counts
+			);
+		}
+	}
+
 	return $c->format($return_object);
 }
 
