@@ -72,7 +72,7 @@ sub problem_url_by_path ($self, $path) {
 # Returns a Mojo::Promise that resolves to a hashref with one of these shapes:
 #
 #   { not_modified => 1 }                                       # 304
-#   { raw_source => $bytes, pg_hash => $hash, macros => $aref } # 200 OK
+#   { raw_source => $bytes, pg_hash => $hash, macros => $aref, resources => $aref } # 200 OK
 #   { error => $msg, status => $code }                          # 4xx/5xx/parse
 #
 # The 304 → "use your cache" path is the caller's responsibility — the client
@@ -113,6 +113,7 @@ sub fetch_problem_p ($self, $url, %opts) {
 			raw_source => $raw_source,
 			pg_hash    => $fetched_hash,
 			macros     => $obj->{macros} // [],
+			resources  => $obj->{resources} // [],
 		};
 	})->catch(sub {
 		my $err = shift;

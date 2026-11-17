@@ -82,4 +82,75 @@ subtest 'default base_url is the production OPL hostname' => sub {
 	);
 };
 
+# ─── fetch_problem_p resources passthrough (WW3-R78) ───────────────────────
+#
+# A stub UA answers get_p with a canned 200 body, so the parse path runs
+# without HTTP.
+
+{
+
+	package StubTx;
+	sub new    { my ($class, $body) = @_; bless { body => $body }, $class }
+	sub result { $_[0] }
+	sub code       {200}
+	sub is_success {1}
+	sub message    {'OK'}
+	sub body       { $_[0]{body} }
+	sub headers    { bless {}, 'StubHeaders' }
+
+	package StubHeaders;
+	sub header { undef }
+
+	package StubUA;
+	sub new { my ($class, $body) = @_; bless { body => $body }, $class }
+	sub max_redirects  { $_[0] }
+	sub request_timeout { $_[0] }
+	sub get_p {
+		my ($self) = @_;
+		return Mojo::Promise->resolve(StubTx->new($self->{body}));
+	}
+}
+
+sub fetch_with_body {
+	my ($body) = @_;
+	my $stub   = StubUA->new($body);
+	my $c      = Renderer::OPLClient->new(ua => $stub, base_url => 'http://opl.test:3000');
+	my $result;
+	$c->fetch_problem_p('http://opl.test:3000/api/problems/hash/sha256:abc')->then(sub { $result = shift })->wait;
+	return $result;
+}
+
+subtest 'fetch_problem_p passes resources through with content_hash and alt' => sub {
+	my $hash = 'sha256:' . ('a' x 64);
+	my $body = Mojo::JSON::encode_json({
+		raw_source => 'DOCUMENT(); ENDDOCUMENT();',
+		pg_hash    => 'sha256:abc',
+		macros     => [],
+		resources  => [
+			{ content_hash => $hash, alt => 'A parabola', mime => 'image/png', filename => 'q1.png' },
+			{ content_hash => 'sha256:' . ('b' x 64), alt => undef },
+		],
+	});
+	my $r = fetch_with_body($body);
+	ok(!$r->{error}, 'no error');
+	is_deeply(
+		$r->{resources},
+		[
+			{ content_hash => $hash, alt => 'A parabola', mime => 'image/png', filename => 'q1.png' },
+			{ content_hash => 'sha256:' . ('b' x 64), alt => undef },
+		],
+		'resources array passed through unchanged',
+	);
+};
+
+subtest 'fetch_problem_p yields [] resources when the response omits them' => sub {
+	my $body = Mojo::JSON::encode_json({
+		raw_source => 'DOCUMENT(); ENDDOCUMENT();',
+		pg_hash    => 'sha256:abc',
+	});
+	my $r = fetch_with_body($body);
+	ok(!$r->{error}, 'no error');
+	is_deeply($r->{resources}, [], 'missing resources defaults to []');
+};
+
 done_testing();
