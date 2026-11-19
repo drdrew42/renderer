@@ -38,7 +38,7 @@ sub has_problem {
 # OPL resources with their stored alt text (WW3-R78).
 #
 # Resources format at $dir/resources.json:
-#   [ { "content_hash": "sha256:...", "alt": "..." | null }, ... ]
+#   [ { "content_hash": "sha256:...", "alt": "..." | null, "filename": "...", "url": "..." }, ... ]
 # Read back by read_resources; a cache staged before this file existed reads [].
 #
 # $macros_aref is an arrayref of hashrefs: each entry carries `name`, `hash`,
@@ -100,7 +100,12 @@ sub stage_problem {
 	my @resources;
 	for my $res (@{ $resources_aref // [] }) {
 		next unless ref $res eq 'HASH' && $res->{content_hash};
-		push @resources, { content_hash => $res->{content_hash}, alt => $res->{alt} };
+		push @resources, {
+			content_hash => $res->{content_hash},
+			alt          => $res->{alt},
+			(defined $res->{filename} ? (filename => $res->{filename}) : ()),
+			(defined $res->{url}      ? (url      => $res->{url})      : ()),
+		};
 	}
 
 	my $resources_path = File::Spec->catfile($dir, 'resources.json');
@@ -119,7 +124,8 @@ sub stage_problem {
 }
 
 # Read resources.json for a cached problem: arrayref of
-# { content_hash, alt } hashes, or [] when absent (staged before WW3-R78).
+# { content_hash, alt, filename?, url? } hashes, or [] when absent (staged before WW3-R78).
+# filename and url are absent for a cache staged before LTW-105.
 sub read_resources {
 	my ($pg_hash) = @_;
 	my $path = File::Spec->catfile(_problem_dir($pg_hash), 'resources.json');
@@ -180,6 +186,18 @@ sub pg_hash_for_path {
 sub save_path_index {
 	my ($file_path, $pg_hash) = @_;
 	return _write_index('.path_index', $file_path, $pg_hash);
+}
+
+# Build the injectedResources map for a cached problem: { link filename => URL },
+# which PGalias resolves before searching disk. Empty for a cache staged before LTW-105.
+sub get_injected_resources {
+	my ($pg_hash) = @_;
+	my %map;
+	for my $res (@{ read_resources($pg_hash) }) {
+		next unless length($res->{filename} // '') && length($res->{url} // '');
+		$map{ $res->{filename} } //= $res->{url};
+	}
+	return \%map;
 }
 
 # Build the injectedMacros hash for a cached problem.

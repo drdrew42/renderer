@@ -53,6 +53,8 @@ async sub problem ($c) {
 			$inputs_ref->{injectedMacros} = $injected;
 			$c->log->info("Injecting " . scalar(keys %$injected) . " macro(s) via envir for $inputs_ref->{pg_hash}");
 		}
+		my $resources = Renderer::ContentCache::get_injected_resources($inputs_ref->{pg_hash});
+		$inputs_ref->{injectedResources} = $resources if %$resources;
 	}
 
 	$c->render_later;    # tell Mojo that this might take a while
@@ -255,11 +257,13 @@ async sub _content_fetch ($c, $expected_typ, $renderer) {
 		$c->log->info("Injecting " . scalar(keys %$injectedMacros) . " macro(s) via envir for $params->{pg_hash}")
 			if $injectedMacros && %$injectedMacros;
 	}
+	my $injectedResources = $params->{pg_hash} ? Renderer::ContentCache::get_injected_resources($params->{pg_hash}) : {};
 
 	my $res = await $renderer->({
 		problemSource => $params->{problemSource},
 		problemSeed   => $params->{problemSeed},
 		($injectedMacros && %$injectedMacros ? (injectedMacros => $injectedMacros) : ()),
+		(%$injectedResources ? (injectedResources => $injectedResources) : ()),
 	});
 
 	if (ref($res) eq 'HASH' && $res->{error}) {

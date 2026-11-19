@@ -251,6 +251,7 @@ sub standaloneRenderer {
 		# Content-addressed custom macros: inject source via envir so PG's
 		# loadMacros() finds them without filesystem search (PGloadfiles.pm).
 		($inputs_ref->{injectedMacros} ? (injectedMacros => $inputs_ref->{injectedMacros}) : ()),
+		($inputs_ref->{injectedResources} ? (injectedResources => $inputs_ref->{injectedResources}) : ()),
 		processAnswers          => $processAnswers,
 		showFeedback            => $hideFeedback ? 0 : 1,    # exam-mode kill-switch (outer gate)
 		showAttemptResults      => $displayResults,          # respects showPartialCorrectAnswers

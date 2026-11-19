@@ -277,10 +277,10 @@ subtest 'stage_problem writes resources.json and read_resources returns it' => s
 	is_deeply(
 		Renderer::ContentCache::read_resources($pg_hash),
 		[
-			{ content_hash => $res_hash, alt => 'A parabola' },
+			{ content_hash => $res_hash, alt => 'A parabola', filename => 'q1.png' },
 			{ content_hash => 'sha256:' . ('d' x 64), alt => undef },
 		],
-		'read_resources returns content_hash and alt only'
+		'read_resources returns content_hash, alt, and filename and url when given'
 	);
 };
 

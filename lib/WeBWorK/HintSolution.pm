@@ -88,6 +88,7 @@ sub render_answer ($p) {
 			problemSeed => $p->{problemSeed},
 			r_source    => \$source,
 			($p->{injectedMacros} ? (injectedMacros => $p->{injectedMacros}) : ()),
+			($p->{injectedResources} ? (injectedResources => $p->{injectedResources}) : ()),
 			inputs_ref => {},
 		);
 
@@ -141,6 +142,7 @@ sub _render_and_filter ($p, %opts) {
 			# and the endpoint returns solution: null. See RenderProblem.pm:256
 			# for the same wiring on the main /render-api lane.
 			($p->{injectedMacros} ? (injectedMacros => $p->{injectedMacros}) : ()),
+			($p->{injectedResources} ? (injectedResources => $p->{injectedResources}) : ()),
 			# State-conditional content (a hint reading $inputs{...}) flows
 			# through PG's normal inputs_ref plumbing. Empty hashref for the
 			# stateless case (the typical case).
